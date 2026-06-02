@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Battle Royale</title>
+    <title>Space Battle Royale - Full Screen</title>
     <style>
-        body {
+        body, html {
             background-color: #06060c;
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             color: #ffffff;
             font-family: 'Courier New', Courier, monospace;
-            overflow: hidden;
             user-select: none;
         }
-        #gameCanvas {
-            border: 3px solid #333;
+        canvas {
+            display: block;
             background-color: #020205;
-            box-shadow: 0 0 30px rgba(255, 0, 85, 0.2);
             cursor: crosshair;
         }
     </style>
 </head>
 <body>
 
-    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
@@ -37,27 +37,50 @@
         // Game States: "START", "PLAYING", "GAMEOVER", "VICTORY"
         let gameState = "START";
         
-        let entities = []; // Holds both player and bots
+        let entities = []; 
         let lasers = [];
         let particles = [];
         
-        // Storm / Safe Zone Circle
+        // Storm / Safe Zone Circle Setup
         const storm = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            radius: 400,
-            minRadius: 40,
-            shrinkSpeed: 0.15
+            x: 0,
+            y: 0,
+            radius: 0,
+            minRadius: 50,
+            shrinkSpeed: 0.2
         };
 
-        let mouseX = canvas.width / 2;
-        let mouseY = canvas.height / 2;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        // Automatically resize canvas to fit the window dynamically
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Keep storm centered on screen resize
+            storm.x = canvas.width / 2;
+            storm.y = canvas.height / 2;
+            
+            if (gameState === "START") {
+                mouseX = canvas.width / 2;
+                mouseY = canvas.height / 2;
+            }
+        }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas(); // Initial sizing call
 
         // Input Trackers
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
             mouseY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener("touchmove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.touches[0].clientX - rect.left;
+            mouseY = e.touches[0].clientY - rect.top;
         });
 
         canvas.addEventListener("click", () => {
@@ -71,16 +94,18 @@
             entities = [];
             lasers = [];
             particles = [];
-            storm.radius = 400;
+            
+            // Dynamically scale storm radius based on screen size
+            storm.radius = Math.max(canvas.width, canvas.height) * 0.6;
 
-            // Spawn Player
+            // Spawn Player at screen center
             entities.push({
                 id: "player",
                 isPlayer: true,
                 x: canvas.width / 2,
-                y: canvas.height / 2 + 100,
-                radius: 12,
-                speed: 3.5,
+                y: canvas.height / 2,
+                radius: 14,
+                speed: 4.5,
                 hp: 100,
                 maxHp: 100,
                 color: "#00ffcc",
@@ -88,24 +113,23 @@
                 target: null
             });
 
-            // Spawn 15 Bots spread across the map
-            for (let i = 0; i < 15; i++) {
-                // Angle and distance distribution to scatter them
+            // Spawn 18 Bots spread randomly inside the initial map layout
+            for (let i = 0; i < 18; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let dist = Math.random() * 250 + 50; 
+                let dist = Math.random() * (storm.radius * 0.8); 
                 
                 entities.push({
                     id: "bot_" + i,
                     isPlayer: false,
                     x: canvas.width / 2 + Math.cos(angle) * dist,
                     y: canvas.height / 2 + Math.sin(angle) * dist,
-                    radius: 10,
-                    speed: Math.random() * 1 + 1.5,
-                    vx: (Math.random() - 0.5) * 2,
-                    vy: (Math.random() - 0.5) * 2,
-                    hp: 80,
-                    maxHp: 80,
-                    color: `hsl(${Math.random() * 50 + 15}, 100%, 60%)`, // Orange/Yellow shades
+                    radius: 12,
+                    speed: Math.random() * 1 + 2,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3,
+                    hp: 85,
+                    maxHp: 85,
+                    color: `hsl(${Math.random() * 55 + 10}, 100%, 60%)`, 
                     fireCooldown: Math.floor(Math.random() * 30),
                     changeDirTimer: 0
                 });
@@ -113,13 +137,13 @@
         }
 
         function createExplosion(x, y, color) {
-            for (let i = 0; i < 12; i++) {
+            for (let i = 0; i < 15; i++) {
                 particles.push({
                     x: x,
                     y: y,
-                    vx: (Math.random() - 0.5) * 5,
-                    vy: (Math.random() - 0.5) * 5,
-                    radius: Math.random() * 3 + 1,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: (Math.random() - 0.5) * 6,
+                    radius: Math.random() * 3.5 + 1,
                     alpha: 1,
                     color: color || "#ff5500"
                 });
@@ -138,18 +162,18 @@
                 storm.radius -= storm.shrinkSpeed;
             }
 
-            // 2. Update Entities (Player & Bots)
+            // 2. Update Entities
             for (let i = entities.length - 1; i >= 0; i--) {
                 let ent = entities[i];
 
                 // Storm Damage Check
                 let distFromCenter = getDistance(ent.x, ent.y, storm.x, storm.y);
                 if (distFromCenter > storm.radius) {
-                    ent.hp -= 0.2; // Continuous ticks of storm damage
+                    ent.hp -= 0.25; 
                 }
 
                 if (ent.isPlayer) {
-                    // Move Player towards Mouse
+                    // Move Player towards Cursor
                     let dx = mouseX - ent.x;
                     let dy = mouseY - ent.y;
                     let dist = Math.sqrt(dx*dx + dy*dy);
@@ -159,7 +183,7 @@
                         ent.y += (dy / dist) * ent.speed;
                     }
 
-                    // Player Auto-Target nearest bot
+                    // Auto-Target nearest tracking bot
                     let nearestBot = null;
                     let recordDist = Infinity;
                     entities.forEach(other => {
@@ -172,7 +196,7 @@
                         }
                     });
 
-                    // Fire Laser at target
+                    // Fire Weapon
                     if (nearestBot && ent.fireCooldown <= 0) {
                         let tDx = nearestBot.x - ent.x;
                         let tDy = nearestBot.y - ent.y;
@@ -181,19 +205,18 @@
                         lasers.push({
                             x: ent.x,
                             y: ent.y,
-                            vx: (tDx / tDist) * 7,
-                            vy: (tDy / tDist) * 7,
+                            vx: (tDx / tDist) * 8,
+                            vy: (tDy / tDist) * 8,
                             ownerId: ent.id,
                             color: "#00ffcc"
                         });
-                        ent.fireCooldown = 18; // Attack speed delay
+                        ent.fireCooldown = 15; 
                     }
 
                 } else {
-                    // Bot logic: AI wandering
+                    // Bot AI wander adjustments
                     ent.changeDirTimer++;
-                    if (ent.changeDirTimer > 60) {
-                        // Randomly adjust direction vectors
+                    if (ent.changeDirTimer > 50) {
                         ent.vx = (Math.random() - 0.5) * ent.speed * 2;
                         ent.vy = (Math.random() - 0.5) * ent.speed * 2;
                         ent.changeDirTimer = 0;
@@ -202,11 +225,11 @@
                     ent.x += ent.vx;
                     ent.y += ent.vy;
 
-                    // Keep bots bounce-contained within canvas edges
-                    if (ent.x < 10 || ent.x > canvas.width - 10) ent.vx *= -1;
-                    if (ent.y < 10 || ent.y > canvas.height - 10) ent.vy *= -1;
+                    // Keep bots bounce-contained within total screen canvas edge
+                    if (ent.x < 15 || ent.x > canvas.width - 15) ent.vx *= -1;
+                    if (ent.y < 15 || ent.y > canvas.height - 15) ent.vy *= -1;
 
-                    // Bot Auto-targeting: Target closest other entity (could be player or bot)
+                    // Bot Engine Targeting
                     let nearestTarget = null;
                     let recordDist = Infinity;
                     entities.forEach(other => {
@@ -219,8 +242,8 @@
                         }
                     });
 
-                    // Bot Shoot
-                    if (nearestTarget && ent.fireCooldown <= 0 && recordDist < 200) {
+                    // Bot Attack Actions
+                    if (nearestTarget && ent.fireCooldown <= 0 && recordDist < 300) {
                         let tDx = nearestTarget.x - ent.x;
                         let tDy = nearestTarget.y - ent.y;
                         let tDist = Math.sqrt(tDx*tDx + tDy*tDy);
@@ -228,18 +251,18 @@
                         lasers.push({
                             x: ent.x,
                             y: ent.y,
-                            vx: (tDx / tDist) * 5,
-                            vy: (tDy / tDist) * 5,
+                            vx: (tDx / tDist) * 6,
+                            vy: (tDy / tDist) * 6,
                             ownerId: ent.id,
                             color: ent.color
                         });
-                        ent.fireCooldown = 35 + Math.random() * 20; // Lower fire rate than player
+                        ent.fireCooldown = 40 + Math.random() * 20;
                     }
                 }
 
                 if (ent.fireCooldown > 0) ent.fireCooldown--;
 
-                // Death Condition Check
+                // Process Casualties
                 if (ent.hp <= 0) {
                     createExplosion(ent.x, ent.y, ent.color);
                     if (ent.isPlayer) {
@@ -249,7 +272,7 @@
                 }
             }
 
-            // Check if player is the absolute last survivor
+            // Win evaluation
             if (entities.length === 1 && entities[0].isPlayer) {
                 gameState = "VICTORY";
             }
@@ -260,19 +283,17 @@
                 l.x += l.vx;
                 l.y += l.vy;
 
-                // Wall bounds check
                 if (l.x < 0 || l.x > canvas.width || l.y < 0 || l.y > canvas.height) {
                     lasers.splice(i, 1);
                     continue;
                 }
 
-                // Hit registration
                 for (let j = 0; j < entities.length; j++) {
                     let ent = entities[j];
-                    if (ent.id !== l.ownerId) { // Prevent self-harming shots
+                    if (ent.id !== l.ownerId) { 
                         let d = getDistance(l.x, l.y, ent.x, ent.y);
                         if (d < ent.radius + 3) {
-                            ent.hp -= 20; // Base damage per shot
+                            ent.hp -= 15; 
                             createExplosion(l.x, l.y, l.color);
                             lasers.splice(i, 1);
                             break;
@@ -281,7 +302,7 @@
                 }
             }
 
-            // 4. Update Particle effects
+            // 4. Update Explosions
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx;
@@ -292,75 +313,74 @@
         }
 
         function draw() {
-            // Context refresh
             ctx.fillStyle = "#020205";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             if (gameState === "START") {
                 ctx.fillStyle = "#ff0055";
-                ctx.font = "24px 'Courier New'";
+                ctx.font = "bold 32px 'Courier New'";
                 ctx.textAlign = "center";
-                ctx.fillText("SPACE BATTLE ROYALE", canvas.width / 2, canvas.height / 2 - 40);
+                ctx.fillText("SPACE BATTLE ROYALE", canvas.width / 2, canvas.height / 2 - 50);
                 
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "14px 'Courier New'";
-                ctx.fillText("16 Ships Drop In. 1 Survives.", canvas.width / 2, canvas.height / 2);
-                ctx.fillText("Avoid the shrinking Red Storm Wall.", canvas.width / 2, canvas.height / 2 + 25);
-                ctx.fillText("Move mouse to steer. Auto-attacks active.", canvas.width / 2, canvas.height / 2 + 50);
+                ctx.font = "16px 'Courier New'";
+                ctx.fillText("19 Ships Drop In. 1 Survives.", canvas.width / 2, canvas.height / 2);
+                ctx.fillText("Avoid the shrinking Safe Zone Storm line.", canvas.width / 2, canvas.height / 2 + 25);
+                ctx.fillText("Guide ship with mouse. Target lock-on is automatic.", canvas.width / 2, canvas.height / 2 + 50);
                 
                 ctx.fillStyle = "#00ffcc";
-                ctx.font = "18px 'Courier New'";
-                ctx.fillText("CLICK TO DROP IN", canvas.width / 2, canvas.height / 2 + 110);
+                ctx.font = "bold 20px 'Courier New'";
+                ctx.fillText("CLICK ANYWHERE TO DROP", canvas.width / 2, canvas.height / 2 + 120);
                 return;
             }
 
-            // --- DRAW GAMEPLAY ELEMENTS ---
+            // --- WORLD RENDERING ---
             
-            // Draw Storm Boundaries (Outer Red Zone)
-            ctx.strokeStyle = "rgba(255, 0, 85, 0.8)";
-            ctx.lineWidth = 4;
+            // Draw Storm Danger Boundaries
+            ctx.strokeStyle = "rgba(255, 0, 85, 0.7)";
+            ctx.lineWidth = 5;
             ctx.beginPath();
             ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Tint the danger zone lightly red
-            ctx.fillStyle = "rgba(255, 0, 85, 0.05)";
+            // Mask visual tint outside boundaries
+            ctx.fillStyle = "rgba(255, 0, 85, 0.07)";
             ctx.beginPath();
             ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
-            ctx.rect(canvas.width, 0, -canvas.width, canvas.height); // Outer invert mask
+            ctx.rect(canvas.width, 0, -canvas.width, canvas.height);
             ctx.fill();
 
-            // Draw Lasers
+            // Draw Projectiles
             lasers.forEach(l => {
                 ctx.fillStyle = l.color;
                 ctx.beginPath();
-                ctx.arc(l.x, l.y, 3, 0, Math.PI * 2);
+                ctx.arc(l.x, l.y, 3.5, 0, Math.PI * 2);
                 ctx.fill();
             });
 
-            // Draw Entities
+            // Draw Ships
             entities.forEach(ent => {
-                // Draw health bar above ships
-                ctx.fillStyle = "rgba(255,255,255,0.2)";
-                ctx.fillRect(ent.x - 12, ent.y - ent.radius - 8, 24, 4);
+                // Health Indicator Layout
+                ctx.fillStyle = "rgba(255,255,255,0.15)";
+                ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32, 4);
                 ctx.fillStyle = ent.isPlayer ? "#00ffcc" : "#ff3333";
                 let hpPct = Math.max(0, ent.hp / ent.maxHp);
-                ctx.fillRect(ent.x - 12, ent.y - ent.radius - 8, 24 * hpPct, 4);
+                ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32 * hpPct, 4);
 
-                // Draw Ships
+                // Ship hulls
                 ctx.fillStyle = ent.color;
                 ctx.beginPath();
                 ctx.arc(ent.x, ent.y, ent.radius, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Add inner core design
+                // Flight center design
                 ctx.fillStyle = "#ffffff";
                 ctx.beginPath();
                 ctx.arc(ent.x, ent.y, ent.radius * 0.4, 0, Math.PI * 2);
                 ctx.fill();
             });
 
-            // Draw Particles
+            // Draw Particle effects
             particles.forEach(p => {
                 ctx.save();
                 ctx.globalAlpha = p.alpha;
@@ -371,53 +391,53 @@
                 ctx.restore();
             });
 
-            // --- DRAW HUD ---
+            // --- HUD DESIGN ---
             let playerObj = entities.find(e => e.isPlayer);
             let healthDisplay = playerObj ? Math.ceil(playerObj.hp) : 0;
 
             ctx.fillStyle = "#ffffff";
-            ctx.font = "bold 16px 'Courier New'";
+            ctx.font = "bold 18px 'Courier New'";
             ctx.textAlign = "left";
-            ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 20, 35);
+            ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
             
             ctx.textAlign = "right";
             ctx.fillStyle = "#ff0055";
-            ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 20, 35);
+            ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 30, 45);
 
-            if (storm.radius < 120 && storm.radius > storm.minRadius) {
+            if (storm.radius < (Math.max(canvas.width, canvas.height) * 0.15)) {
                 ctx.fillStyle = "#ff0055";
                 ctx.textAlign = "center";
-                ctx.font = "12px 'Courier New'";
-                ctx.fillText("STORM COLLAPSING!", canvas.width / 2, 70);
+                ctx.font = "bold 16px 'Courier New'";
+                ctx.fillText("CRITICAL STORM COLLAPSE", canvas.width / 2, 45);
             }
 
-            // --- END GAME SCREENS ---
+            // --- RESOLUTION OVERLAYS ---
             if (gameState === "GAMEOVER") {
-                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillStyle = "rgba(2,2,5,0.85)";
                 ctx.fillRect(0,0,canvas.width,canvas.height);
                 ctx.fillStyle = "#ff3366";
-                ctx.font = "32px 'Courier New'";
+                ctx.font = "bold 36px 'Courier New'";
                 ctx.textAlign = "center";
                 ctx.fillText("ELIMINATED", canvas.width / 2, canvas.height / 2 - 20);
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "16px 'Courier New'";
-                ctx.fillText(`Ranked #${entities.length + 1} out of 16`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.font = "18px 'Courier New'";
+                ctx.fillText(`Placement: #${entities.length + 1} / 19`, canvas.width / 2, canvas.height / 2 + 25);
                 ctx.fillStyle = "#00ffcc";
-                ctx.fillText("CLICK TO REDROP", canvas.width / 2, canvas.height / 2 + 70);
+                ctx.fillText("CLICK TO DEPLOY AGAIN", canvas.width / 2, canvas.height / 2 + 80);
             }
 
             if (gameState === "VICTORY") {
-                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillStyle = "rgba(2,2,5,0.85)";
                 ctx.fillRect(0,0,canvas.width,canvas.height);
                 ctx.fillStyle = "#00ffcc";
-                ctx.font = "32px 'Courier New'";
+                ctx.font = "bold 38px 'Courier New'";
                 ctx.textAlign = "center";
                 ctx.fillText("#1 VICTORY ROYALE", canvas.width / 2, canvas.height / 2 - 20);
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "16px 'Courier New'";
-                ctx.fillText("You are the last ship standing!", canvas.width / 2, canvas.height / 2 + 20);
+                ctx.font = "18px 'Courier New'";
+                ctx.fillText("Champion of the Sector!", canvas.width / 2, canvas.height / 2 + 25);
                 ctx.fillStyle = "#ff0055";
-                ctx.fillText("CLICK TO PLAY AGAIN", canvas.width / 2, canvas.height / 2 + 70);
+                ctx.fillText("CLICK TO REMATCH", canvas.width / 2, canvas.height / 2 + 80);
             }
         }
 
