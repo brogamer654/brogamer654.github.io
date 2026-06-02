@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arcade Space Shooter</title>
+    <title>Space Battle Royale</title>
     <style>
         body {
-            background-color: #0a0a12;
+            background-color: #06060c;
             margin: 0;
             padding: 0;
             display: flex;
@@ -16,268 +16,411 @@
             color: #ffffff;
             font-family: 'Courier New', Courier, monospace;
             overflow: hidden;
+            user-select: none;
         }
         #gameCanvas {
-            border: 3px solid #00ff66;
+            border: 3px solid #333;
             background-color: #020205;
-            box-shadow: 0 0 20px #00ff66;
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.2);
             cursor: crosshair;
         }
     </style>
 </head>
 <body>
 
-    <canvas id="gameCanvas" width="400" height="500"></canvas>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // Game States: "START", "PLAYING", "GAMEOVER"
+        // Game States: "START", "PLAYING", "GAMEOVER", "VICTORY"
         let gameState = "START";
-        let score = 0;
-        let lives = 3;
-
-        // Player Ship
-        const player = {
+        
+        let entities = []; // Holds both player and bots
+        let lasers = [];
+        let particles = [];
+        
+        // Storm / Safe Zone Circle
+        const storm = {
             x: canvas.width / 2,
-            y: canvas.height - 40,
-            width: 30,
-            height: 20,
-            speed: 6
+            y: canvas.height / 2,
+            radius: 400,
+            minRadius: 40,
+            shrinkSpeed: 0.15
         };
 
-        // Arrays for game objects
-        let lasers = [];
-        let enemies = [];
-        let particles = [];
-
-        // Timers
-        let enemyTimer = 0;
-        let laserTimer = 0;
-
-        // Track Mouse Position
         let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
 
-        // Listeners for Mouse and Touch
+        // Input Trackers
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
         });
 
-        canvas.addEventListener("touchmove", (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.touches[0].clientX - rect.left;
-        });
-
-        // Click to handle screen transitions
         canvas.addEventListener("click", () => {
-            if (gameState === "START") {
-                resetGame();
-                gameState = "PLAYING";
-            } else if (gameState === "GAMEOVER") {
-                resetGame();
+            if (gameState === "START" || gameState === "GAMEOVER" || gameState === "VICTORY") {
+                initBattleRoyale();
                 gameState = "PLAYING";
             }
         });
 
-        function resetGame() {
-            score = 0;
-            lives = 3;
+        function initBattleRoyale() {
+            entities = [];
             lasers = [];
-            enemies = [];
             particles = [];
-            player.x = canvas.width / 2;
-        }
+            storm.radius = 400;
 
-        function spawnEnemy() {
-            const size = Math.random() * 20 + 15;
-            enemies.push({
-                x: Math.random() * (canvas.width - size),
-                y: -size,
-                width: size,
-                height: size,
-                speed: Math.random() * 2 + 1 + (score * 0.005)
+            // Spawn Player
+            entities.push({
+                id: "player",
+                isPlayer: true,
+                x: canvas.width / 2,
+                y: canvas.height / 2 + 100,
+                radius: 12,
+                speed: 3.5,
+                hp: 100,
+                maxHp: 100,
+                color: "#00ffcc",
+                fireCooldown: 0,
+                target: null
             });
+
+            // Spawn 15 Bots spread across the map
+            for (let i = 0; i < 15; i++) {
+                // Angle and distance distribution to scatter them
+                let angle = Math.random() * Math.PI * 2;
+                let dist = Math.random() * 250 + 50; 
+                
+                entities.push({
+                    id: "bot_" + i,
+                    isPlayer: false,
+                    x: canvas.width / 2 + Math.cos(angle) * dist,
+                    y: canvas.height / 2 + Math.sin(angle) * dist,
+                    radius: 10,
+                    speed: Math.random() * 1 + 1.5,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    hp: 80,
+                    maxHp: 80,
+                    color: `hsl(${Math.random() * 50 + 15}, 100%, 60%)`, // Orange/Yellow shades
+                    fireCooldown: Math.floor(Math.random() * 30),
+                    changeDirTimer: 0
+                });
+            }
         }
 
-        function createExplosion(x, y) {
-            for (let i = 0; i < 10; i++) {
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 12; i++) {
                 particles.push({
                     x: x,
                     y: y,
-                    vx: (Math.random() - 0.5) * 6,
-                    vy: (Math.random() - 0.5) * 6,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
                     radius: Math.random() * 3 + 1,
-                    alpha: 1
+                    alpha: 1,
+                    color: color || "#ff5500"
                 });
             }
+        }
+
+        function getDistance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
         }
 
         function update() {
             if (gameState !== "PLAYING") return;
 
-            // Smoothly move player toward mouse X position
-            player.x += (mouseX - player.x) * 0.2;
-
-            // Keep player inside canvas walls
-            if (player.x < player.width / 2) player.x = player.width / 2;
-            if (player.x > canvas.width - player.width / 2) player.x = canvas.width - player.width / 2;
-
-            // Auto-fire lasers
-            laserTimer++;
-            if (laserTimer >= 15) { // Fires every 15 frames
-                lasers.push({
-                    x: player.x - 2,
-                    y: player.y,
-                    width: 4,
-                    height: 10,
-                    speed: 8
-                });
-                laserTimer = 0;
+            // 1. Shrink Storm
+            if (storm.radius > storm.minRadius) {
+                storm.radius -= storm.shrinkSpeed;
             }
 
-            // Move Lasers
-            for (let i = lasers.length - 1; i >= 0; i--) {
-                lasers[i].y -= lasers[i].speed;
-                if (lasers[i].y < 0) lasers.splice(i, 1);
-            }
+            // 2. Update Entities (Player & Bots)
+            for (let i = entities.length - 1; i >= 0; i--) {
+                let ent = entities[i];
 
-            // Spawn Enemies
-            enemyTimer++;
-            if (enemyTimer >= 50) {
-                spawnEnemy();
-                enemyTimer = 0;
-            }
-
-            // Move and manage enemies
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                let e = enemies[i];
-                e.y += e.speed;
-
-                // Enemy goes past bottom border
-                if (e.y > canvas.height) {
-                    enemies.splice(i, 1);
-                    lives--;
-                    if (lives <= 0) gameState = "GAMEOVER";
-                    continue;
+                // Storm Damage Check
+                let distFromCenter = getDistance(ent.x, ent.y, storm.x, storm.y);
+                if (distFromCenter > storm.radius) {
+                    ent.hp -= 0.2; // Continuous ticks of storm damage
                 }
 
-                // Crash: Enemy hits Player
-                if (e.x < player.x + player.width/2 &&
-                    e.x + e.width > player.x - player.width/2 &&
-                    e.y < player.y + player.height &&
-                    e.y + e.height > player.y) {
+                if (ent.isPlayer) {
+                    // Move Player towards Mouse
+                    let dx = mouseX - ent.x;
+                    let dy = mouseY - ent.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
                     
-                    createExplosion(e.x + e.width/2, e.y + e.height/2);
-                    enemies.splice(i, 1);
-                    lives--;
-                    if (lives <= 0) gameState = "GAMEOVER";
+                    if (dist > 5) {
+                        ent.x += (dx / dist) * ent.speed;
+                        ent.y += (dy / dist) * ent.speed;
+                    }
+
+                    // Player Auto-Target nearest bot
+                    let nearestBot = null;
+                    let recordDist = Infinity;
+                    entities.forEach(other => {
+                        if (!other.isPlayer) {
+                            let d = getDistance(ent.x, ent.y, other.x, other.y);
+                            if (d < recordDist) {
+                                recordDist = d;
+                                nearestBot = other;
+                            }
+                        }
+                    });
+
+                    // Fire Laser at target
+                    if (nearestBot && ent.fireCooldown <= 0) {
+                        let tDx = nearestBot.x - ent.x;
+                        let tDy = nearestBot.y - ent.y;
+                        let tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        
+                        lasers.push({
+                            x: ent.x,
+                            y: ent.y,
+                            vx: (tDx / tDist) * 7,
+                            vy: (tDy / tDist) * 7,
+                            ownerId: ent.id,
+                            color: "#00ffcc"
+                        });
+                        ent.fireCooldown = 18; // Attack speed delay
+                    }
+
+                } else {
+                    // Bot logic: AI wandering
+                    ent.changeDirTimer++;
+                    if (ent.changeDirTimer > 60) {
+                        // Randomly adjust direction vectors
+                        ent.vx = (Math.random() - 0.5) * ent.speed * 2;
+                        ent.vy = (Math.random() - 0.5) * ent.speed * 2;
+                        ent.changeDirTimer = 0;
+                    }
+
+                    ent.x += ent.vx;
+                    ent.y += ent.vy;
+
+                    // Keep bots bounce-contained within canvas edges
+                    if (ent.x < 10 || ent.x > canvas.width - 10) ent.vx *= -1;
+                    if (ent.y < 10 || ent.y > canvas.height - 10) ent.vy *= -1;
+
+                    // Bot Auto-targeting: Target closest other entity (could be player or bot)
+                    let nearestTarget = null;
+                    let recordDist = Infinity;
+                    entities.forEach(other => {
+                        if (other.id !== ent.id) {
+                            let d = getDistance(ent.x, ent.y, other.x, other.y);
+                            if (d < recordDist) {
+                                recordDist = d;
+                                nearestTarget = other;
+                            }
+                        }
+                    });
+
+                    // Bot Shoot
+                    if (nearestTarget && ent.fireCooldown <= 0 && recordDist < 200) {
+                        let tDx = nearestTarget.x - ent.x;
+                        let tDy = nearestTarget.y - ent.y;
+                        let tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+
+                        lasers.push({
+                            x: ent.x,
+                            y: ent.y,
+                            vx: (tDx / tDist) * 5,
+                            vy: (tDy / tDist) * 5,
+                            ownerId: ent.id,
+                            color: ent.color
+                        });
+                        ent.fireCooldown = 35 + Math.random() * 20; // Lower fire rate than player
+                    }
+                }
+
+                if (ent.fireCooldown > 0) ent.fireCooldown--;
+
+                // Death Condition Check
+                if (ent.hp <= 0) {
+                    createExplosion(ent.x, ent.y, ent.color);
+                    if (ent.isPlayer) {
+                        gameState = "GAMEOVER";
+                    }
+                    entities.splice(i, 1);
+                }
+            }
+
+            // Check if player is the absolute last survivor
+            if (entities.length === 1 && entities[0].isPlayer) {
+                gameState = "VICTORY";
+            }
+
+            // 3. Update Lasers
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let l = lasers[i];
+                l.x += l.vx;
+                l.y += l.vy;
+
+                // Wall bounds check
+                if (l.x < 0 || l.x > canvas.width || l.y < 0 || l.y > canvas.height) {
+                    lasers.splice(i, 1);
                     continue;
                 }
 
-                // Laser hits Enemy
-                for (let j = lasers.length - 1; j >= 0; j--) {
-                    let l = lasers[j];
-                    if (l.x < e.x + e.width &&
-                        l.x + l.width > e.x &&
-                        l.y < e.y + e.height &&
-                        l.y + l.height > e.y) {
-                        
-                        createExplosion(e.x + e.width / 2, e.y + e.height / 2);
-                        enemies.splice(i, 1);
-                        lasers.splice(j, 1);
-                        score += 10;
-                        break;
+                // Hit registration
+                for (let j = 0; j < entities.length; j++) {
+                    let ent = entities[j];
+                    if (ent.id !== l.ownerId) { // Prevent self-harming shots
+                        let d = getDistance(l.x, l.y, ent.x, ent.y);
+                        if (d < ent.radius + 3) {
+                            ent.hp -= 20; // Base damage per shot
+                            createExplosion(l.x, l.y, l.color);
+                            lasers.splice(i, 1);
+                            break;
+                        }
                     }
                 }
             }
 
-            // Update explosion particles
+            // 4. Update Particle effects
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx;
                 p.y += p.vy;
-                p.alpha -= 0.04;
+                p.alpha -= 0.03;
                 if (p.alpha <= 0) particles.splice(i, 1);
             }
         }
 
         function draw() {
-            // Clear Screen
+            // Context refresh
             ctx.fillStyle = "#020205";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             if (gameState === "START") {
-                ctx.fillStyle = "#00ff66";
+                ctx.fillStyle = "#ff0055";
                 ctx.font = "24px 'Courier New'";
                 ctx.textAlign = "center";
-                ctx.fillText("SPACE SHOOTER", canvas.width / 2, canvas.height / 2 - 30);
+                ctx.fillText("SPACE BATTLE ROYALE", canvas.width / 2, canvas.height / 2 - 40);
                 
                 ctx.fillStyle = "#ffffff";
                 ctx.font = "14px 'Courier New'";
-                ctx.fillText("Move Mouse/Finger to Guide Ship", canvas.width / 2, canvas.height / 2 + 10);
-                ctx.fillText("Lasers Fire Automatically", canvas.width / 2, canvas.height / 2 + 30);
+                ctx.fillText("16 Ships Drop In. 1 Survives.", canvas.width / 2, canvas.height / 2);
+                ctx.fillText("Avoid the shrinking Red Storm Wall.", canvas.width / 2, canvas.height / 2 + 25);
+                ctx.fillText("Move mouse to steer. Auto-attacks active.", canvas.width / 2, canvas.height / 2 + 50);
                 
-                ctx.fillStyle = "#00ff66";
+                ctx.fillStyle = "#00ffcc";
                 ctx.font = "18px 'Courier New'";
-                ctx.fillText("CLICK SCREEN TO START", canvas.width / 2, canvas.height / 2 + 80);
+                ctx.fillText("CLICK TO DROP IN", canvas.width / 2, canvas.height / 2 + 110);
+                return;
             }
 
-            if (gameState === "PLAYING") {
-                // Draw Player Ship (Triangle)
+            // --- DRAW GAMEPLAY ELEMENTS ---
+            
+            // Draw Storm Boundaries (Outer Red Zone)
+            ctx.strokeStyle = "rgba(255, 0, 85, 0.8)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Tint the danger zone lightly red
+            ctx.fillStyle = "rgba(255, 0, 85, 0.05)";
+            ctx.beginPath();
+            ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
+            ctx.rect(canvas.width, 0, -canvas.width, canvas.height); // Outer invert mask
+            ctx.fill();
+
+            // Draw Lasers
+            lasers.forEach(l => {
+                ctx.fillStyle = l.color;
+                ctx.beginPath();
+                ctx.arc(l.x, l.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Entities
+            entities.forEach(ent => {
+                // Draw health bar above ships
+                ctx.fillStyle = "rgba(255,255,255,0.2)";
+                ctx.fillRect(ent.x - 12, ent.y - ent.radius - 8, 24, 4);
+                ctx.fillStyle = ent.isPlayer ? "#00ffcc" : "#ff3333";
+                let hpPct = Math.max(0, ent.hp / ent.maxHp);
+                ctx.fillRect(ent.x - 12, ent.y - ent.radius - 8, 24 * hpPct, 4);
+
+                // Draw Ships
+                ctx.fillStyle = ent.color;
+                ctx.beginPath();
+                ctx.arc(ent.x, ent.y, ent.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add inner core design
                 ctx.fillStyle = "#ffffff";
                 ctx.beginPath();
-                ctx.moveTo(player.x, player.y);
-                ctx.lineTo(player.x - player.width / 2, player.y + player.height);
-                ctx.lineTo(player.x + player.width / 2, player.y + player.height);
-                ctx.closePath();
+                ctx.arc(ent.x, ent.y, ent.radius * 0.4, 0, Math.PI * 2);
                 ctx.fill();
+            });
 
-                // Draw Lasers
-                ctx.fillStyle = "#00ffff";
-                lasers.forEach(l => ctx.fillRect(l.x, l.y, l.width, l.height));
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
 
-                // Draw Enemies
-                ctx.fillStyle = "#ff3366";
-                enemies.forEach(e => ctx.fillRect(e.x, e.y, e.width, e.height));
+            // --- DRAW HUD ---
+            let playerObj = entities.find(e => e.isPlayer);
+            let healthDisplay = playerObj ? Math.ceil(playerObj.hp) : 0;
 
-                // Draw Particles
-                particles.forEach(p => {
-                    ctx.save();
-                    ctx.globalAlpha = p.alpha;
-                    ctx.fillStyle = "#ff9900";
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
-                });
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 16px 'Courier New'";
+            ctx.textAlign = "left";
+            ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 20, 35);
+            
+            ctx.textAlign = "right";
+            ctx.fillStyle = "#ff0055";
+            ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 20, 35);
 
-                // UI Text (Score & Lives)
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "16px 'Courier New'";
-                ctx.textAlign = "left";
-                ctx.fillText(`SCORE: ${score}`, 15, 30);
-                ctx.textAlign = "right";
-                ctx.fillText(`LIVES: ${lives}`, canvas.width - 15, 30);
+            if (storm.radius < 120 && storm.radius > storm.minRadius) {
+                ctx.fillStyle = "#ff0055";
+                ctx.textAlign = "center";
+                ctx.font = "12px 'Courier New'";
+                ctx.fillText("STORM COLLAPSING!", canvas.width / 2, 70);
             }
 
+            // --- END GAME SCREENS ---
             if (gameState === "GAMEOVER") {
+                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillRect(0,0,canvas.width,canvas.height);
                 ctx.fillStyle = "#ff3366";
-                ctx.font = "28px 'Courier New'";
+                ctx.font = "32px 'Courier New'";
                 ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
-                
+                ctx.fillText("ELIMINATED", canvas.width / 2, canvas.height / 2 - 20);
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "18px 'Courier New'";
-                ctx.fillText(`FINAL SCORE: ${score}`, canvas.width / 2, canvas.height / 2 + 20);
-                
-                ctx.fillStyle = "#00ff66";
+                ctx.font = "16px 'Courier New'";
+                ctx.fillText(`Ranked #${entities.length + 1} out of 16`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillStyle = "#00ffcc";
+                ctx.fillText("CLICK TO REDROP", canvas.width / 2, canvas.height / 2 + 70);
+            }
+
+            if (gameState === "VICTORY") {
+                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.fillStyle = "#00ffcc";
+                ctx.font = "32px 'Courier New'";
+                ctx.textAlign = "center";
+                ctx.fillText("#1 VICTORY ROYALE", canvas.width / 2, canvas.height / 2 - 20);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "16px 'Courier New'";
+                ctx.fillText("You are the last ship standing!", canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillStyle = "#ff0055";
                 ctx.fillText("CLICK TO PLAY AGAIN", canvas.width / 2, canvas.height / 2 + 70);
             }
         }
 
-        // Main Execution loop
         function gameLoop() {
             update();
             draw();
