@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dodge Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #222;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        canvas {
+            background: #111;
+            display: block;
+            margin: auto;
+            border: 3px solid white;
+        }
+
+        h1 {
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Dodge the Falling Blocks</h1>
+<canvas id="gameCanvas" width="500" height="700"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const player = {
+    x: 225,
+    y: 650,
+    width: 50,
+    height: 30,
+    speed: 7
+};
+
+let obstacles = [];
+let score = 0;
+let gameOver = false;
+
+const keys = {};
+
+document.addEventListener("keydown", e => {
+    keys[e.key] = true;
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.key] = false;
+});
+
+function spawnObstacle() {
+    obstacles.push({
+        x: Math.random() * (canvas.width - 30),
+        y: -30,
+        width: 30,
+        height: 30,
+        speed: 3 + Math.random() * 4
+    });
+}
+
+function update() {
+    if (gameOver) return;
+
+    if (keys["ArrowLeft"]) {
+        player.x -= player.speed;
+    }
+
+    if (keys["ArrowRight"]) {
+        player.x += player.speed;
+    }
+
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+    for (let i = 0; i < obstacles.length; i++) {
+        obstacles[i].y += obstacles[i].speed;
+
+        if (
+            player.x < obstacles[i].x + obstacles[i].width &&
+            player.x + player.width > obstacles[i].x &&
+            player.y < obstacles[i].y + obstacles[i].height &&
+            player.y + player.height > obstacles[i].y
+        ) {
+            gameOver = true;
+        }
+    }
+
+    obstacles = obstacles.filter(o => o.y < canvas.height + 50);
+
+    score++;
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Player
+    ctx.fillStyle = "lime";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    // Obstacles
+    ctx.fillStyle = "red";
+    obstacles.forEach(o => {
+        ctx.fillRect(o.x, o.y, o.width, o.height);
+    });
+
+    // Score
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.fillText("Score: " + score, 10, 30);
+
+    if (gameOver) {
+        ctx.fillStyle = "yellow";
+        ctx.font = "50px Arial";
+        ctx.fillText("GAME OVER", 90, 350);
+
+        ctx.font = "25px Arial";
+        ctx.fillText("Final Score: " + score, 160, 400);
+    }
+}
+
+setInterval(() => {
+    if (!gameOver) {
+        spawnObstacle();
+    }
+}, 700);
+
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+
+</body>
+</html>
