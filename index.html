@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Canvas Snake</title>
+    <title>Retro Space Shooter</title>
     <style>
         body {
-            background-color: #121212;
+            background-color: #0b0b1e;
             color: #ffffff;
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -19,64 +19,81 @@
         }
 
         h1 {
-            margin-bottom: 5px;
-            letter-spacing: 2px;
-            color: #4CAF50;
+            margin: 0 0 5px 0;
+            font-size: 28px;
+            letter-spacing: 3px;
+            color: #00ffcc;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
         }
 
-        #score-board {
-            font-size: 20px;
-            margin-bottom: 15px;
+        #ui-container {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            font-size: 18px;
+            letter-spacing: 1px;
         }
 
         #game-container {
             position: relative;
             width: 400px;
-            height: 400px;
-            box-shadow: 0 0 30px rgba(76, 175, 80, 0.3);
+            height: 500px;
+            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
         }
 
         canvas {
-            border: 4px solid #4CAF50;
-            background-color: #050505;
+            border: 2px solid #00ffcc;
+            background-color: #050510;
+            display: block;
         }
 
-        #game-over-screen {
-            display: none;
+        #overlay-screen {
+            display: flex;
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(5, 5, 16, 0.85);
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border: 4px solid #FF5252;
             box-sizing: border-box;
+            border: 2px solid #ff3366;
         }
 
-        #game-over-screen h2 {
-            color: #FF5252;
-            font-size: 32px;
+        #overlay-screen h2 {
+            color: #ff3366;
+            font-size: 36px;
             margin: 0 0 10px 0;
+            text-shadow: 0 0 10px rgba(255, 51, 102, 0.5);
+        }
+
+        #overlay-screen p {
+            margin: 5px 0;
+            font-size: 18px;
         }
 
         button {
-            background-color: #4CAF50;
+            background-color: #00ffcc;
             border: none;
-            color: black;
-            font-family: 'Courier New', Courier, monospace;
+            color: #050510;
+            font-family: inherit;
             font-weight: bold;
-            padding: 10px 20px;
+            padding: 12px 28px;
             font-size: 16px;
-            margin-top: 15px;
+            margin-top: 20px;
             cursor: pointer;
-            transition: transform 0.1s, background 0.2s;
+            border-radius: 4px;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.4);
+            transition: transform 0.1s, background 0.2s, box-shadow 0.2s;
         }
 
         button:hover {
-            background-color: #66BB6A;
+            background-color: #33ffdd;
+            box-shadow: 0 0 25px rgba(0, 255, 204, 0.7);
             transform: scale(1.05);
         }
 
@@ -87,15 +104,18 @@
 </head>
 <body>
 
-    <h1>SNAKE</h1>
-    <div id="score-board">SCORE: <span id="score">0</span></div>
+    <h1>SPACE SHOOTER</h1>
+    <div id="ui-container">
+        <div>SCORE: <span id="score">0</span></div>
+        <div>LIVES: <span id="lives">3</span></div>
+    </div>
 
     <div id="game-container">
-        <canvas id="gameCanvas" width="400" height="400"></canvas>
-        <div id="game-over-screen">
-            <h2>GAME OVER</h2>
-            <p>FINAL SCORE: <span id="final-score">0</span></p>
-            <button onclick="resetGame()">PLAY AGAIN</button>
+        <canvas id="gameCanvas" width="400" height="500"></canvas>
+        <div id="overlay-screen">
+            <h2 id="overlay-title">READY?</h2>
+            <p id="overlay-desc">Defend the perimeter.</p>
+            <button id="action-btn" onclick="startGame()">START GAME</button>
         </div>
     </div>
 
@@ -103,160 +123,240 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const scoreElement = document.getElementById("score");
-        const gameOverScreen = document.getElementById("game-over-screen");
-        const finalScoreElement = document.getElementById("final-score");
+        const livesElement = document.getElementById("lives");
+        const overlayScreen = document.getElementById("overlay-screen");
+        const overlayTitle = document.getElementById("overlay-title");
+        const overlayDesc = document.getElementById("overlay-desc");
+        const actionBtn = document.getElementById("action-btn");
 
-        const gridSize = 20; 
-        const tileCount = canvas.width / gridSize;
-
-        let snake = [];
-        let food = { x: 0, y: 0 };
-        let dx = gridSize; // horizontal velocity
-        let dy = 0;        // vertical velocity
+        // Game State Variables
+        let isGameActive = false;
         let score = 0;
-        let gameInterval;
-        const gameSpeed = 90; // millisecond intervals (lower = faster)
-        let changingDirection = false; 
+        let lives = 3;
+        let animationFrameId;
 
-        // Listen for keyboard inputs
-        document.addEventListener("keydown", changeDirection);
-        
-        // Start the game loop automatically on load
-        resetGame();
+        // Player properties
+        const player = {
+            x: canvas.width / 2 - 15,
+            y: canvas.height - 40,
+            width: 30,
+            height: 25,
+            speed: 5,
+            movingLeft: false,
+            movingRight: false
+        };
 
-        function gameLoop() {
-            if (hasGameEnded()) {
-                gameOverScreen.style.display = "flex";
-                finalScoreElement.innerText = score;
-                clearInterval(gameInterval);
-                return;
+        // Arrays to hold entities
+        let lasers = [];
+        let enemies = [];
+        let particles = [];
+
+        // Timing controls
+        let enemySpawnTimer = 0;
+        let enemySpawnInterval = 60; // Spawn an enemy every 60 frames (~1 second)
+        let lastShotTime = 0;
+        const shotCooldown = 250; // Minimum time between shots in milliseconds
+
+        // Keyboard Event Listeners
+        document.addEventListener("keydown", (e) => {
+            if (e.code === "ArrowLeft" || e.code === "KeyA") player.movingLeft = true;
+            if (e.code === "ArrowRight" || e.code === "KeyD") player.movingRight = true;
+            if (e.code === "Space") {
+                e.preventDefault(); // Prevent page scrolling
+                fireLaser();
             }
+        });
 
-            changingDirection = false;
-            clearCanvas();
-            drawFood();
-            moveSnake();
-            drawSnake();
-        }
+        document.addEventListener("keyup", (e) => {
+            if (e.code === "ArrowLeft" || e.code === "KeyA") player.movingLeft = false;
+            if (e.code === "ArrowRight" || e.code === "KeyD") player.movingRight = false;
+        });
 
-        function clearCanvas() {
-            ctx.fillStyle = "#050505";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-
-        function drawSnake() {
-            snake.forEach((part, index) => {
-                // Head is bright green, body segments are slightly lighter green
-                ctx.fillStyle = index === 0 ? "#4CAF50" : "#81C784";
-                ctx.fillRect(part.x, part.y, gridSize - 2, gridSize - 2);
-            });
-        }
-
-        function moveSnake() {
-            // Create a new head position based on current velocity
-            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-            snake.unshift(head);
-
-            // Check if snake ate the food
-            if (snake[0].x === food.x && snake[0].y === food.y) {
-                score += 10;
-                scoreElement.innerText = score;
-                generateFood();
-            } else {
-                // Remove the tail segment if it didn't eat food
-                snake.pop();
-            }
-        }
-
-        function generateFood() {
-            food.x = Math.floor(Math.random() * tileCount) * gridSize;
-            food.y = Math.floor(Math.random() * tileCount) * gridSize;
-
-            // Prevent food from spawning on top of the snake's body
-            snake.forEach(part => {
-                if (part.x === food.x && part.y === food.y) {
-                    generateFood();
-                }
-            });
-        }
-
-        function drawFood() {
-            ctx.fillStyle = "#FF5252";
-            ctx.fillRect(food.x, food.y, gridSize - 2, gridSize - 2);
-        }
-
-        function changeDirection(event) {
-            const keyPressed = event.keyCode;
-            
-            // Arrow key codes
-            const LEFT_KEY = 37;
-            const UP_KEY = 38;
-            const RIGHT_KEY = 39;
-            const DOWN_KEY = 40;
-
-            // Prevent rapid inputs from triggering self-collision before the next frame updates
-            if (changingDirection) return;
-
-            const goingUp = dy === -gridSize;
-            const goingDown = dy === gridSize;
-            const goingRight = dx === gridSize;
-            const goingLeft = dx === -gridSize;
-
-            if (keyPressed === LEFT_KEY && !goingRight) {
-                dx = -gridSize;
-                dy = 0;
-                changingDirection = true;
-            }
-            if (keyPressed === UP_KEY && !goingDown) {
-                dx = 0;
-                dy = -gridSize;
-                changingDirection = true;
-            }
-            if (keyPressed === RIGHT_KEY && !goingLeft) {
-                dx = gridSize;
-                dy = 0;
-                changingDirection = true;
-            }
-            if (keyPressed === DOWN_KEY && !goingUp) {
-                dx = 0;
-                dy = gridSize;
-                changingDirection = true;
-            }
-        }
-
-        function hasGameEnded() {
-            // Check wall collisions
-            const hitLeftWall = snake[0].x < 0;
-            const hitRightWall = snake[0].x >= canvas.width;
-            const hitToptWall = snake[0].y < 0;
-            const hitBottomWall = snake[0].y >= canvas.height;
-
-            if (hitLeftWall || hitRightWall || hitToptWall || hitBottomWall) return true;
-
-            // Check self collisions (skip index 0, which is the head itself)
-            for (let i = 4; i < snake.length; i++) {
-                if (snake[i].x === snake[0].x && snake[i].y === snake[0].y) return true;
-            }
-            return false;
-        }
-
-        function resetGame() {
-            // Initial position: center of the grid, 3 blocks long
-            snake = [
-                { x: 200, y: 200 },
-                { x: 180, y: 200 },
-                { x: 160, y: 200 }
-            ];
-            dx = gridSize; 
-            dy = 0;
+        function startGame() {
+            // Reset game tracking variables
             score = 0;
-            scoreElement.innerText = score;
-            gameOverScreen.style.display = "none";
-            generateFood();
+            lives = 3;
+            lasers = [];
+            enemies = [];
+            particles = [];
+            enemySpawnInterval = 60;
+            player.x = canvas.width / 2 - player.width / 2;
             
-            clearInterval(gameInterval);
-            gameInterval = setInterval(gameLoop, gameSpeed);
+            scoreElement.innerText = score;
+            livesElement.innerText = lives;
+            overlayScreen.style.display = "none";
+            isGameActive = true;
+            
+            // Start the loop
+            cancelAnimationFrame(animationFrameId);
+            gameLoop();
         }
-    </script>
-</body>
-</html>
+
+        function gameOver() {
+            isGameActive = false;
+            cancelAnimationFrame(animationFrameId);
+            
+            overlayTitle.innerText = "GAME OVER";
+            overlayTitle.style.color = "#ff3366";
+            overlayScreen.style.border = "2px solid #ff3366";
+            overlayDesc.innerText = `Final Score: ${score}`;
+            actionBtn.innerText = "PLAY AGAIN";
+            overlayScreen.style.display = "flex";
+        }
+
+        function fireLaser() {
+            if (!isGameActive) return;
+            const currentTime = Date.now();
+            if (currentTime - lastShotTime >= shotCooldown) {
+                // Spawn laser from the nose of the ship
+                lasers.push({
+                    x: player.x + player.width / 2 - 2,
+                    y: player.y,
+                    width: 4,
+                    height: 12,
+                    speed: 7
+                });
+                lastShotTime = currentTime;
+            }
+        }
+
+        function spawnEnemy() {
+            const size = Math.random() * 20 + 15; // Random size between 15 and 35
+            const x = Math.random() * (canvas.width - size);
+            const speed = Math.random() * 2 + 1.5 + (score * 0.005); // Speed scales slightly with score
+            
+            enemies.push({
+                x: x,
+                y: -size,
+                width: size,
+                height: size,
+                speed: speed,
+                hue: Math.floor(Math.random() * 40) + 340 // Varied shades of reddish-pink
+            });
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    radius: Math.random() * 3 + 1,
+                    alpha: 1,
+                    color: color
+                });
+            }
+        }
+
+        function update() {
+            // Move Player
+            if (player.movingLeft && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (player.movingRight && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Move Lasers
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                lasers[i].y -= lasers[i].speed;
+                // Remove out of bounds lasers
+                if (lasers[i].y < -lasers[i].height) {
+                    lasers.splice(i, 1);
+                }
+            }
+
+            // Spawn Enemies
+            enemySpawnTimer++;
+            if (enemySpawnTimer >= enemySpawnInterval) {
+                spawnEnemy();
+                enemySpawnTimer = 0;
+                // Gradually make the game faster as score increases
+                enemySpawnInterval = Math.max(20, 60 - Math.floor(score / 100) * 4);
+            }
+
+            // Move and Manage Enemies
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let enemy = enemies[i];
+                enemy.y += enemy.speed;
+
+                // Check if enemy passed the bottom border
+                if (enemy.y > canvas.height) {
+                    enemies.splice(i, 1);
+                    lives--;
+                    livesElement.innerText = lives;
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    }
+                    continue;
+                }
+
+                // Collision Detection: Player vs Enemy
+                if (enemy.x < player.x + player.width &&
+                    enemy.x + enemy.width > player.x &&
+                    enemy.y < player.y + player.height &&
+                    enemy.y + enemy.height > player.y) {
+                    
+                    createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2, `hsl(${enemy.hue}, 100%, 60%)`);
+                    enemies.splice(i, 1);
+                    lives--;
+                    livesElement.innerText = lives;
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    }
+                    continue;
+                }
+
+                // Collision Detection: Lasers vs Enemy
+                for (let j = lasers.length - 1; j >= 0; j--) {
+                    let laser = lasers[j];
+                    if (laser.x < enemy.x + enemy.width &&
+                        laser.x + laser.width > enemy.x &&
+                        laser.y < enemy.y + enemy.height &&
+                        laser.y + laser.height > enemy.y) {
+                        
+                        // Trigger Hit Effects
+                        createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2, `hsl(${enemy.hue}, 100%, 60%)`);
+                        
+                        // Remove entities
+                        enemies.splice(i, 1);
+                        lasers.splice(j, 1);
+                        
+                        // Update Score
+                        score += 10;
+                        scoreElement.innerText = score;
+                        break;
+                    }
+                }
+            }
+
+            // Update Particle Effects
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.03;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            // Clear screen with a slight trail effect
+            ctx.fillStyle = "rgba(5, 5, 16, 0.3)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Lasers (Bright Neon Blue Cyan)
+            ctx.fillStyle = "#00ffcc";
+            lasers.forEach(laser => {
+                ctx.fillRect(laser.x, laser.y, laser.width, laser.height);
+            });
+
+            // Draw Enemies (Distinct Outlined Blocks)
+            enemies.forEach(enemy => {
+                ctx.fillStyle = `hsl(${enemy.hue}, 90%, 50%)`;
+                ctx.fillRect
