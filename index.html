@@ -2,65 +2,223 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Space Battle Royale - Stylized Flat Arena</title>
+    <title>Space Battle Royale - Full Fortnite Edition</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #4fa33e; font-family: monospace; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #4fa33e; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
         canvas { display: block; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #ffffff; font-size: 16px; pointer-events: none; text-shadow: 2px 2px 0px #000; font-weight: bold; }
-        #storm-warning { position: absolute; top: 20px; right: 20px; color: #ff0055; font-size: 18px; text-shadow: 2px 2px 0px #000; font-weight: bold; }
+        
+        /* Screen Overlays */
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(30, 40, 55, 0.85); color: white; z-index: 10; }
+        .hidden { display: none !important; }
+        
+        h1 { font-size: 48px; margin-bottom: 20px; text-shadow: 3px 3px 0px #000; letter-spacing: 2px; color: #ffff33; }
+        button { padding: 12px 30px; font-size: 20px; font-weight: bold; background: #ff9900; border: 3px solid #fff; border-radius: 8px; color: white; cursor: pointer; text-shadow: 1px 1px 0px #000; box-shadow: 0 5px 0px #b36600; margin: 10px; transition: transform 0.1s; }
+        button:active { transform: translateY(4px); box-shadow: 0 1px 0px #b36600; }
+        
+        /* Settings Panel */
+        .settings-panel { background: rgba(0,0,0,0.6); padding: 20px; border-radius: 10px; border: 2px solid #ff9900; margin-bottom: 20px; width: 300px; text-align: left; }
+        .setting-row { margin: 15px 0; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        
+        /* HUD UI Elements */
+        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; box-sizing: border-box; padding: 20px; display: flex; justify-content: space-between; align-items: flex-start; z-index: 5; }
+        .hud-card { color: #ffffff; font-size: 18px; text-shadow: 2px 2px 0px #000; font-weight: bold; line-height: 1.5; }
+        #storm-warning { color: #ff3366; font-size: 22px; animation: pulse 1s infinite alternate; }
+        
+        /* Inventory System Layout */
+        #inventory-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.2); z-index: 5; }
+        .inv-slot { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border: 2px solid #aaa; border-radius: 6px; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; font-size: 11px; font-weight: bold; position: relative; }
+        .inv-slot.active { border-color: #ffff00; background: rgba(255, 255, 0, 0.25); box-shadow: 0 0 10px #ffff00; }
+        .inv-slot .ammo { position: absolute; bottom: 2px; right: 4px; font-size: 10px; color: #ffcc00; }
+        .inv-slot .key-bind { position: absolute; top: 2px; left: 4px; font-size: 9px; color: #aaa; }
+
+        @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        HEALTH: <span id="hp">100</span>%<br>
-        ALIVE: <span id="alive">50</span>/50<br>
-        CONTROLS: W/S (Move), Mouse (Look/Steer), Left Click (Shoot)
+    <div id="startScreen" class="screen">
+        <h1>BATTLE ROYALE</h1>
+        <button id="playBtn">PLAY MATCH</button>
+        <button id="settingsBtn">SETTINGS</button>
     </div>
-    <div id="storm-warning">STORM SHRINKING</div>
+
+    <div id="settingsScreen" class="screen hidden">
+        <h1>SETTINGS</h1>
+        <div class="settings-panel">
+            <div class="setting-row">
+                <label>Mouse Sensitivity</label>
+                <input type="range" id="sensSlider" min="1" max="10" value="5">
+            </div>
+            <div class="setting-row">
+                <label>Show Grid Tiling</label>
+                <input type="checkbox" id="gridToggle" checked>
+            </div>
+        </div>
+        <button id="backBtn">SAVE & BACK</button>
+    </div>
+
+    <div id="gameOverScreen" class="screen hidden">
+        <h1 id="endTitle">ELIMINATED</h1>
+        <p id="endRank" style="font-size: 24px; margin-bottom: 20px; font-weight: bold;"></p>
+        <button id="restartBtn">MAIN MENU</button>
+    </div>
+
+    <div id="hud" class="hidden">
+        <div class="hud-card">
+            HEALTH: <span id="hp" style="color: #33cc33; font-size: 24px;">100</span>/100<br>
+            SHIELD: <span id="shield" style="color: #3399ff; font-size: 24px;">0</span>/100
+        </div>
+        <div id="storm-warning" class="hud-card">STORM SHRINKING</div>
+        <div class="hud-card" style="text-align: right;">
+            ALIVE: <span id="alive" style="color: #ff9900; font-size: 24px;">50</span><br>
+            KILLS: <span id="kills" style="color: #ffff33; font-size: 24px;">0</span>
+        </div>
+    </div>
+
+    <div id="inventory-bar" class="hidden">
+        <div class="inv-slot active" id="slot-0"><span class="key-bind">1</span><span class="name">AR</span><span class="ammo" id="ammo-0">30</span></div>
+        <div class="inv-slot" id="slot-1"><span class="key-bind">2</span><span class="name">SHOTGUN</span><span class="ammo" id="ammo-1">5</span></div>
+        <div class="inv-slot" id="slot-2"><span class="key-bind">3</span><span class="name">SNIPER</span><span class="ammo" id="ammo-2">1</span></div>
+        <div class="inv-slot" id="slot-3"><span class="key-bind">4</span><span class="name">SHIELD PNT</span><span class="ammo" id="ammo-3">2</span></div>
+    </div>
+
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
+        // Map & Mechanics Configuration
         const mapSize = 8000;
-        let player = { x: mapSize/2, y: mapSize/2, angle: 0, hp: 100, speed: 5.5, fireCooldown: 0 };
-        let storm = { x: mapSize/2, y: mapSize/2, radius: 3500, minRadius: 200, shrinkSpeed: 0.5 };
+        let gameState = "START"; // START, SETTINGS, PLAYING, GAMEOVER
+        
+        let player = { x: mapSize/2, y: mapSize/2, angle: 0, hp: 100, shield: 0, speed: 5.5, fireCooldown: 0, kills: 0 };
+        let storm = { x: mapSize/2, y: mapSize/2, radius: 3800, minRadius: 150, shrinkSpeed: 0.4 };
+        
+        // Settings Configurations
+        let config = { sensitivity: 5, drawGrid: true };
+
+        // Weapon Inventory Configurations
+        let inventory = [
+            { name: "AR", type: "weapon", ammo: 30, maxAmmo: 30, cooldown: 10, damage: 22, range: 700, spread: 0.02, speed: 24, color: "#ffff00" },
+            { name: "SHOTGUN", type: "weapon", ammo: 5, maxAmmo: 5, cooldown: 45, damage: 12, range: 300, spread: 0.12, speed: 18, color: "#ff3333" },
+            { name: "SNIPER", type: "weapon", ammo: 1, maxAmmo: 1, cooldown: 75, damage: 85, range: 1500, spread: 0.0, speed: 35, color: "#33ffff" },
+            { name: "SHIELD PNT", type: "consumable", ammo: 2, maxAmmo: 3 }
+        ];
+        let activeSlot = 0;
+
         let entities = [];
         let lasers = [];
         let keys = {};
         let mouseX = 0, mouseY = 0, mousePressed = false;
 
+        // --- SCREEN HANDLING MANAGEMENT ---
+        function switchState(state) {
+            gameState = state;
+            document.getElementById("startScreen").classList.add("hidden");
+            document.getElementById("settingsScreen").classList.add("hidden");
+            document.getElementById("gameOverScreen").classList.add("hidden");
+            document.getElementById("hud").classList.add("hidden");
+            document.getElementById("inventory-bar").classList.add("hidden");
+
+            if (state === "START") document.getElementById("startScreen").classList.remove("hidden");
+            if (state === "SETTINGS") document.getElementById("settingsScreen").classList.remove("hidden");
+            if (state === "PLAYING") {
+                document.getElementById("hud").classList.remove("hidden");
+                document.getElementById("inventory-bar").classList.remove("hidden");
+                initGame();
+            }
+            if (state === "GAMEOVER") {
+                document.getElementById("gameOverScreen").classList.remove("hidden");
+                let placement = entities.length + 1;
+                document.getElementById("endTitle").innerText = placement === 1 ? "VICTORY ROYALE!" : "ELIMINATED";
+                document.getElementById("endTitle").style.color = placement === 1 ? "#ffff33" : "#ff3366";
+                document.getElementById("endRank").innerText = `RANK: #${placement} | KILLS: ${player.kills}`;
+            }
+        }
+
+        // Setup DOM Actions
+        document.getElementById("playBtn").addEventListener("click", () => switchState("PLAYING"));
+        document.getElementById("settingsBtn").addEventListener("click", () => switchState("SETTINGS"));
+        document.getElementById("backBtn").addEventListener("click", () => {
+            config.sensitivity = parseInt(document.getElementById("sensSlider").value);
+            config.drawGrid = document.getElementById("gridToggle").checked;
+            switchState("START");
+        });
+        document.getElementById("restartBtn").addEventListener("click", () => switchState("START"));
+
         function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         window.addEventListener("resize", resize);
         resize();
 
-        window.addEventListener("keydown", e => keys[e.code] = true);
+        // Control Listeners
+        window.addEventListener("keydown", e => {
+            keys[e.code] = true;
+            if (e.code === "Digit1") selectSlot(0);
+            if (e.code === "Digit2") selectSlot(1);
+            if (e.code === "Digit3") selectSlot(2);
+            if (e.code === "Digit4") selectSlot(3);
+            if (e.code === "KeyR") reloadWeapon();
+        });
         window.addEventListener("keyup", e => keys[e.code] = false);
         window.addEventListener("mousemove", e => { mouseX = e.clientX; mouseY = e.clientY; });
         window.addEventListener("mousedown", e => { if(e.button === 0) mousePressed = true; });
         window.addEventListener("mouseup", e => { if(e.button === 0) mousePressed = false; });
 
-        // Initialize Bot Enemies with bright Fortnite-style colors
-        const colors = ["#ff3366", "#ffff33", "#3399ff", "#ff9933", "#ff33ff", "#33ffff"];
-        for (let i = 0; i < 49; i++) {
-            entities.push({
-                id: i,
-                x: mapSize/2 + (Math.random() - 0.5) * 4000,
-                y: mapSize/2 + (Math.random() - 0.5) * 4000,
-                angle: Math.random() * Math.PI * 2,
-                hp: 100,
-                color: colors[Math.floor(Math.random() * colors.length)],
-                fireCooldown: Math.random() * 60
-            });
+        function selectSlot(index) {
+            document.getElementById(`slot-${activeSlot}`).classList.remove("active");
+            activeSlot = index;
+            document.getElementById(`slot-${activeSlot}`).classList.add("active");
         }
 
-        // --- 3D PERSPECTIVE PROJECTION (FLAT GROUND) ---
+        function reloadWeapon() {
+            let item = inventory[activeSlot];
+            if (item.type === "weapon" && item.ammo < item.maxAmmo) {
+                player.fireCooldown = 60; // Reload latency stall
+                item.ammo = item.maxAmmo;
+                updateAmmoUI();
+            }
+        }
+
+        function updateAmmoUI() {
+            for(let i=0; i<4; i++) {
+                document.getElementById(`ammo-${i}`).innerText = inventory[i].ammo;
+            }
+        }
+
+        function initGame() {
+            player = { x: mapSize/2, y: mapSize/2, angle: 0, hp: 100, shield: 0, speed: 5.5, fireCooldown: 0, kills: 0 };
+            storm = { x: mapSize/2, y: mapSize/2, radius: 3800, minRadius: 150, shrinkSpeed: 0.4 };
+            lasers = [];
+            entities = [];
+            
+            // Refill inventory values
+            inventory[0].ammo = 30;
+            inventory[1].ammo = 5;
+            inventory[2].ammo = 1;
+            inventory[3].ammo = 2;
+            selectSlot(0);
+            updateAmmoUI();
+
+            const colors = ["#ff3366", "#ffff33", "#3399ff", "#ff9933", "#ff33ff", "#33ffff"];
+            for (let i = 0; i < 49; i++) {
+                entities.push({
+                    id: i,
+                    x: mapSize/2 + (Math.random() - 0.5) * 5000,
+                    y: mapSize/2 + (Math.random() - 0.5) * 5000,
+                    angle: Math.random() * Math.PI * 2,
+                    hp: 100, shield: Math.random() > 0.5 ? 50 : 0,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    fireCooldown: Math.random() * 60
+                });
+            }
+        }
+
+        // --- 3D PERSPECTIVE PROJECTION SYSTEM ---
         function project3D(wx, wy, wz) {
             let camX = player.x - Math.cos(player.angle) * 95;
             let camY = player.y - Math.sin(player.angle) * 95;
-            let camZ = 40; // Flat constant camera height
+            let camZ = 40;
 
             let dx = wx - camX, dy = wy - camY, dz = wz - camZ;
             let rx = -dx * Math.sin(player.angle) + dy * Math.cos(player.angle);
@@ -77,15 +235,58 @@
             };
         }
 
+        function useConsumable() {
+            let item = inventory[activeSlot];
+            if (item.type === "consumable" && item.ammo > 0 && player.shield < 100) {
+                player.shield = Math.min(100, player.shield + 50);
+                item.ammo--;
+                player.fireCooldown = 45; 
+                updateAmmoUI();
+            }
+        }
+
+        function fireActiveWeapon() {
+            let weapon = inventory[activeSlot];
+            if (weapon.type !== "weapon" || weapon.ammo <= 0) return;
+
+            weapon.ammo--;
+            player.fireCooldown = weapon.cooldown;
+            updateAmmoUI();
+
+            if (activeSlot === 1) { // Shotgun Pellet Multi-Burst Engine
+                for (let i = -2; i <= 2; i++) {
+                    let spreadAngle = player.angle + (i * 0.04);
+                    lasers.push({
+                        x: player.x, y: player.y, z: 6,
+                        vx: Math.cos(spreadAngle) * weapon.speed,
+                        vy: Math.sin(spreadAngle) * weapon.speed,
+                        damage: weapon.damage, range: weapon.range,
+                        isPlayer: true, life: weapon.range / weapon.speed
+                    });
+                }
+            } else { // Single Line Standard Fire Tracking
+                let dev = (Math.random() - 0.5) * weapon.spread;
+                lasers.push({
+                    x: player.x, y: player.y, z: 6,
+                    vx: Math.cos(player.angle + dev) * weapon.speed,
+                    vy: Math.sin(player.angle + dev) * weapon.speed,
+                    damage: weapon.damage, range: weapon.range,
+                    isPlayer: true, life: weapon.range / weapon.speed
+                });
+            }
+        }
+
         function update() {
-            // Storm logic
+            if (gameState !== "PLAYING") return;
+
+            // Handle Safe Area Circle Tracking
             if (storm.radius > storm.minRadius) storm.radius -= storm.shrinkSpeed;
 
-            // Player Rotation via Horizon Mouse Look
+            // Camera Look Direction calculations
             let mouseOffsetX = mouseX - canvas.width / 2;
-            player.angle += (mouseOffsetX / (canvas.width / 2)) * 0.04;
+            player.angle += (mouseOffsetX / (canvas.width / 2)) * (0.01 * config.sensitivity);
 
-            // Player Movement
+            // Forward/Back Movement Engine Vector
             if (keys["KeyW"] || keys["ArrowUp"]) {
                 player.x += Math.cos(player.angle) * player.speed;
                 player.y += Math.sin(player.angle) * player.speed;
@@ -95,48 +296,50 @@
                 player.y -= Math.sin(player.angle) * player.speed;
             }
 
-            // Map Bounds clamping
+            // Environment Edge Constraints
             player.x = Math.max(50, Math.min(mapSize - 50, player.x));
             player.y = Math.max(50, Math.min(mapSize - 50, player.y));
 
-            // Storm damage to player
+            // Storm Border Damage Check Loops
             if (Math.hypot(player.x - storm.x, player.y - storm.y) > storm.radius) {
                 player.hp -= 0.15;
+                if (player.hp <= 0) { switchState("GAMEOVER"); return; }
             }
 
-            // Player Shooting
+            // Weapon Systems Intermission Delay
             if (player.fireCooldown > 0) player.fireCooldown--;
             if (mousePressed && player.fireCooldown === 0) {
-                lasers.push({ x: player.x, y: player.y, z: 6, vx: Math.cos(player.angle) * 22, vy: Math.sin(player.angle) * 22, isPlayer: true, life: 55 });
-                player.fireCooldown = 8;
+                if (inventory[activeSlot].type === "weapon") fireActiveWeapon();
+                else useConsumable();
             }
 
-            // Update Bots
+            // Simulation bot calculations
             entities.forEach(bot => {
                 bot.x += Math.cos(bot.angle) * 1.8;
                 bot.y += Math.sin(bot.angle) * 1.8;
                 if (Math.random() < 0.01) bot.angle = Math.random() * Math.PI * 2;
 
-                // Clamp bots to map boundaries
                 bot.x = Math.max(50, Math.min(mapSize - 50, bot.x));
                 bot.y = Math.max(50, Math.min(mapSize - 50, bot.y));
 
-                // Storm damage to bots
                 if (Math.hypot(bot.x - storm.x, bot.y - storm.y) > storm.radius) {
                     bot.hp -= 0.15;
                 }
 
-                // AI Shooting
+                // AI Targeting Routines
                 let dist = Math.hypot(player.x - bot.x, player.y - bot.y);
                 if (bot.fireCooldown > 0) bot.fireCooldown--;
                 if (dist < 650 && bot.fireCooldown === 0) {
                     let aim = Math.atan2(player.y - bot.y, player.x - bot.x);
-                    lasers.push({ x: bot.x, y: bot.y, z: 6, vx: Math.cos(aim) * 16, vy: Math.sin(aim) * 16, isPlayer: false, life: 55 });
-                    bot.fireCooldown = 70;
+                    lasers.push({ x: bot.x, y: bot.y, z: 6, vx: Math.cos(aim) * 16, vy: Math.sin(aim) * 16, damage: 12, isPlayer: false, life: 45 });
+                    bot.fireCooldown = 65 + Math.random() * 30;
                 }
             });
 
-            // Update Lasers & Collisions
+            // Strip eliminated bot vectors
+            entities = entities.filter(b => b.hp > 0);
+
+            // Update Laser Calculations & Structural Bounds Collision
             for (let i = lasers.length - 1; i >= 0; i--) {
                 let l = lasers[i];
                 l.x += l.vx; l.y += l.vy; l.life--;
@@ -147,33 +350,46 @@
                     for (let j = entities.length - 1; j >= 0; j--) {
                         let bot = entities[j];
                         if (Math.hypot(l.x - bot.x, l.y - bot.y) < 22) {
-                            bot.hp -= 25;
+                            if(bot.shield > 0) {
+                                bot.shield -= l.damage;
+                                if(bot.shield < 0) { bot.hp += bot.shield; bot.shield = 0; }
+                            } else {
+                                bot.hp -= l.damage;
+                            }
                             lasers.splice(i, 1);
-                            if (bot.hp <= 0) entities.splice(j, 1);
+                            if (bot.hp <= 0) player.kills++;
                             break;
                         }
                     }
                 } else {
                     if (Math.hypot(l.x - player.x, l.y - player.y) < 22) {
-                        player.hp -= 4;
+                        if (player.shield > 0) {
+                            player.shield -= l.damage;
+                            if (player.shield < 0) { player.hp += player.shield; player.shield = 0; }
+                        } else {
+                            player.hp -= l.damage;
+                        }
                         lasers.splice(i, 1);
+                        if (player.hp <= 0) { switchState("GAMEOVER"); return; }
                     }
                 }
             }
 
+            // Sync Core Dynamic Values to Viewport DOM Elements
             document.getElementById("hp").innerText = Math.max(0, Math.ceil(player.hp));
+            document.getElementById("shield").innerText = Math.max(0, Math.ceil(player.shield));
             document.getElementById("alive").innerText = entities.length + 1;
+            document.getElementById("kills").innerText = player.kills;
         }
 
         function draw() {
-            // Horizon level line calculation
             let horizonY = canvas.height / 2 + canvas.height * 0.12;
 
-            // 1. Base Ground fill
+            // Fill default fallback ground background bounds
             ctx.fillStyle = "#4fa33e";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 2. Fortnite Stylized Sky Gradient
+            // Stylized Sky Gradient Vector Array
             let skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
             skyGrad.addColorStop(0, "#22aaff");
             skyGrad.addColorStop(0.8, "#66ccff");
@@ -181,32 +397,34 @@
             ctx.fillStyle = skyGrad;
             ctx.fillRect(0, 0, canvas.width, horizonY);
 
-            // 3. Stylized Grass Tiling Grid (Checkerboard style)
-            let step = 120;
-            let startX = Math.floor((player.x - 1200) / step) * step;
-            let startY = Math.floor((player.y - 1200) / step) * step;
+            // Stylized Ground Grid Layout
+            if (config.drawGrid) {
+                let step = 120;
+                let startX = Math.floor((player.x - 1200) / step) * step;
+                let startY = Math.floor((player.y - 1200) / step) * step;
 
-            for (let x = startX; x < player.x + 1200; x += step) {
-                for (let y = startY; y < player.y + 1200; y += step) {
-                    if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) continue;
+                for (let x = startX; x < player.x + 1200; x += step) {
+                    for (let y = startY; y < player.y + 1200; y += step) {
+                        if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) continue;
 
-                    let p1 = project3D(x, y, 0);
-                    let p2 = project3D(x + step, y, 0);
-                    let p3 = project3D(x + step, y + step, 0);
-                    let p4 = project3D(x, y + step, 0);
+                        let p1 = project3D(x, y, 0);
+                        let p2 = project3D(x + step, y, 0);
+                        let p3 = project3D(x + step, y + step, 0);
+                        let p4 = project3D(x, y + step, 0);
 
-                    if (p1 && p2 && p3 && p4) {
-                        ctx.fillStyle = ((Math.floor(x/step) + Math.floor(y/step)) % 2 === 0) ? "#55b044" : "#4fa33e";
-                        ctx.beginPath();
-                        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
-                        ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
-                        ctx.closePath();
-                        ctx.fill();
+                        if (p1 && p2 && p3 && p4) {
+                            ctx.fillStyle = ((Math.floor(x/step) + Math.floor(y/step)) % 2 === 0) ? "#55b044" : "#4fa33e";
+                            ctx.beginPath();
+                            ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                            ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
                     }
                 }
             }
 
-            // 4. Purple Translucent Storm Wall Look
+            // Fortnite Storm Rendering Quadrant
             let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2; 
@@ -233,18 +451,18 @@
                 }
             }
 
-            // 5. Render Queue for Players, Bots, and Weapon Fire (Depth Sorted)
+            // Depth Sorting Render Queue
             let queue = [];
 
             entities.forEach(bot => {
                 let p = project3D(bot.x, bot.y, 0);
-                if (p) queue.push({ depth: p.depth, draw: () => drawCharacter(p.x, p.y, p.scale, bot.color, bot.hp) });
+                if (p) queue.push({ depth: p.depth, draw: () => drawCharacter(p.x, p.y, p.scale, bot.color, bot.hp, bot.shield) });
             });
 
             lasers.forEach(l => {
                 let p = project3D(l.x, l.y, l.z);
                 if (p) queue.push({ depth: p.depth, draw: () => {
-                    ctx.fillStyle = l.isPlayer ? "#ffff00" : "#ff3333";
+                    ctx.fillStyle = l.isPlayer ? inventory[activeSlot].color : "#ff3333";
                     ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(3, 4 * p.scale), 0, Math.PI * 2); ctx.fill();
                 }});
             });
@@ -252,32 +470,30 @@
             queue.sort((a, b) => b.depth - a.depth);
             queue.forEach(item => item.draw());
 
-            // 6. TRUE WORLD-SPACE CENTERED CROSSHAIR
-            let targetWorldX = player.x + Math.cos(player.angle) * 300;
-            let targetWorldY = player.y + Math.sin(player.angle) * 300;
-            let targetWorldZ = 6; // Tracks straight down the trajectory vector
-            let crosshair = project3D(targetWorldX, targetWorldY, targetWorldZ);
+            // World-Space Centered Crosshair
+            if (gameState === "PLAYING") {
+                let targetWorldX = player.x + Math.cos(player.angle) * 300;
+                let targetWorldY = player.y + Math.sin(player.angle) * 300;
+                let targetWorldZ = 6; 
+                let crosshair = project3D(targetWorldX, targetWorldY, targetWorldZ);
 
-            if (crosshair) {
-                ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.arc(crosshair.x, crosshair.y, 5, 0, Math.PI * 2);
-                ctx.stroke();
-                
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(crosshair.x - 16, crosshair.y); ctx.lineTo(crosshair.x - 8, crosshair.y);
-                ctx.moveTo(crosshair.x + 8, crosshair.y); ctx.lineTo(crosshair.x + 16, crosshair.y);
-                ctx.moveTo(crosshair.x, crosshair.y - 16); ctx.lineTo(crosshair.x, crosshair.y - 8);
-                ctx.moveTo(crosshair.x, crosshair.y + 8); ctx.lineTo(crosshair.x, crosshair.y + 16);
-                ctx.stroke();
+                if (crosshair) {
+                    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.arc(crosshair.x, crosshair.y, 5, 0, Math.PI * 2); ctx.stroke();
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(crosshair.x - 16, crosshair.y); ctx.lineTo(crosshair.x - 8, crosshair.y);
+                    ctx.moveTo(crosshair.x + 8, crosshair.y); ctx.lineTo(crosshair.x + 16, crosshair.y);
+                    ctx.moveTo(crosshair.x, crosshair.y - 16); ctx.lineTo(crosshair.x, crosshair.y - 8);
+                    ctx.moveTo(crosshair.x, crosshair.y + 8); ctx.lineTo(crosshair.x, crosshair.y + 16);
+                    ctx.stroke();
+                }
             }
         }
 
-        function drawCharacter(x, y, scale, color, hp) {
+        function drawCharacter(x, y, scale, color, hp, shield) {
             let size = 14 * scale;
             
-            // Draw cartoonish character capsule/ship triangle
             ctx.fillStyle = color;
             ctx.strokeStyle = "#000000";
             ctx.lineWidth = 2;
@@ -286,15 +502,21 @@
             ctx.lineTo(x - size, y + size);
             ctx.lineTo(x + size, y + size);
             ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+            ctx.fill(); ctx.stroke();
 
-            // Stylized Fortnite-like Health bars positioned directly above heads
+            // Stacked Health & Shield UI Bars above entities
             let barW = size * 1.8;
-            ctx.fillStyle = "rgba(0,0,0,0.6)"; 
-            ctx.fillRect(x - barW/2, y - size - 12, barW, 5);
-            ctx.fillStyle = "#33cc33"; 
-            ctx.fillRect(x - barW/2, y - size - 12, barW * (hp / 100), 5);
+            let barH = 4 * scale;
+            
+            // Health Bar background / green fill
+            ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x - barW/2, y - size - 12, barW, 4);
+            ctx.fillStyle = "#33cc33"; ctx.fillRect(x - barW/2, y - size - 12, barW * (hp / 100), 4);
+            
+            // Shield Bar conditional overlay
+            if (shield > 0) {
+                ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x - barW/2, y - size - 18, barW, 4);
+                ctx.fillStyle = "#3399ff"; ctx.fillRect(x - barW/2, y - size - 18, barW * (shield / 100), 4);
+            }
         }
 
         function loop() {
