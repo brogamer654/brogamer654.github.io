@@ -195,7 +195,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>50 Ships drop into a massive 3D matrix. Use hotkeys [1-5] to swap slots! Tap 'V' to switch between Cockpit and Third-Person view tracker.</p>
+        <p>Use hotkeys [1-5] to swap weapon slots! Aim your crosshairs or vessel and **Left Click** to fire. Bullets fly ultra-fast!</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -242,7 +242,7 @@
             <div style="border-bottom: 1px dashed #333; width: 100%; margin: 8px 0;"></div>
             <h4 style="margin: 0 0 5px 0; color: #00ffcc;">INVENTORY HOTKEYS</h4>
             <div class="setting-row"><label>Equip Slot 1 (Laser):</label><button class="bind-btn" id="bind-SLOT_1" onclick="startRebind('SLOT_1')">Digit1</button></div>
-            <div class="setting-row"><label>Equip Slot 2 (Missile):</label><button class="bind-btn" id="bind-SLOT_2" onclick="startRebind('SLOT_2')">Digit2</button></div>
+            <div class="setting-row"><label>Equip Slot 2 (Shotgun):</label><button class="bind-btn" id="bind-SLOT_2" onclick="startRebind('SLOT_2')">Digit2</button></div>
             <div class="setting-row"><label>Use Slot 3 (Shield):</label><button class="bind-btn" id="bind-SLOT_3" onclick="startRebind('SLOT_3')">Digit3</button></div>
             <div class="setting-row"><label>Use Slot 4 (Boost):</label><button class="bind-btn" id="bind-SLOT_4" onclick="startRebind('SLOT_4')">Digit4</button></div>
             <div class="setting-row"><label>Use Slot 5 (EMP):</label><button class="bind-btn" id="bind-SLOT_5" onclick="startRebind('SLOT_5')">Digit5</button></div>
@@ -268,7 +268,7 @@
 
     <div id="inventory-container">
         <div class="inv-slot active" id="slot-0" onclick="selectSlot(0)"><div class="slot-num" id="lbl-slot-0">[1]</div><div class="slot-name">LASER</div></div>
-        <div class="inv-slot" id="slot-1" onclick="selectSlot(1)"><div class="slot-num" id="lbl-slot-1">[2]</div><div class="slot-name">MISSILE</div></div>
+        <div class="inv-slot" id="slot-1" onclick="selectSlot(1)"><div class="slot-num" id="lbl-slot-1">[2]</div><div class="slot-name">SHOTGUN</div></div>
         <div class="inv-slot" id="slot-2" onclick="selectSlot(2)"><div class="slot-num" id="lbl-slot-2">[3]</div><div class="slot-name">SHIELD</div></div>
         <div class="inv-slot" id="slot-3" onclick="selectSlot(3)"><div class="slot-num" id="lbl-slot-3">[4]</div><div class="slot-name">BOOST</div></div>
         <div class="inv-slot" id="slot-4" onclick="selectSlot(4)"><div class="slot-num" id="lbl-slot-4">[5]</div><div class="slot-name">EMP</div></div>
@@ -308,6 +308,7 @@
         };
 
         let keysPressed = {};
+        let mouseIsDown = false;
         let activeRebindAction = null;
 
         const mapSize = 18000; 
@@ -318,7 +319,6 @@
         const mobileBuildBtn = { x: 0, y: 0, radius: 35 };
         const mobileViewBtn = { x: 0, y: 0, radius: 35 };
 
-        // PERMANENT STATIC REUSABLE MEMORY POOLS FOR ZERO-ALLOCATION RENDERING
         const stormProjB1 = { x: 0, y: 0, scale: 0, depth: 0 };
         const stormProjT1 = { x: 0, y: 0, scale: 0, depth: 0 };
         const stormProjB2 = { x: 0, y: 0, scale: 0, depth: 0 };
@@ -377,6 +377,10 @@
         }
 
         window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        
+        // MANUAL FIRE MOUSE TRIGGERS
+        window.addEventListener("mousedown", (e) => { if(e.button === 0) mouseIsDown = true; });
+        window.addEventListener("mouseup", (e) => { if(e.button === 0) mouseIsDown = false; });
 
         window.addEventListener("touchstart", (e) => {
             for(let i=0; i<e.touches.length; i++) {
@@ -385,6 +389,8 @@
                     joystick.active = true;
                     joystick.startX = t.clientX; joystick.startY = t.clientY;
                     joystick.curX = t.clientX; joystick.curY = t.clientY;
+                } else if (gameState === "PLAYING") {
+                    mouseIsDown = true; // Mobile tap to shoot
                 }
                 if (config.mobileOverlay && gameState === "PLAYING") {
                     if (getDistance(t.clientX, t.clientY, mobileBuildBtn.x, mobileBuildBtn.y) < mobileBuildBtn.radius) {
@@ -406,7 +412,12 @@
             }
         });
 
-        window.addEventListener("touchend", (e) => { if (e.touches.length === 0) joystick.active = false; });
+        window.addEventListener("touchend", (e) => { 
+            if (e.touches.length === 0) {
+                joystick.active = false;
+                mouseIsDown = false;
+            }
+        });
 
         window.addEventListener("keydown", (e) => {
             if (activeRebindAction) {
@@ -416,7 +427,6 @@
                 document.getElementById(`bind-${activeRebindAction}`).classList.remove("waiting");
                 activeRebindAction = null;
                 
-                // Keep hotbar slots label updated with current key setting
                 let player = entities.find(ent => ent.isPlayer);
                 if (player) updateInventoryUI(player);
                 return;
@@ -433,7 +443,6 @@
                     deployStructure("player");
                 }
                 
-                // INVENTORY HOTKEYS TRIGGER WITH REBINDABLE POINTERS
                 if (e.code === config.keybinds.SLOT_1) selectSlot(0);
                 if (e.code === config.keybinds.SLOT_2) selectSlot(1);
                 if (e.code === config.keybinds.SLOT_3) selectSlot(2);
@@ -534,10 +543,7 @@
             }
         }
 
-        function exitToMenu() {
-            changeState("START");
-        }
-
+        function exitToMenu() { changeState("START"); }
         function openSettings() {
             document.getElementById("start-screen").style.display = "none";
             document.getElementById("gameover-screen").style.display = "none";
@@ -589,7 +595,7 @@
                 selectedSlot: 0,
                 inventory: [
                     { name: "LASER", type: "weapon", ammo: Infinity },
-                    { name: "MISSILE", type: "weapon", ammo: 8 },
+                    { name: "SHOTGUN", type: "weapon", ammo: 24 }, // Repurposed Rocket launcher slot to Shotgun shells
                     { name: "SHIELD", type: "utility", ammo: 3 },
                     { name: "BOOST", type: "utility", ammo: 2 },
                     { name: "EMP", type: "utility", ammo: 1 }
@@ -627,7 +633,7 @@
 
             if (creator.isPlayer) {
                 if (creator.builds > 0) {
-                    structures.push({ x: creator.x, y: creator.y, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 255, 0.15)", borderColor: config.playerSkin });
+                    structures.push({ x: creator.x, y: creator.y, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 200, 0.15)", borderColor: config.playerSkin });
                     creator.builds--;
                     createExplosion(creator.x, creator.y, 0, config.playerSkin);
                 }
@@ -651,10 +657,7 @@
         }
 
         function getDistance(x1, y1, x2, y2) { return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2); }
-
-        function checkStructureCollision(pX, pY, struct) {
-            return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2);
-        }
+        function checkStructureCollision(pX, pY, struct) { return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2); }
 
         function get3DProjection(worldX, worldY, worldZ, outTarget) {
             let player = entities.find(e => e.isPlayer);
@@ -664,23 +667,14 @@
             let horizonPitchOffset = 0; 
 
             if (viewMode === "1P") {
-                camX = player.x;
-                camY = player.y;
-                camZ = 7; 
-                camAngle = player.angle;
-                horizonPitchOffset = 0;
+                camX = player.x; camY = player.y; camZ = 7; camAngle = player.angle; horizonPitchOffset = 0;
             } else { 
                 camX = player.x - Math.cos(player.angle) * 75;
                 camY = player.y - Math.sin(player.angle) * 75;
-                camZ = 32; 
-                camAngle = player.angle;
-                horizonPitchOffset = canvas.height * 0.12; 
+                camZ = 32; camAngle = player.angle; horizonPitchOffset = canvas.height * 0.12; 
             }
 
-            let dx = worldX - camX;
-            let dy = worldY - camY;
-            let dz = worldZ - camZ;
-
+            let dx = worldX - camX; let dy = worldY - camY; let dz = worldZ - camZ;
             let rotX = -dx * Math.sin(camAngle) + dy * Math.cos(camAngle);
             let rotY =  dx * Math.cos(camAngle) + dy * Math.sin(camAngle);
 
@@ -689,9 +683,7 @@
             let fov = 450; 
             outTarget.x = canvas.width / 2 + (rotX / rotY) * fov;
             outTarget.y = canvas.height / 2 - (dz / rotY) * fov + horizonPitchOffset;
-            outTarget.scale = fov / rotY;
-            outTarget.depth = rotY;
-            
+            outTarget.scale = fov / rotY; outTarget.depth = rotY;
             return outTarget;
         }
 
@@ -703,9 +695,7 @@
             let player = entities.find(e => e.isPlayer);
             if (player && player.builds < player.maxBuilds) {
                 player.buildRegenTimer++;
-                if (player.buildRegenTimer >= 150) { 
-                    player.builds++; player.buildRegenTimer = 0;
-                }
+                if (player.buildRegenTimer >= 150) { player.builds++; player.buildRegenTimer = 0; }
             }
 
             for (let i = entities.length - 1; i >= 0; i--) {
@@ -715,11 +705,8 @@
 
                 if (ent.isPlayer) {
                     if (ent.speedTimer > 0) {
-                        ent.speed = ent.baseSpeed * 2.5;
-                        ent.speedTimer--;
-                    } else {
-                        ent.speed = ent.baseSpeed;
-                    }
+                        ent.speed = ent.baseSpeed * 2.5; ent.speedTimer--;
+                    } else { ent.speed = ent.baseSpeed; }
 
                     if (config.mobileOverlay && joystick.active) {
                         let jDx = joystick.curX - joystick.startX;
@@ -727,104 +714,84 @@
                         let jDist = Math.sqrt(jDx*jDx + jDy*jDy);
                         if (jDist > 5) {
                             ent.angle = Math.atan2(jDy, jDx);
-                            ent.x += Math.cos(ent.angle) * ent.speed;
-                            ent.y += Math.sin(ent.angle) * ent.speed;
+                            ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed;
                         }
                     } else {
-                        // NEW MOUSE FOLLOW ENGINE DRIVER
                         if (config.controlScheme === "mouse-follow") {
                             let screenCenterX = canvas.width / 2;
                             let screenCenterY = canvas.height / 2;
-                            
-                            let deltaX = mouseX - screenCenterX;
-                            let deltaY = mouseY - screenCenterY;
-                            
-                            // Adjust ship steering vector based on horizontal screen bounds
-                            if (Math.abs(deltaX) > 12) {
-                                ent.angle += (deltaX / screenCenterX) * 0.05;
-                            }
-                            
-                            // Upper screen coordinates accelerate hull forward, lower drops into reverse
+                            let deltaX = mouseX - screenCenterX; let deltaY = mouseY - screenCenterY;
+                            if (Math.abs(deltaX) > 12) ent.angle += (deltaX / screenCenterX) * 0.05;
                             if (deltaY < -40) {
                                 let forwardForce = Math.min(1, Math.abs(deltaY) / screenCenterY);
-                                ent.x += Math.cos(ent.angle) * ent.speed * forwardForce;
-                                ent.y += Math.sin(ent.angle) * ent.speed * forwardForce;
+                                ent.x += Math.cos(ent.angle) * ent.speed * forwardForce; ent.y += Math.sin(ent.angle) * ent.speed * forwardForce;
                             } else if (deltaY > 40) {
                                 let reverseForce = Math.min(0.5, (deltaY / screenCenterY) * 0.5);
-                                ent.x -= Math.cos(ent.angle) * ent.speed * reverseForce;
-                                ent.y -= Math.sin(ent.angle) * ent.speed * reverseForce;
+                                ent.x -= Math.cos(ent.angle) * ent.speed * reverseForce; ent.y -= Math.sin(ent.angle) * ent.speed * reverseForce;
                             }
                         } 
                         else if (config.controlScheme === "mouse") {
                             let mouseOffsetX = mouseX - canvas.width / 2;
                             ent.angle += (mouseOffsetX / (canvas.width / 2)) * 0.045;
-                            
-                            if (keysPressed[config.keybinds.UP]) {
-                                ent.x += Math.cos(ent.angle) * ent.speed;
-                                ent.y += Math.sin(ent.angle) * ent.speed;
-                            }
-                            if (keysPressed[config.keybinds.DOWN]) {
-                                ent.x -= Math.cos(ent.angle) * ent.speed;
-                                ent.y -= Math.sin(ent.angle) * ent.speed;
-                            }
+                            if (keysPressed[config.keybinds.UP]) { ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.DOWN]) { ent.x -= Math.cos(ent.angle) * ent.speed; ent.y -= Math.sin(ent.angle) * ent.speed; }
                         } else {
                             if (keysPressed[config.keybinds.LEFT])  ent.angle -= 0.045;
                             if (keysPressed[config.keybinds.RIGHT]) ent.angle += 0.045;
-                            
-                            if (keysPressed[config.keybinds.UP]) {
-                                ent.x += Math.cos(ent.angle) * ent.speed;
-                                ent.y += Math.sin(ent.angle) * ent.speed;
-                            }
-                            if (keysPressed[config.keybinds.DOWN]) {
-                                ent.x -= Math.cos(ent.angle) * ent.speed;
-                                ent.y -= Math.sin(ent.angle) * ent.speed;
-                            }
+                            if (keysPressed[config.keybinds.UP]) { ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.DOWN]) { ent.x -= Math.cos(ent.angle) * ent.speed; ent.y -= Math.sin(ent.angle) * ent.speed; }
                         }
                     }
 
                     if (ent.x < 20) ent.x = 20; if (ent.x > mapSize - 20) ent.x = mapSize - 20;
                     if (ent.y < 20) ent.y = 20; if (ent.y > mapSize - 20) ent.y = mapSize - 20;
 
-                    let nearestBot = null; let recordDist = Infinity;
-                    entities.forEach(other => {
-                        if (!other.isPlayer) {
-                            let d = getDistance(ent.x, ent.y, other.x, other.y);
-                            if (d < recordDist) { recordDist = d; nearestBot = other; }
-                        }
-                    });
-
-                    if (nearestBot && ent.fireCooldown <= 0 && recordDist < 420) {
+                    // MANUAL TRIGGER FIRE DEPLOYMENT ENGINE (AUTO FIRE REMOVED)
+                    if (mouseIsDown && ent.fireCooldown <= 0) {
                         let currentWeapon = ent.inventory[ent.selectedSlot];
-                        let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        if (tDist < 0.1) tDist = 0.1;
+                        let aimAngle = ent.angle;
 
                         if (currentWeapon.name === "LASER") {
-                            lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.5, vy: (tDy / tDist) * 8.5, ownerId: ent.id, color: config.playerSkin, dmg: 14, size: 3, life: 140 });
-                            ent.fireCooldown = 13; 
+                            // High-speed Laser bullet implementation (Speed boosted to 23)
+                            lasers.push({ 
+                                x: ent.x, y: ent.y, 
+                                vx: Math.cos(aimAngle) * 23.0, 
+                                vy: Math.sin(aimAngle) * 23.0, 
+                                ownerId: ent.id, color: config.playerSkin, baseDmg: 15, size: 3, life: 65, 
+                                isShotgun: false 
+                            });
+                            ent.fireCooldown = 9; 
                         } 
-                        else if (currentWeapon.name === "MISSILE" && currentWeapon.ammo > 0) {
-                            lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 5.5, vy: (tDy / tDist) * 5.5, ownerId: ent.id, color: "#ff0055", dmg: 40, size: 7, life: 200 });
+                        else if (currentWeapon.name === "SHOTGUN" && currentWeapon.ammo > 0) {
+                            // Shotgun 5-Pellet spread initialization
+                            for (let p = -2; p <= 2; p++) {
+                                let spreadAngle = aimAngle + (p * 0.095); 
+                                lasers.push({
+                                    x: ent.x, y: ent.y,
+                                    startX: ent.x, startY: ent.y, // Origins loaded for falloff calculation
+                                    vx: Math.cos(spreadAngle) * 21.0, // High speed pellets
+                                    vy: Math.sin(spreadAngle) * 21.0,
+                                    ownerId: ent.id, color: "#ffaa00", baseDmg: 32, size: 2.2, life: 25, 
+                                    isShotgun: true
+                                });
+                            }
                             currentWeapon.ammo--;
-                            ent.fireCooldown = 55; 
+                            ent.fireCooldown = 38; 
                             updateInventoryUI(ent);
                         }
                     }
                 } else {
+                    // BOT RUNTIME AI SYSTEM (BOTS RETAIN AUTOSHOOT MECHANICS TO RE-ENGAGE LAYER)
                     ent.changeDirTimer++;
                     if (ent.changeDirTimer > 60) {
-                        ent.vx = (Math.random() - 0.5) * ent.speed * 1.8;
-                        ent.vy = (Math.random() - 0.5) * ent.speed * 1.8;
+                        ent.vx = (Math.random() - 0.5) * ent.speed * 1.8; ent.vy = (Math.random() - 0.5) * ent.speed * 1.8;
                         ent.changeDirTimer = 0;
                     }
                     ent.x += ent.vx; ent.y += ent.vy;
-                    if (Math.abs(ent.vx) > 0.1 || Math.abs(ent.vy) > 0.1) {
-                        ent.angle = Math.atan2(ent.vy, ent.vx);
-                    }
+                    if (Math.abs(ent.vx) > 0.1 || Math.abs(ent.vy) > 0.1) ent.angle = Math.atan2(ent.vy, ent.vx);
 
-                    if (ent.x < 25) { ent.x = 25; ent.vx *= -1; }
-                    if (ent.x > mapSize - 25) { ent.x = mapSize - 25; ent.vx *= -1; }
-                    if (ent.y < 25) { ent.y = 25; ent.vy *= -1; }
-                    if (ent.y > mapSize - 25) { ent.y = mapSize - 25; ent.vy *= -1; }
+                    if (ent.x < 25) { ent.x = 25; ent.vx *= -1; } if (ent.x > mapSize - 25) { ent.x = mapSize - 25; ent.vx *= -1; }
+                    if (ent.y < 25) { ent.y = 25; ent.vy *= -1; } if (ent.y > mapSize - 25) { ent.y = mapSize - 25; ent.vy *= -1; }
 
                     if (ent.buildCooldown > 0) ent.buildCooldown--;
                     if (ent.hp < ent.maxHp * 0.4 && ent.buildCooldown === 0 && Math.random() < 0.02) deployStructure(ent.id);
@@ -837,10 +804,11 @@
                         }
                     });
 
-                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 280) {
+                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 350) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
                         if (tDist < 0.1) tDist = 0.1;
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color, dmg: 12, size: 3, life: 150 });
+                        // Bot bullets fly faster as well
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 18.0, vy: (tDy / tDist) * 18.0, ownerId: ent.id, color: ent.color, baseDmg: 12, size: 3, life: 70, isShotgun: false });
                         ent.fireCooldown = 45 + Math.random() * 25;
                     }
                 }
@@ -860,21 +828,23 @@
             if (entities.length === 1 && entities[0].isPlayer) changeState("VICTORY");
 
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let l = lasers[i]; 
-                l.x += l.vx; 
-                l.y += l.vy;
-                l.life--; 
+                let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.life--; 
 
                 if (l.life <= 0 || isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
-                    lasers.splice(i, 1); 
-                    continue; 
+                    lasers.splice(i, 1); continue; 
                 }
 
                 let hitRegistered = false;
                 for (let k = structures.length - 1; k >= 0; k--) {
                     let s = structures[k];
                     if (checkStructureCollision(l.x, l.y, s)) {
-                        s.hp -= l.dmg; createExplosion(l.x, l.y, 3, s.borderColor);
+                        let calculatedDmg = l.baseDmg;
+                        if (l.isShotgun) {
+                            let dist = getDistance(l.startX, l.startY, s.x, s.y);
+                            // Shotgun Damage Falloff Formula: Max damage (32) drops linearly to 6 damage at range limit
+                            calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
+                        }
+                        s.hp -= calculatedDmg; createExplosion(l.x, l.y, 3, s.borderColor);
                         lasers.splice(i, 1); hitRegistered = true; break;
                     }
                 }
@@ -883,29 +853,27 @@
                 for (let j = 0; j < entities.length; j++) {
                     let ent = entities[j];
                     if (ent.id !== l.ownerId && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius + 3) {
-                        ent.hp -= l.dmg; createExplosion(l.x, l.y, 3, l.color);
+                        let calculatedDmg = l.baseDmg;
+                        if (l.isShotgun) {
+                            let dist = getDistance(l.startX, l.startY, ent.x, ent.y);
+                            calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
+                        }
+                        ent.hp -= calculatedDmg; createExplosion(l.x, l.y, 3, l.color);
                         lasers.splice(i, 1); break;
                     }
                 }
             }
 
             for(let i=structures.length-1; i>=0; i--) { if(structures[i].hp <= 0) structures.splice(i,1); }
-            
             for(let i=particles.length-1; i>=0; i--) { 
-                let p = particles[i]; 
-                p.x += p.vx; p.y += p.vy; p.z += p.vz;
-                p.vz -= 0.15; 
-                
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.z += p.vz; p.vz -= 0.15; 
                 if (p.z < 0) { p.z = 0; p.vz = -p.vz * 0.5; p.vx *= 0.7; p.vy *= 0.7; }
-                p.alpha -= 0.02; 
-                if(p.alpha <= 0) particles.splice(i,1); 
+                p.alpha -= 0.02; if(p.alpha <= 0) particles.splice(i,1); 
             }
         }
 
         function draw() {
-            ctx.fillStyle = "#010103";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+            ctx.fillStyle = "#010103"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             if (gameState !== "PLAYING") return;
 
             let player = entities.find(e => e.isPlayer);
@@ -921,86 +889,46 @@
             for (let gx = Math.max(0, startGridX); gx <= Math.min(mapSize, endGridX); gx += gridSpacing) {
                 for (let gy = Math.max(0, startGridY); gy <= Math.min(mapSize, endGridY); gy += gridSpacing) {
                     if (get3DProjection(gx, gy, 0, tempGridProj)) {
-                        ctx.beginPath(); 
-                        ctx.arc(tempGridProj.x, tempGridProj.y, Math.max(1, 1.8 * tempGridProj.scale), 0, Math.PI * 2); 
-                        ctx.fill();
+                        ctx.beginPath(); ctx.arc(tempGridProj.x, tempGridProj.y, Math.max(1, 1.8 * tempGridProj.scale), 0, Math.PI * 2); ctx.fill();
                     }
                 }
             }
 
             let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
-                let r1 = (i / stormSegments) * Math.PI * 2;
-                let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
+                let r1 = (i / stormSegments) * Math.PI * 2; let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
+                let sx1 = storm.x + Math.cos(r1) * storm.radius; let sy1 = storm.y + Math.sin(r1) * storm.radius;
+                let sx2 = storm.x + Math.cos(r2) * storm.radius; let sy2 = storm.y + Math.sin(r2) * storm.radius;
 
-                let sx1 = storm.x + Math.cos(r1) * storm.radius;
-                let sy1 = storm.y + Math.sin(r1) * storm.radius;
-                let sx2 = storm.x + Math.cos(r2) * storm.radius;
-                let sy2 = storm.y + Math.sin(r2) * storm.radius;
-
-                if (get3DProjection(sx1, sy1, 0, stormProjB1) &&
-                    get3DProjection(sx1, sy1, 45, stormProjT1) &&
-                    get3DProjection(sx2, sy2, 0, stormProjB2) &&
-                    get3DProjection(sx2, sy2, 45, stormProjT2)) {
-                    
-                    ctx.fillStyle = "rgba(255, 0, 85, 0.05)";
-                    ctx.strokeStyle = "rgba(255, 0, 85, 0.25)"; ctx.lineWidth = 1;
-                    ctx.beginPath(); 
-                    ctx.moveTo(stormProjB1.x, stormProjB1.y); 
-                    ctx.lineTo(stormProjT1.x, stormProjT1.y); 
-                    ctx.lineTo(stormProjT2.x, stormProjT2.y); 
-                    ctx.lineTo(stormProjB2.x, stormProjB2.y); 
-                    ctx.closePath();
-                    ctx.fill(); ctx.stroke();
+                if (get3DProjection(sx1, sy1, 0, stormProjB1) && get3DProjection(sx1, sy1, 45, stormProjT1) &&
+                    get3DProjection(sx2, sy2, 0, stormProjB2) && get3DProjection(sx2, sy2, 45, stormProjT2)) {
+                    ctx.fillStyle = "rgba(255, 0, 85, 0.05)"; ctx.strokeStyle = "rgba(255, 0, 85, 0.25)"; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(stormProjB1.x, stormProjB1.y); ctx.lineTo(stormProjT1.x, stormProjT1.y); ctx.lineTo(stormProjT2.x, stormProjT2.y); ctx.lineTo(stormProjB2.x, stormProjB2.y);
+                    ctx.closePath(); ctx.fill(); ctx.stroke();
                 }
             }
 
-            renderPoolIndex = 0;
-            activeRenderQueue.length = 0;
-
-            structures.forEach(s => {
-                if (get3DProjection(s.x, s.y, 0, itemProj)) {
-                    activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale));
-                }
-            });
-
-            lasers.forEach(l => {
-                if (get3DProjection(l.x, l.y, 3.5, itemProj)) {
-                    activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale));
-                }
-            });
-
-            particles.forEach(p => {
-                if (get3DProjection(p.x, p.y, p.z, itemProj)) {
-                    activeRenderQueue.push(getPooledItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale));
-                }
-            });
-
+            renderPoolIndex = 0; activeRenderQueue.length = 0;
+            structures.forEach(s => { if (get3DProjection(s.x, s.y, 0, itemProj)) activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale)); });
+            lasers.forEach(l => { if (get3DProjection(l.x, l.y, 3.5, itemProj)) activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale)); });
+            particles.forEach(p => { if (get3DProjection(p.x, p.y, p.z, itemProj)) activeRenderQueue.push(getPooledItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale)); });
             entities.forEach(ent => {
                 if (ent.isPlayer && viewMode === "1P") return; 
-                if (get3DProjection(ent.x, ent.y, 0, itemProj)) {
-                    activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
-                }
+                if (get3DProjection(ent.x, ent.y, 0, itemProj)) activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
             });
 
             activeRenderQueue.sort((a, b) => b.depth - a.depth);
 
             activeRenderQueue.forEach(item => {
-                if (item.type === "structure") {
-                    draw3DBox(item.raw);
-                } 
+                if (item.type === "structure") draw3DBox(item.raw);
                 else if (item.type === "laser") {
-                    ctx.fillStyle = item.raw.color;
-                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(1.5, item.raw.size * item.scale), 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = item.raw.color; ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(1.5, item.raw.size * item.scale), 0, Math.PI * 2); ctx.fill();
                 } 
                 else if (item.type === "particle") {
                     ctx.save(); ctx.globalAlpha = item.raw.alpha; ctx.fillStyle = item.raw.color;
-                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(0.5, item.raw.radius * item.scale), 0, Math.PI * 2); ctx.fill();
-                    ctx.restore();
+                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(0.5, item.raw.radius * item.scale), 0, Math.PI * 2); ctx.fill(); ctx.restore();
                 } 
-                else if (item.type === "entity") {
-                    draw3DShip(item.raw);
-                }
+                else if (item.type === "entity") draw3DShip(item.raw);
             });
 
             let healthDisplay = Math.ceil(player.hp);
@@ -1010,8 +938,7 @@
             ctx.fillStyle = "#ffcc00"; ctx.fillText(`CAMERA: ${viewMode}`, 30, 99);
             
             if (player.speedTimer > 0) {
-                ctx.fillStyle = "#ffff00";
-                ctx.fillText(`HYPERDRIVE ACTIVE: ${Math.ceil(player.speedTimer / 60)}s`, 30, 130);
+                ctx.fillStyle = "#ffff00"; ctx.fillText(`HYPERDRIVE ACTIVE: ${Math.ceil(player.speedTimer / 60)}s`, 30, 130);
             }
             
             ctx.textAlign = "right"; ctx.fillStyle = "#ff0055";
@@ -1019,8 +946,7 @@
 
             if (config.mobileOverlay) {
                 if (joystick.active) {
-                    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
-                    ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.05)"; ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fill();
                     ctx.strokeStyle = "rgba(0, 255, 204, 0.3)"; ctx.lineWidth = 2; ctx.stroke();
 
                     let dx = joystick.curX - joystick.startX, dy = joystick.curY - joystick.startY, d = Math.sqrt(dx*dx + dy*dy);
@@ -1029,14 +955,12 @@
                     ctx.fillStyle = "#00ffcc"; ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
                 }
 
-                ctx.fillStyle = "rgba(0, 255, 205, 0.12)";
-                ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "rgba(0, 255, 205, 0.12)"; ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
                 ctx.fillText("BUILD", mobileBuildBtn.x, mobileBuildBtn.y + 4);
 
-                ctx.fillStyle = "rgba(255, 204, 0, 0.12)";
-                ctx.beginPath(); ctx.arc(mobileViewBtn.x, mobileViewBtn.y, mobileViewBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "rgba(255, 204, 0, 0.12)"; ctx.beginPath(); ctx.arc(mobileViewBtn.x, mobileViewBtn.y, mobileViewBtn.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#ffcc00"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#ffcc00"; ctx.fillText("VIEW", mobileViewBtn.x, mobileViewBtn.y + 4);
             }
@@ -1047,31 +971,19 @@
             let cx = [b.x - half, b.x + half, b.x + half, b.x - half];
             let cy = [b.y - half, b.y - half, b.y + half, b.y + half];
             
-            ctx.strokeStyle = b.borderColor; ctx.lineWidth = 1;
-            ctx.fillStyle = b.color;
+            ctx.strokeStyle = b.borderColor; ctx.lineWidth = 1; ctx.fillStyle = b.color;
 
             let valid = true;
             for (let i = 0; i < 4; i++) {
-                if (get3DProjection(cx[i], cy[i], 0, itemProj)) {
-                    boxB[i].x = itemProj.x; boxB[i].y = itemProj.y;
-                } else { valid = false; break; }
-                
-                if (get3DProjection(cx[i], cy[i], h, itemProj)) {
-                    boxT[i].x = itemProj.x; boxT[i].y = itemProj.y;
-                } else { valid = false; break; }
+                if (get3DProjection(cx[i], cy[i], 0, itemProj)) { boxB[i].x = itemProj.x; boxB[i].y = itemProj.y; } else { valid = false; break; }
+                if (get3DProjection(cx[i], cy[i], h, itemProj)) { boxT[i].x = itemProj.x; boxT[i].y = itemProj.y; } else { valid = false; break; }
             }
-            
             if (!valid) return;
 
             for (let i = 0; i < 4; i++) {
                 let next = (i + 1) % 4;
-                ctx.beginPath();
-                ctx.moveTo(boxB[i].x, boxB[i].y);
-                ctx.lineTo(boxB[next].x, boxB[next].y);
-                ctx.lineTo(boxT[next].x, boxT[next].y);
-                ctx.lineTo(boxT[i].x, boxT[i].y);
-                ctx.closePath();
-                ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(boxB[i].x, boxB[i].y); ctx.lineTo(boxB[next].x, boxB[next].y); ctx.lineTo(boxT[next].x, boxT[next].y); ctx.lineTo(boxT[i].x, boxT[i].y);
+                ctx.closePath(); ctx.fill(); ctx.stroke();
             }
         }
 
