@@ -308,7 +308,7 @@
 
         let keysPressed = {};
         let mouseIsDown = false;
-        let rightMouseIsDown = false; // Zoom Scope tracking variable
+        let rightMouseIsDown = false; 
         let activeRebindAction = null;
 
         const mapSize = 18000; 
@@ -378,16 +378,15 @@
 
         window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
         
-        // INTERCEPT CONTEXT MENU FOR ZOOM INTEGRATION
         window.addEventListener("contextmenu", (e) => e.preventDefault());
 
         window.addEventListener("mousedown", (e) => { 
             if(e.button === 0) mouseIsDown = true; 
-            if(e.button === 2) rightMouseIsDown = true; // Scope zooming active
+            if(e.button === 2) rightMouseIsDown = true; 
         });
         window.addEventListener("mouseup", (e) => { 
             if(e.button === 0) mouseIsDown = false; 
-            if(e.button === 2) rightMouseIsDown = false; // Scope zoom released
+            if(e.button === 2) rightMouseIsDown = false; 
         });
 
         window.addEventListener("touchstart", (e) => {
@@ -688,7 +687,6 @@
 
             if (rotY <= 2 || rotY > 2400) return null;
 
-            // SCOPE MATRIX: Adjust FOV scaling engine when right-click is engaged
             let fov = rightMouseIsDown ? 950 : 450; 
             outTarget.x = canvas.width / 2 + (rotX / rotY) * fov;
             outTarget.y = canvas.height / 2 - (dz / rotY) * fov + horizonPitchOffset;
@@ -934,12 +932,10 @@
                 else if (item.type === "entity") draw3DShip(item.raw);
             });
 
-            // CENTER TARGETING CROSSHAIR & SCOPE RETICLE IMPLEMENTATION
             let cx = canvas.width / 2;
             let cy = canvas.height / 2;
 
             if (rightMouseIsDown) {
-                // Precision Sniper Scope Reticle
                 ctx.strokeStyle = "#ff0055";
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -949,20 +945,17 @@
                 ctx.strokeStyle = "rgba(255, 0, 85, 0.4)";
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                // Extended quadrant hash lines
                 ctx.moveTo(cx - 130, cy); ctx.lineTo(cx - 15, cy);
                 ctx.moveTo(cx + 15, cy); ctx.lineTo(cx + 130, cy);
                 ctx.moveTo(cx, cy - 130); ctx.lineTo(cx, cy - 15);
                 ctx.moveTo(cx, cy + 15); ctx.lineTo(cx, cy + 130);
                 ctx.stroke();
 
-                // Focal dot
                 ctx.fillStyle = "#ff0055";
                 ctx.beginPath();
                 ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
                 ctx.fill();
             } else {
-                // Standard Hip-Fire Crosshair HUD
                 ctx.strokeStyle = config.playerSkin;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -1039,7 +1032,7 @@
                 ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
 
                 ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.lineTo(shipProjR.x, shipProjR.y); ctx.closePath(); ctx.fill(); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.moveTo(shipProjR.x, shipProjR.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); stroke();
+                ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.moveTo(shipProjR.x, shipProjR.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.stroke();
 
                 let barW = 24 * shipProjTip.scale;
                 ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW, 3);
