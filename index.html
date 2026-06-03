@@ -72,7 +72,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            max-width: 460px;
+            max-width: 480px;
             width: 90%;
             box-shadow: 0 0 30px rgba(0,255,204,0.3);
             max-height: 85vh;
@@ -84,8 +84,8 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            margin: 8px 0;
-            font-size: 15px;
+            margin: 6px 0;
+            font-size: 14px;
         }
 
         select {
@@ -122,9 +122,9 @@
             background: #111;
             border: 1px dashed #ff0055;
             color: #ff0055;
-            padding: 5px 12px;
-            font-size: 14px;
-            min-width: 110px;
+            padding: 4px 10px;
+            font-size: 13px;
+            min-width: 120px;
             margin: 0;
         }
         .bind-btn.waiting {
@@ -195,7 +195,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>50 Ships drop into a massive 3D matrix. Use hotkeys [1-5] to swap inventory slots! Tap 'V' to switch seamlessly between First-Person cockpit and Third-Person tracking.</p>
+        <p>50 Ships drop into a massive 3D matrix. Use hotkeys [1-5] to swap slots! Tap 'V' to switch between Cockpit and Third-Person view tracker.</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -205,10 +205,11 @@
             <h2>3D ENGINE CONFIG</h2>
             
             <div class="setting-row">
-                <label>Steering Input:</label>
+                <label>Steering Input Mode:</label>
                 <select id="control-select" onchange="updateControlScheme()">
-                    <option value="keyboard">Keyboard Binds (Recommended)</option>
+                    <option value="keyboard">Keyboard Binds</option>
                     <option value="mouse">Mouse Horizon Look</option>
+                    <option value="mouse-follow">Mouse Follow (Pointer Tracking)</option>
                 </select>
             </div>
 
@@ -231,30 +232,20 @@
             <div style="border-bottom: 1px solid #333; width: 100%; margin: 10px 0;"></div>
             <h3 style="margin: 0 0 5px 0; color: #ff0055;">INPUT KEYBINDS</h3>
 
-            <div class="setting-row">
-                <label>Toggle Camera (1P/3P):</label>
-                <button class="bind-btn" id="bind-TOGGLE_VIEW" onclick="startRebind('TOGGLE_VIEW')">KeyV</button>
-            </div>
-            <div class="setting-row">
-                <label>Deploy Barrier:</label>
-                <button class="bind-btn" id="bind-BUILD" onclick="startRebind('BUILD')">Space</button>
-            </div>
-            <div class="setting-row">
-                <label>Thrust Forward:</label>
-                <button class="bind-btn" id="bind-UP" onclick="startRebind('UP')">KeyW</button>
-            </div>
-            <div class="setting-row">
-                <label>Reverse Brake:</label>
-                <button class="bind-btn" id="bind-DOWN" onclick="startRebind('DOWN')">KeyS</button>
-            </div>
-            <div class="setting-row">
-                <label>Yaw Steer Left:</label>
-                <button class="bind-btn" id="bind-LEFT" onclick="startRebind('LEFT')">KeyA</button>
-            </div>
-            <div class="setting-row">
-                <label>Yaw Steer Right:</label>
-                <button class="bind-btn" id="bind-RIGHT" onclick="startRebind('RIGHT')">KeyD</button>
-            </div>
+            <div class="setting-row"><label>Toggle Camera (1P/3P):</label><button class="bind-btn" id="bind-TOGGLE_VIEW" onclick="startRebind('TOGGLE_VIEW')">KeyV</button></div>
+            <div class="setting-row"><label>Deploy Barrier:</label><button class="bind-btn" id="bind-BUILD" onclick="startRebind('BUILD')">Space</button></div>
+            <div class="setting-row"><label>Thrust Forward:</label><button class="bind-btn" id="bind-UP" onclick="startRebind('UP')">KeyW</button></div>
+            <div class="setting-row"><label>Reverse Brake:</label><button class="bind-btn" id="bind-DOWN" onclick="startRebind('DOWN')">KeyS</button></div>
+            <div class="setting-row"><label>Yaw Steer Left:</label><button class="bind-btn" id="bind-LEFT" onclick="startRebind('LEFT')">KeyA</button></div>
+            <div class="setting-row"><label>Yaw Steer Right:</label><button class="bind-btn" id="bind-RIGHT" onclick="startRebind('RIGHT')">KeyD</button></div>
+            
+            <div style="border-bottom: 1px dashed #333; width: 100%; margin: 8px 0;"></div>
+            <h4 style="margin: 0 0 5px 0; color: #00ffcc;">INVENTORY HOTKEYS</h4>
+            <div class="setting-row"><label>Equip Slot 1 (Laser):</label><button class="bind-btn" id="bind-SLOT_1" onclick="startRebind('SLOT_1')">Digit1</button></div>
+            <div class="setting-row"><label>Equip Slot 2 (Missile):</label><button class="bind-btn" id="bind-SLOT_2" onclick="startRebind('SLOT_2')">Digit2</button></div>
+            <div class="setting-row"><label>Use Slot 3 (Shield):</label><button class="bind-btn" id="bind-SLOT_3" onclick="startRebind('SLOT_3')">Digit3</button></div>
+            <div class="setting-row"><label>Use Slot 4 (Boost):</label><button class="bind-btn" id="bind-SLOT_4" onclick="startRebind('SLOT_4')">Digit4</button></div>
+            <div class="setting-row"><label>Use Slot 5 (EMP):</label><button class="bind-btn" id="bind-SLOT_5" onclick="startRebind('SLOT_5')">Digit5</button></div>
 
             <button style="margin-top: 15px; width: 100%;" onclick="closeSettings()">SAVE CHANGES</button>
             <button class="secondary" style="margin-top: 5px; width: 100%; padding: 8px; font-size: 14px;" onclick="exitToMenu()">EXIT TO MAIN MENU</button>
@@ -276,11 +267,11 @@
     </div>
 
     <div id="inventory-container">
-        <div class="inv-slot active" id="slot-0" onclick="selectSlot(0)"><div class="slot-num">[1]</div><div class="slot-name">LASER</div></div>
-        <div class="inv-slot" id="slot-1" onclick="selectSlot(1)"><div class="slot-num">[2]</div><div class="slot-name">MISSILE</div></div>
-        <div class="inv-slot" id="slot-2" onclick="selectSlot(2)"><div class="slot-num">[3]</div><div class="slot-name">SHIELD</div></div>
-        <div class="inv-slot" id="slot-3" onclick="selectSlot(3)"><div class="slot-num">[4]</div><div class="slot-name">BOOST</div></div>
-        <div class="inv-slot" id="slot-4" onclick="selectSlot(4)"><div class="slot-num">[5]</div><div class="slot-name">EMP</div></div>
+        <div class="inv-slot active" id="slot-0" onclick="selectSlot(0)"><div class="slot-num" id="lbl-slot-0">[1]</div><div class="slot-name">LASER</div></div>
+        <div class="inv-slot" id="slot-1" onclick="selectSlot(1)"><div class="slot-num" id="lbl-slot-1">[2]</div><div class="slot-name">MISSILE</div></div>
+        <div class="inv-slot" id="slot-2" onclick="selectSlot(2)"><div class="slot-num" id="lbl-slot-2">[3]</div><div class="slot-name">SHIELD</div></div>
+        <div class="inv-slot" id="slot-3" onclick="selectSlot(3)"><div class="slot-num" id="lbl-slot-3">[4]</div><div class="slot-name">BOOST</div></div>
+        <div class="inv-slot" id="slot-4" onclick="selectSlot(4)"><div class="slot-num" id="lbl-slot-4">[5]</div><div class="slot-name">EMP</div></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -307,7 +298,12 @@
                 UP: "KeyW",
                 DOWN: "KeyS",
                 LEFT: "KeyA",
-                RIGHT: "KeyD"
+                RIGHT: "KeyD",
+                SLOT_1: "Digit1",
+                SLOT_2: "Digit2",
+                SLOT_3: "Digit3",
+                SLOT_4: "Digit4",
+                SLOT_5: "Digit5"
             }
         };
 
@@ -419,6 +415,10 @@
                 document.getElementById(`bind-${activeRebindAction}`).innerText = e.code;
                 document.getElementById(`bind-${activeRebindAction}`).classList.remove("waiting");
                 activeRebindAction = null;
+                
+                // Keep hotbar slots label updated with current key setting
+                let player = entities.find(ent => ent.isPlayer);
+                if (player) updateInventoryUI(player);
                 return;
             }
 
@@ -432,12 +432,13 @@
                     e.preventDefault();
                     deployStructure("player");
                 }
-                // INVENTORY HOTKEYS 1-5
-                if (e.code === "Digit1") selectSlot(0);
-                if (e.code === "Digit2") selectSlot(1);
-                if (e.code === "Digit3") selectSlot(2);
-                if (e.code === "Digit4") selectSlot(3);
-                if (e.code === "Digit5") selectSlot(4);
+                
+                // INVENTORY HOTKEYS TRIGGER WITH REBINDABLE POINTERS
+                if (e.code === config.keybinds.SLOT_1) selectSlot(0);
+                if (e.code === config.keybinds.SLOT_2) selectSlot(1);
+                if (e.code === config.keybinds.SLOT_3) selectSlot(2);
+                if (e.code === config.keybinds.SLOT_4) selectSlot(3);
+                if (e.code === config.keybinds.SLOT_5) selectSlot(4);
             }
 
             if (e.code === "Escape") {
@@ -457,19 +458,16 @@
             if (player) player.color = hexColor;
         }
 
-        // INVENTORY CONTROL LOGIC (REACTIVE SELECTION MAPPED TO UI DOM)
         function selectSlot(index) {
             let player = entities.find(e => e.isPlayer);
             if (!player || player.hp <= 0) return;
 
             let item = player.inventory[index];
             
-            // If it's a weapon, simply switch to it
             if (item.type === "weapon") {
                 player.selectedSlot = index;
                 updateInventoryUI(player);
             } 
-            // If it's a utility consumable, check ammo, fire instantly, and snap back to weapon
             else if (item.type === "utility") {
                 if (item.ammo > 0) {
                     executeUtilityItem(player, item.name);
@@ -491,7 +489,7 @@
                 createExplosion(player.x, player.y, 4, "#00ffcc");
             } 
             else if (itemName === "BOOST") {
-                player.speedTimer = 180; // 3 seconds at 60fps
+                player.speedTimer = 180; 
                 createExplosion(player.x, player.y, 1, "#ffff00");
             } 
             else if (itemName === "EMP") {
@@ -500,7 +498,7 @@
                     if (!other.isPlayer) {
                         let dist = getDistance(player.x, player.y, other.x, other.y);
                         if (dist < 400) {
-                            other.hp -= 35; // Direct structural damage
+                            other.hp -= 35; 
                             createExplosion(other.x, other.y, 2, "#ff00ff");
                         }
                     }
@@ -508,15 +506,23 @@
             }
         }
 
+        function cleanKeyLabel(codeStr) {
+            return codeStr.replace("Digit", "").replace("Key", "");
+        }
+
         function updateInventoryUI(player) {
+            const keyMappings = [config.keybinds.SLOT_1, config.keybinds.SLOT_2, config.keybinds.SLOT_3, config.keybinds.SLOT_4, config.keybinds.SLOT_5];
+            
             for (let i = 0; i < 5; i++) {
                 let slotEl = document.getElementById(`slot-${i}`);
+                let labelEl = document.getElementById(`lbl-slot-${i}`);
                 if (!slotEl) continue;
 
                 let item = player.inventory[i];
                 let displayAmmo = item.ammo === Infinity ? "" : ` (${item.ammo})`;
                 
                 slotEl.querySelector('.slot-name').innerText = `${item.name}${displayAmmo}`;
+                if (labelEl) labelEl.innerText = `[${cleanKeyLabel(keyMappings[i])}]`;
 
                 if (i === player.selectedSlot) {
                     slotEl.classList.add("active");
@@ -708,7 +714,6 @@
                 if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.35;
 
                 if (ent.isPlayer) {
-                    // Update Speed Status Condition safely
                     if (ent.speedTimer > 0) {
                         ent.speed = ent.baseSpeed * 2.5;
                         ent.speedTimer--;
@@ -726,7 +731,31 @@
                             ent.y += Math.sin(ent.angle) * ent.speed;
                         }
                     } else {
-                        if (config.controlScheme === "mouse") {
+                        // NEW MOUSE FOLLOW ENGINE DRIVER
+                        if (config.controlScheme === "mouse-follow") {
+                            let screenCenterX = canvas.width / 2;
+                            let screenCenterY = canvas.height / 2;
+                            
+                            let deltaX = mouseX - screenCenterX;
+                            let deltaY = mouseY - screenCenterY;
+                            
+                            // Adjust ship steering vector based on horizontal screen bounds
+                            if (Math.abs(deltaX) > 12) {
+                                ent.angle += (deltaX / screenCenterX) * 0.05;
+                            }
+                            
+                            // Upper screen coordinates accelerate hull forward, lower drops into reverse
+                            if (deltaY < -40) {
+                                let forwardForce = Math.min(1, Math.abs(deltaY) / screenCenterY);
+                                ent.x += Math.cos(ent.angle) * ent.speed * forwardForce;
+                                ent.y += Math.sin(ent.angle) * ent.speed * forwardForce;
+                            } else if (deltaY > 40) {
+                                let reverseForce = Math.min(0.5, (deltaY / screenCenterY) * 0.5);
+                                ent.x -= Math.cos(ent.angle) * ent.speed * reverseForce;
+                                ent.y -= Math.sin(ent.angle) * ent.speed * reverseForce;
+                            }
+                        } 
+                        else if (config.controlScheme === "mouse") {
                             let mouseOffsetX = mouseX - canvas.width / 2;
                             ent.angle += (mouseOffsetX / (canvas.width / 2)) * 0.045;
                             
@@ -764,7 +793,6 @@
                         }
                     });
 
-                    // INVENTORY WEAPON RESOLUTION SYSTEM
                     if (nearestBot && ent.fireCooldown <= 0 && recordDist < 420) {
                         let currentWeapon = ent.inventory[ent.selectedSlot];
                         let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
@@ -777,7 +805,7 @@
                         else if (currentWeapon.name === "MISSILE" && currentWeapon.ammo > 0) {
                             lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 5.5, vy: (tDy / tDist) * 5.5, ownerId: ent.id, color: "#ff0055", dmg: 40, size: 7, life: 200 });
                             currentWeapon.ammo--;
-                            ent.fireCooldown = 55; // Slower reload time
+                            ent.fireCooldown = 55; 
                             updateInventoryUI(ent);
                         }
                     }
@@ -975,7 +1003,6 @@
                 }
             });
 
-            // Status Effects HUD Tracker
             let healthDisplay = Math.ceil(player.hp);
             ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px 'Courier New'"; ctx.textAlign = "left";
             ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
