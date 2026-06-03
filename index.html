@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Space Battle Royale - 3D Skin Hangar</title>
+    <title>Space Battle Royale - True 3D Perspective</title>
     <style>
         body, html {
             background-color: #020205;
@@ -72,7 +72,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            max-width: 480px;
+            max-width: 460px;
             width: 90%;
             box-shadow: 0 0 30px rgba(0,255,204,0.3);
             max-height: 85vh;
@@ -84,11 +84,11 @@
             justify-content: space-between;
             align-items: center;
             width: 100%;
-            margin: 6px 0;
-            font-size: 14px;
+            margin: 8px 0;
+            font-size: 15px;
         }
 
-        select, input[type="text"] {
+        select {
             background: #06060c;
             border: 1px solid #00ffcc;
             color: white;
@@ -98,14 +98,26 @@
             outline: none;
         }
 
+        /* Styling for the custom skin color picker button wrapper */
+        .color-picker-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         input[type="color"] {
-            background: transparent;
-            border: none;
+            -webkit-appearance: none;
+            border: 2px solid #00ffcc;
             width: 40px;
             height: 30px;
+            border-radius: 4px;
             cursor: pointer;
-            outline: none;
+            background: none;
+            padding: 0;
         }
+
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 2px; }
 
         .bind-btn {
             background: #111;
@@ -130,14 +142,14 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>19 Ships drop into a 3D matrix. Click Settings to modify your flight keys or jump into the Hangar to construct a fully customized ship color mesh skin!</p>
+        <p>19 Ships drop into a 3D matrix. Auto-aim lock weapons active. Tap 'V' to switch seamlessly between First-Person cockpit and Third-Person view track!</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
-        <button class="secondary" onclick="openSettings()">SETTINGS & HANGAR</button>
+        <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
 
     <div id="settings-overlay" class="overlay" style="display: none;">
         <div id="settings-menu">
-            <h2>3D CONFIG & HANGAR</h2>
+            <h2>3D ENGINE CONFIG</h2>
             
             <div class="setting-row">
                 <label>Steering Input:</label>
@@ -148,39 +160,20 @@
             </div>
 
             <div class="setting-row">
+                <label>Create Custom Skin:</label>
+                <div class="color-picker-wrapper">
+                    <span id="skin-hex-text" style="font-size: 12px; color: #aaa;">#00ffcc</span>
+                    <input type="color" id="skin-picker" value="#00ffcc" oninput="saveCustomSkin(this.value)">
+                </div>
+            </div>
+
+            <div class="setting-row">
                 <label>Mobile Touch Overlay:</label>
                 <select id="mobile-select" onchange="updateMobileControls()">
                     <option value="false">Hidden (PC Default)</option>
                     <option value="true">Visible (On-Screen Layout)</option>
                 </select>
             </div>
-
-            <div style="border-bottom: 1px solid #333; width: 100%; margin: 10px 0;"></div>
-            <h3 style="margin: 0 0 5px 0; color: #00ffcc;">SHIP SKIN HANGAR</h3>
-            
-            <div class="setting-row">
-                <label>Select Skin Slot:</label>
-                <select id="skin-slot-select" onchange="loadSkinEditor()">
-                    <option value="0">Slot 1</option>
-                    <option value="1">Slot 2</option>
-                    <option value="2">Slot 3</option>
-                    <option value="3">Slot 4</option>
-                    <option value="4">Slot 5</option>
-                </select>
-            </div>
-            <div class="setting-row">
-                <label>Designator Name:</label>
-                <input type="text" id="skin-name-input" oninput="saveSkinChanges()" maxlength="14">
-            </div>
-            <div class="setting-row">
-                <label>Primary Wing Hull:</label>
-                <input type="color" id="skin-primary-input" onchange="saveSkinChanges()">
-            </div>
-            <div class="setting-row">
-                <label>Canopy Spine Accent:</label>
-                <input type="color" id="skin-secondary-input" onchange="saveSkinChanges()">
-            </div>
-            <button style="margin: 8px 0; padding: 6px 15px; font-size: 13px; width: 100%;" onclick="equipSkin()">EQUIP SELECTED DESIGN</button>
 
             <div style="border-bottom: 1px solid #333; width: 100%; margin: 10px 0;"></div>
             <h3 style="margin: 0 0 5px 0; color: #ff0055;">INPUT KEYBINDS</h3>
@@ -211,7 +204,636 @@
             </div>
 
             <button style="margin-top: 15px; width: 100%;" onclick="closeSettings()">SAVE CHANGES</button>
+            <button class="secondary" style="margin-top: 5px; width: 100%; padding: 8px; font-size: 14px;" onclick="exitToMenu()">EXIT TO MAIN MENU</button>
         </div>
     </div>
 
-    <div id="gameover-screen
+    <div id="gameover-screen" class="overlay" style="display: none;">
+        <h1 style="color: #ff3366;">ELIMINATED</h1>
+        <p id="placement-text">Placement: #0 / 19</p>
+        <button onclick="changeState('PLAYING')">RE-DEPLOY HULL</button>
+        <button class="secondary" onclick="openSettings()">SETTINGS</button>
+    </div>
+
+    <div id="victory-screen" class="overlay" style="display: none;">
+        <h1 style="color: #00ffcc;">#1 VICTORY ROYALE</h1>
+        <p>You conquered the 3D sector perimeter!</p>
+        <button onclick="changeState('PLAYING')">PLAY REMATCH</button>
+        <button class="secondary" onclick="openSettings()">SETTINGS</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let gameState = "START";
+        let viewMode = "3P"; 
+        
+        let entities = []; 
+        let lasers = [];
+        let particles = [];
+        let structures = []; 
+
+        let config = {
+            controlScheme: "keyboard", 
+            mobileOverlay: false,       
+            playerSkin: "#00ffcc", // Default custom skin fallback
+            keybinds: {
+                TOGGLE_VIEW: "KeyV",
+                BUILD: "Space",
+                UP: "KeyW",
+                DOWN: "KeyS",
+                LEFT: "KeyA",
+                RIGHT: "KeyD"
+            }
+        };
+
+        // NEW: Load saved custom skin from local memory immediately on boot
+        const savedSkin = localStorage.getItem("savedSpaceSkin");
+        if (savedSkin) {
+            config.playerSkin = savedSkin;
+            // Update UI elements to display saved skin configuration data
+            document.getElementById("skin-picker").value = savedSkin;
+            document.getElementById("skin-hex-text").innerText = savedSkin.toUpperCase();
+        }
+
+        let keysPressed = {};
+        let activeRebindAction = null;
+
+        const mapSize = 1200; 
+        const storm = { x: 0, y: 0, radius: 0, minRadius: 60, shrinkSpeed: 0.22 };
+
+        let mouseX = 0, mouseY = 0;
+        const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
+        const mobileBuildBtn = { x: 0, y: 0, radius: 35 };
+        const mobileViewBtn = { x: 0, y: 0, radius: 35 };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            mobileBuildBtn.x = canvas.width - 65;
+            mobileBuildBtn.y = canvas.height - 150;
+            mobileViewBtn.x = canvas.width - 65;
+            mobileViewBtn.y = canvas.height - 65;
+        }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+
+        window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+
+        window.addEventListener("touchstart", (e) => {
+            for(let i=0; i<e.touches.length; i++) {
+                let t = e.touches[i];
+                if (config.mobileOverlay && t.clientX < canvas.width / 2 && !joystick.active) {
+                    joystick.active = true;
+                    joystick.startX = t.clientX; joystick.startY = t.clientY;
+                    joystick.curX = t.clientX; joystick.curY = t.clientY;
+                }
+                if (config.mobileOverlay && gameState === "PLAYING") {
+                    if (getDistance(t.clientX, t.clientY, mobileBuildBtn.x, mobileBuildBtn.y) < mobileBuildBtn.radius) {
+                        deployStructure("player");
+                    }
+                    if (getDistance(t.clientX, t.clientY, mobileViewBtn.x, mobileViewBtn.y) < mobileViewBtn.radius) {
+                        viewMode = (viewMode === "3P") ? "1P" : "3P";
+                    }
+                }
+            }
+        });
+
+        window.addEventListener("touchmove", (e) => {
+            for(let i=0; i<e.touches.length; i++) {
+                let t = e.touches[i];
+                if (joystick.active && t.clientX < canvas.width / 2) {
+                    joystick.curX = t.clientX; joystick.curY = t.clientY;
+                }
+            }
+        });
+
+        window.addEventListener("touchend", (e) => { if (e.touches.length === 0) joystick.active = false; });
+
+        window.addEventListener("keydown", (e) => {
+            if (activeRebindAction) {
+                e.preventDefault();
+                config.keybinds[activeRebindAction] = e.code;
+                document.getElementById(`bind-${activeRebindAction}`).innerText = e.code;
+                document.getElementById(`bind-${activeRebindAction}`).classList.remove("waiting");
+                activeRebindAction = null;
+                return;
+            }
+
+            keysPressed[e.code] = true;
+
+            if (gameState === "PLAYING") {
+                if (e.code === config.keybinds.TOGGLE_VIEW) {
+                    viewMode = (viewMode === "3P") ? "1P" : "3P";
+                }
+                if (e.code === config.keybinds.BUILD) {
+                    e.preventDefault();
+                    deployStructure("player");
+                }
+            }
+
+            // Optional Escape Hotkey to easily access settings mid-game
+            if (e.code === "Escape") {
+                if (gameState === "PLAYING") openSettings();
+                else if (document.getElementById("settings-overlay").style.display === "flex") closeSettings();
+            }
+        });
+
+        window.addEventListener("keyup", (e) => { keysPressed[e.code] = false; });
+
+        // NEW: Custom Skin color storage processor
+        function saveCustomSkin(hexColor) {
+            config.playerSkin = hexColor;
+            document.getElementById("skin-hex-text").innerText = hexColor.toUpperCase();
+            localStorage.setItem("savedSpaceSkin", hexColor); // Lock into persistent browser memory
+
+            // Live refresh skin indicator if player is actively moving on map grid
+            let player = entities.find(e => e.isPlayer);
+            if (player) player.color = hexColor;
+        }
+
+        // NEW: Clean Match Abort Routine
+        function exitToMenu() {
+            changeState("START");
+        }
+
+        function openSettings() {
+            document.getElementById("start-screen").style.display = "none";
+            document.getElementById("gameover-screen").style.display = "none";
+            document.getElementById("victory-screen").style.display = "none";
+            document.getElementById("settings-overlay").style.display = "flex";
+        }
+
+        function closeSettings() {
+            document.getElementById("settings-overlay").style.display = "none";
+            changeState(gameState); 
+        }
+
+        function updateControlScheme() { config.controlScheme = document.getElementById("control-select").value; }
+        function updateMobileControls() { config.mobileOverlay = document.getElementById("mobile-select").value === "true"; }
+
+        function startRebind(action) {
+            if(activeRebindAction) return;
+            activeRebindAction = action;
+            const btn = document.getElementById(`bind-${action}`);
+            btn.innerText = "Press key...";
+            btn.classList.add("waiting");
+        }
+
+        function changeState(newState) {
+            gameState = newState;
+            document.getElementById("start-screen").style.display = (newState === "START") ? "flex" : "none";
+            document.getElementById("settings-overlay").style.display = "none";
+            document.getElementById("gameover-screen").style.display = (newState === "GAMEOVER") ? "flex" : "none";
+            document.getElementById("victory-screen").style.display = (newState === "VICTORY") ? "flex" : "none";
+
+            if (newState === "PLAYING") initBattleRoyale();
+        }
+
+        function initBattleRoyale() {
+            entities = []; lasers = []; particles = []; structures = [];
+            storm.x = mapSize / 2;
+            storm.y = mapSize / 2;
+            storm.radius = mapSize * 0.7;
+
+            entities.push({
+                id: "player", isPlayer: true,
+                x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
+                radius: 14, speed: 4.2, hp: 100, maxHp: 100,
+                color: config.playerSkin, // Generates player with saved custom skin preference
+                fireCooldown: 0,
+                builds: 3, maxBuilds: 5, buildRegenTimer: 0
+            });
+
+            for (let i = 0; i < 18; i++) {
+                let angle = Math.random() * Math.PI * 2;
+                let dist = Math.random() * (storm.radius * 0.6); 
+                entities.push({
+                    id: "bot_" + i, isPlayer: false,
+                    x: storm.x + Math.cos(angle) * dist,
+                    y: storm.y + Math.sin(angle) * dist,
+                    angle: Math.random() * Math.PI * 2,
+                    radius: 12, speed: Math.random() * 0.8 + 1.8,
+                    vx: (Math.random() - 0.5) * 2.5, vy: (Math.random() - 0.5) * 2.5,
+                    hp: 85, maxHp: 85, color: `hsl(${Math.random() * 55 + 10}, 100%, 60%)`, 
+                    fireCooldown: Math.floor(Math.random() * 30), changeDirTimer: 0, buildCooldown: 0
+                });
+            }
+        }
+
+        function deployStructure(creatorId) {
+            let creator = entities.find(e => e.id === creatorId);
+            if (!creator) return;
+
+            if (creator.isPlayer) {
+                if (creator.builds > 0) {
+                    structures.push({ x: creator.x, y: creator.y, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 255, 0.15)", borderColor: config.playerSkin });
+                    creator.builds--;
+                    createExplosion(creator.x, creator.y, 0, config.playerSkin);
+                }
+            } else {
+                structures.push({ x: creator.x, y: creator.y, size: 28, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.15)", borderColor: creator.color });
+                creator.buildCooldown = 360; 
+                createExplosion(creator.x, creator.y, 0, creator.color);
+            }
+        }
+
+        function createExplosion(x, y, z, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: x, y: y, z: z || 2,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    vz: Math.random() * 4 + 1, 
+                    radius: Math.random() * 2.5 + 1, alpha: 1, color: color || "#ff5500"
+                });
+            }
+        }
+
+        function getDistance(x1, y1, x2, y2) { return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2); }
+
+        function checkStructureCollision(pX, pY, struct) {
+            return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2);
+        }
+
+        function get3DProjection(worldX, worldY, worldZ) {
+            let player = entities.find(e => e.isPlayer);
+            if (!player) return null;
+
+            let camX, camY, camZ, camAngle;
+            let horizonPitchOffset = 0; 
+
+            if (viewMode === "1P") {
+                camX = player.x;
+                camY = player.y;
+                camZ = 7; 
+                camAngle = player.angle;
+                horizonPitchOffset = 0;
+            } else { 
+                camX = player.x - Math.cos(player.angle) * 75;
+                camY = player.y - Math.sin(player.angle) * 75;
+                camZ = 32; 
+                camAngle = player.angle;
+                horizonPitchOffset = canvas.height * 0.12; 
+            }
+
+            let dx = worldX - camX;
+            let dy = worldY - camY;
+            let dz = worldZ - camZ;
+
+            let rotX = -dx * Math.sin(camAngle) + dy * Math.cos(camAngle);
+            let rotY =  dx * Math.cos(camAngle) + dy * Math.sin(camAngle);
+
+            if (rotY <= 2) return null;
+
+            let fov = 450; 
+            let screenX = canvas.width / 2 + (rotX / rotY) * fov;
+            let screenY = canvas.height / 2 - (dz / rotY) * fov + horizonPitchOffset;
+            
+            return { x: screenX, y: screenY, scale: fov / rotY, depth: rotY };
+        }
+
+        function update() {
+            if (gameState !== "PLAYING") return;
+
+            if (storm.radius > storm.minRadius) storm.radius -= storm.shrinkSpeed;
+
+            let player = entities.find(e => e.isPlayer);
+            if (player && player.builds < player.maxBuilds) {
+                player.buildRegenTimer++;
+                if (player.buildRegenTimer >= 180) { 
+                    player.builds++; player.buildRegenTimer = 0;
+                }
+            }
+
+            for (let i = entities.length - 1; i >= 0; i--) {
+                let ent = entities[i];
+
+                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.25;
+
+                if (ent.isPlayer) {
+                    if (config.mobileOverlay && joystick.active) {
+                        let jDx = joystick.curX - joystick.startX;
+                        let jDy = joystick.curY - joystick.startY;
+                        let jDist = Math.sqrt(jDx*jDx + jDy*jDy);
+                        if (jDist > 5) {
+                            ent.angle = Math.atan2(jDy, jDx);
+                            ent.x += Math.cos(ent.angle) * ent.speed;
+                            ent.y += Math.sin(ent.angle) * ent.speed;
+                        }
+                    } else {
+                        if (config.controlScheme === "mouse") {
+                            let mouseOffsetX = mouseX - canvas.width / 2;
+                            ent.angle += (mouseOffsetX / (canvas.width / 2)) * 0.045;
+                            
+                            if (keysPressed[config.keybinds.UP]) {
+                                ent.x += Math.cos(ent.angle) * ent.speed;
+                                ent.y += Math.sin(ent.angle) * ent.speed;
+                            }
+                            if (keysPressed[config.keybinds.DOWN]) {
+                                ent.x -= Math.cos(ent.angle) * ent.speed;
+                                ent.y -= Math.sin(ent.angle) * ent.speed;
+                            }
+                        } else {
+                            if (keysPressed[config.keybinds.LEFT])  ent.angle -= 0.045;
+                            if (keysPressed[config.keybinds.RIGHT]) ent.angle += 0.045;
+                            
+                            if (keysPressed[config.keybinds.UP]) {
+                                ent.x += Math.cos(ent.angle) * ent.speed;
+                                ent.y += Math.sin(ent.angle) * ent.speed;
+                            }
+                            if (keysPressed[config.keybinds.DOWN]) {
+                                ent.x -= Math.cos(ent.angle) * ent.speed;
+                                ent.y -= Math.sin(ent.angle) * ent.speed;
+                            }
+                        }
+                    }
+
+                    if (ent.x < 20) ent.x = 20; if (ent.x > mapSize - 20) ent.x = mapSize - 20;
+                    if (ent.y < 20) ent.y = 20; if (ent.y > mapSize - 20) ent.y = mapSize - 20;
+
+                    let nearestBot = null; let recordDist = Infinity;
+                    entities.forEach(other => {
+                        if (!other.isPlayer) {
+                            let d = getDistance(ent.x, ent.y, other.x, other.y);
+                            if (d < recordDist) { recordDist = d; nearestBot = other; }
+                        }
+                    });
+
+                    if (nearestBot && ent.fireCooldown <= 0 && recordDist < 350) {
+                        let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 7.5, vy: (tDy / tDist) * 7.5, ownerId: ent.id, color: config.playerSkin });
+                        ent.fireCooldown = 16; 
+                    }
+                } else {
+                    ent.changeDirTimer++;
+                    if (ent.changeDirTimer > 60) {
+                        ent.vx = (Math.random() - 0.5) * ent.speed * 1.8;
+                        ent.vy = (Math.random() - 0.5) * ent.speed * 1.8;
+                        ent.changeDirTimer = 0;
+                    }
+                    ent.x += ent.vx; ent.y += ent.vy;
+                    if (Math.abs(ent.vx) > 0.1 || Math.abs(ent.vy) > 0.1) {
+                        ent.angle = Math.atan2(ent.vy, ent.vx);
+                    }
+
+                    if (ent.x < 20 || ent.x > mapSize - 20) ent.vx *= -1;
+                    if (ent.y < 20 || ent.y > mapSize - 20) ent.vy *= -1;
+
+                    if (ent.buildCooldown > 0) ent.buildCooldown--;
+                    if (ent.hp < ent.maxHp * 0.4 && ent.buildCooldown === 0 && Math.random() < 0.02) deployStructure(ent.id);
+
+                    let nearestTarget = null; let rDist = Infinity;
+                    entities.forEach(other => {
+                        if (other.id !== ent.id) {
+                            let d = getDistance(ent.x, ent.y, other.x, other.y);
+                            if (d < rDist) { rDist = d; nearestTarget = other; }
+                        }
+                    });
+
+                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 260) {
+                        let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 5.5, vy: (tDy / tDist) * 5.5, ownerId: ent.id, color: ent.color });
+                        ent.fireCooldown = 50 + Math.random() * 25;
+                    }
+                }
+
+                if (ent.fireCooldown > 0) ent.fireCooldown--;
+
+                if (ent.hp <= 0) {
+                    createExplosion(ent.x, ent.y, 2, ent.color);
+                    if (ent.isPlayer) {
+                        document.getElementById("placement-text").innerText = `Placement: #${entities.length} / 19`;
+                        changeState("GAMEOVER");
+                    }
+                    entities.splice(i, 1);
+                }
+            }
+
+            if (entities.length === 1 && entities[0].isPlayer) changeState("VICTORY");
+
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let l = lasers[i]; l.x += l.vx; l.y += l.vy;
+
+                if (l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { lasers.splice(i, 1); continue; }
+
+                let hitRegistered = false;
+                for (let k = structures.length - 1; k >= 0; k--) {
+                    let s = structures[k];
+                    if (checkStructureCollision(l.x, l.y, s)) {
+                        s.hp -= 20; createExplosion(l.x, l.y, 3, s.borderColor);
+                        lasers.splice(i, 1); hitRegistered = true; break;
+                    }
+                }
+                if (hitRegistered) continue;
+
+                for (let j = 0; j < entities.length; j++) {
+                    let ent = entities[j];
+                    if (ent.id !== l.ownerId && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius + 3) {
+                        ent.hp -= 15; createExplosion(l.x, l.y, 3, l.color);
+                        lasers.splice(i, 1); break;
+                    }
+                }
+            }
+
+            for(let i=structures.length-1; i>=0; i--) { if(structures[i].hp <= 0) structures.splice(i,1); }
+            
+            for(let i=particles.length-1; i>=0; i--) { 
+                let p = particles[i]; 
+                p.x += p.vx; p.y += p.vy; p.z += p.vz;
+                p.vz -= 0.15; 
+                
+                if (p.z < 0) { p.z = 0; p.vz = -p.vz * 0.5; p.vx *= 0.7; p.vy *= 0.7; }
+                p.alpha -= 0.02; 
+                if(p.alpha <= 0) particles.splice(i,1); 
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = "#010103";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState !== "PLAYING") return;
+
+            let player = entities.find(e => e.isPlayer);
+            if (!player) return;
+
+            let renderQueue = [];
+
+            let gridSpacing = 60;
+            let startGridX = Math.floor((player.x - 400) / gridSpacing) * gridSpacing;
+            let endGridX = Math.floor((player.x + 400) / gridSpacing) * gridSpacing;
+            let startGridY = Math.floor((player.y - 400) / gridSpacing) * gridSpacing;
+            let endGridY = Math.floor((player.y + 400) / gridSpacing) * gridSpacing;
+
+            for (let gx = Math.max(0, startGridX); gx <= Math.min(mapSize, endGridX); gx += gridSpacing) {
+                for (let gy = Math.max(0, startGridY); gy <= Math.min(mapSize, endGridY); gy += gridSpacing) {
+                    let proj = get3DProjection(gx, gy, 0);
+                    if (proj) {
+                        renderQueue.push({ type: "gridDot", depth: proj.depth, proj: proj });
+                    }
+                }
+            }
+
+            structures.forEach(s => {
+                let proj = get3DProjection(s.x, s.y, 0);
+                if (proj) renderQueue.push({ type: "structure", depth: proj.depth, raw: s });
+            });
+
+            lasers.forEach(l => {
+                let proj = get3DProjection(l.x, l.y, 3.5); 
+                if (proj) renderQueue.push({ type: "laser", depth: proj.depth, proj: proj, raw: l });
+            });
+
+            particles.forEach(p => {
+                let proj = get3DProjection(p.x, p.y, p.z);
+                if (proj) renderQueue.push({ type: "particle", depth: proj.depth, proj: proj, raw: p });
+            });
+
+            entities.forEach(ent => {
+                let proj = get3DProjection(ent.x, ent.y, 0);
+                if (proj) renderQueue.push({ type: "entity", depth: proj.depth, proj: proj, raw: ent });
+            });
+
+            let stormSegments = 36;
+            for (let i = 0; i < stormSegments; i++) {
+                let r1 = (i / stormSegments) * Math.PI * 2;
+                let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
+
+                let sx1 = storm.x + Math.cos(r1) * storm.radius;
+                let sy1 = storm.y + Math.sin(r1) * storm.radius;
+                let sx2 = storm.x + Math.cos(r2) * storm.radius;
+                let sy2 = storm.y + Math.sin(r2) * storm.radius;
+
+                let midProj = get3DProjection((sx1 + sx2)/2, (sy1 + sy2)/2, 0);
+                if (midProj) {
+                    renderQueue.push({ type: "stormWall", depth: midProj.depth, x1: sx1, y1: sy1, x2: sx2, y2: sy2 });
+                }
+            }
+
+            renderQueue.sort((a, b) => b.depth - a.depth);
+
+            renderQueue.forEach(item => {
+                if (item.type === "gridDot") {
+                    ctx.fillStyle = "rgba(0, 255, 200, 0.18)";
+                    ctx.beginPath(); ctx.arc(item.proj.x, item.proj.y, Math.max(1, 1.8 * item.proj.scale), 0, Math.PI * 2); ctx.fill();
+                } 
+                else if (item.type === "structure") {
+                    draw3DBox(item.raw);
+                } 
+                else if (item.type === "laser") {
+                    ctx.fillStyle = item.raw.color;
+                    ctx.beginPath(); ctx.arc(item.proj.x, item.proj.y, Math.max(1.5, 3 * item.proj.scale), 0, Math.PI * 2); ctx.fill();
+                } 
+                else if (item.type === "particle") {
+                    ctx.save(); ctx.globalAlpha = item.raw.alpha; ctx.fillStyle = item.raw.color;
+                    ctx.beginPath(); ctx.arc(item.proj.x, item.proj.y, Math.max(0.5, item.raw.radius * item.proj.scale), 0, Math.PI * 2); ctx.fill();
+                    ctx.restore();
+                } 
+                else if (item.type === "entity") {
+                    if (item.raw.isPlayer && viewMode === "1P") return; 
+                    draw3DShip(item.raw);
+                } 
+                else if (item.type === "stormWall") {
+                    draw3DStormSegment(item.x1, item.y1, item.x2, item.y2);
+                }
+            });
+
+            let healthDisplay = Math.ceil(player.hp);
+            ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px 'Courier New'"; ctx.textAlign = "left";
+            ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
+            ctx.fillStyle = "#00ffff"; ctx.fillText(`BUILDS: ${player.builds} / 5`, 30, 72);
+            ctx.fillStyle = "#ffcc00"; ctx.fillText(`CAMERA: ${viewMode}`, 30, 99);
+            
+            ctx.textAlign = "right"; ctx.fillStyle = "#ff0055";
+            ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 30, 45);
+
+            if (config.mobileOverlay) {
+                if (joystick.active) {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
+                    ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = "rgba(0, 255, 204, 0.3)"; ctx.lineWidth = 2; ctx.stroke();
+
+                    let dx = joystick.curX - joystick.startX, dy = joystick.curY - joystick.startY, d = Math.sqrt(dx*dx + dy*dy);
+                    let px = joystick.startX + (dx / (d > joystick.maxRadius ? d : 1)) * Math.min(d, joystick.maxRadius);
+                    let py = joystick.startY + (dy / (d > joystick.maxRadius ? d : 1)) * Math.min(d, joystick.maxRadius);
+                    ctx.fillStyle = "#00ffcc"; ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
+                }
+
+                ctx.fillStyle = "rgba(0, 255, 255, 0.12)";
+                ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
+                ctx.fillText("BUILD", mobileBuildBtn.x, mobileBuildBtn.y + 4);
+
+                ctx.fillStyle = "rgba(255, 204, 0, 0.12)";
+                ctx.beginPath(); ctx.arc(mobileViewBtn.x, mobileViewBtn.y, mobileViewBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#ffcc00"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#ffcc00"; ctx.fillText("VIEW", mobileViewBtn.x, mobileViewBtn.y + 4);
+            }
+        }
+
+        function draw3DBox(b) {
+            let half = b.size / 2; let h = 18;
+            let corners = [
+                {x: b.x - half, y: b.y - half}, {x: b.x + half, y: b.y - half},
+                {x: b.x + half, y: b.y + half}, {x: b.x - half, y: b.y - half}
+            ];
+            let bottom = corners.map(c => get3DProjection(c.x, c.y, 0));
+            let top = corners.map(c => get3DProjection(c.x, c.y, h));
+
+            ctx.strokeStyle = b.borderColor; ctx.lineWidth = 1;
+            ctx.fillStyle = b.color;
+
+            ctx.beginPath();
+            for (let i = 0; i < 4; i++) {
+                let next = (i + 1) % 4;
+                if (bottom[i] && bottom[next] && top[i] && top[next]) {
+                    ctx.moveTo(bottom[i].x, bottom[i].y); ctx.lineTo(bottom[next].x, bottom[next].y);
+                    ctx.lineTo(top[next].x, top[next].y); ctx.lineTo(top[i].x, top[i].y);
+                    ctx.closePath(); ctx.fill(); ctx.stroke();
+                }
+            }
+        }
+
+        function draw3DShip(s) {
+            let r = s.radius; let a = s.angle;
+            let f = get3DProjection(s.x + Math.cos(a)*r, s.y + Math.sin(a)*r, 1.5);
+            let l = get3DProjection(s.x + Math.cos(a + 2.4)*r, s.y + Math.sin(a + 2.4)*r, 0);
+            let rW = get3DProjection(s.x + Math.cos(a - 2.4)*r, s.y + Math.sin(a - 2.4)*r, 0);
+            let tip = get3DProjection(s.x, s.y, 5);
+
+            if (f && l && rW && tip) {
+                ctx.strokeStyle = s.color; ctx.lineWidth = 1.5;
+                ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
+
+                ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(l.x, l.y); ctx.lineTo(rW.x, rW.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(l.x, l.y); ctx.moveTo(rW.x, rW.y); ctx.lineTo(tip.x, tip.y); stroke();
+
+                let barW = 24 * tip.scale;
+                ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(tip.x - barW/2, tip.y - 12, barW, 3);
+                ctx.fillStyle = s.isPlayer ? config.playerSkin : "#ff3333";
+                ctx.fillRect(tip.x - barW/2, tip.y - 12, barW * Math.max(0, s.hp / s.maxHp), 3);
+            }
+        }
+
+        function draw3DStormSegment(x1, y1, x2, y2) {
+            let b1 = get3DProjection(x1, y1, 0),   t1 = get3DProjection(x1, y1, 45);
+            let b2 = get3DProjection(x2, y2, 0),   t2 = get3DProjection(x2, y2, 45);
+
+            if (b1 && t1 && b2 && t2) {
+                ctx.fillStyle = "rgba(255, 0, 85, 0.05)";
+                ctx.strokeStyle = "rgba(255, 0, 85, 0.25)"; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(t1.x, t1.y); ctx.lineTo(t2.x, t2.y); ctx.lineTo(b2.x, b2.y); ctx.closePath();
+                ctx.fill(); ctx.stroke();
+            }
+        }
+
+        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+        gameLoop();
+    </script>
+</body>
+</html>
