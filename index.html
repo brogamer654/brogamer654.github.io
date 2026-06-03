@@ -260,6 +260,46 @@
         const mobileBuildBtn = { x: 0, y: 0, radius: 35 };
         const mobileViewBtn = { x: 0, y: 0, radius: 35 };
 
+        // PERMANENT STATIC REUSABLE MEMORY POOLS FOR ZERO-ALLOCATION RENDERING
+        const stormProjB1 = { x: 0, y: 0, scale: 0, depth: 0 };
+        const stormProjT1 = { x: 0, y: 0, scale: 0, depth: 0 };
+        const stormProjB2 = { x: 0, y: 0, scale: 0, depth: 0 };
+        const stormProjT2 = { x: 0, y: 0, scale: 0, depth: 0 };
+        
+        const shipProjF = { x: 0, y: 0, scale: 0, depth: 0 };
+        const shipProjL = { x: 0, y: 0, scale: 0, depth: 0 };
+        const shipProjR = { x: 0, y: 0, scale: 0, depth: 0 };
+        const shipProjTip = { x: 0, y: 0, scale: 0, depth: 0 };
+
+        const boxB = [{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0}];
+        const boxT = [{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0}];
+        
+        const itemProj = { x: 0, y: 0, scale: 0, depth: 0 };
+        const tempGridProj = { x: 0, y: 0, scale: 0, depth: 0 };
+
+        const activeRenderQueue = [];
+        const renderPool = [];
+        let renderPoolIndex = 0;
+
+        function getPooledItem(type, depth, raw, projX, projY, projScale) {
+            let item;
+            if (renderPoolIndex < renderPool.length) {
+                item = renderPool[renderPoolIndex];
+            } else {
+                item = { type: "", depth: 0, raw: null, x: 0, y: 0, scale: 0 };
+                renderPool.push(item);
+            }
+            renderPoolIndex++;
+            
+            item.type = type;
+            item.depth = depth;
+            item.raw = raw;
+            item.x = projX;
+            item.y = projY;
+            item.scale = projScale;
+            return item;
+        }
+
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -459,7 +499,8 @@
             return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2);
         }
 
-        function get3DProjection(worldX, worldY, worldZ) {
+        // FIXED: Streamlines projection straight into referenced memory target, reducing allocation to zero bytes
+        function get3DProjection(worldX, worldY, worldZ, outTarget) {
             let player = entities.find(e => e.isPlayer);
             if (!player) return null;
 
@@ -490,10 +531,12 @@
             if (rotY <= 2 || rotY > 2400) return null;
 
             let fov = 450; 
-            let screenX = canvas.width / 2 + (rotX / rotY) * fov;
-            let screenY = canvas.height / 2 - (dz / rotY) * fov + horizonPitchOffset;
+            outTarget.x = canvas.width / 2 + (rotX / rotY) * fov;
+            outTarget.y = canvas.height / 2 - (dz / rotY) * fov + horizonPitchOffset;
+            outTarget.scale = fov / rotY;
+            outTarget.depth = rotY;
             
-            return { x: screenX, y: screenY, scale: fov / rotY, depth: rotY };
+            return outTarget;
         }
 
         function update() {
@@ -566,7 +609,6 @@
                     if (nearestBot && ent.fireCooldown <= 0 && recordDist < 380) {
                         let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
                         if (tDist < 0.1) tDist = 0.1; 
-                        // FIXED: Added strict decay 'life' counter
                         lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.0, vy: (tDy / tDist) * 8.0, ownerId: ent.id, color: config.playerSkin, life: 150 });
                         ent.fireCooldown = 14; 
                     }
@@ -601,7 +643,6 @@
                     if (nearestTarget && ent.fireCooldown <= 0 && rDist < 280) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
                         if (tDist < 0.1) tDist = 0.1;
-                        // FIXED: Added strict decay 'life' counter
                         lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color, life: 150 });
                         ent.fireCooldown = 45 + Math.random() * 25;
                     }
@@ -625,9 +666,8 @@
                 let l = lasers[i]; 
                 l.x += l.vx; 
                 l.y += l.vy;
-                l.life--; // Count down the life frames
+                l.life--; 
 
-                // FIXED: Automatically discard lasers that exceed lifespan or break constraints
                 if (l.life <= 0 || isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
                     lasers.splice(i, 1); 
                     continue; 
@@ -674,43 +714,25 @@
             let player = entities.find(e => e.isPlayer);
             if (!player) return;
 
-            let renderQueue = [];
-
+            // OPTIMIZATION 1: Draw the base matrix grid instantly (Bypasses rendering queue/heap allocation)
             let gridSpacing = 60;
             let startGridX = Math.floor((player.x - 450) / gridSpacing) * gridSpacing;
             let endGridX = Math.floor((player.x + 450) / gridSpacing) * gridSpacing;
             let startGridY = Math.floor((player.y - 450) / gridSpacing) * gridSpacing;
             let endGridY = Math.floor((player.y + 450) / gridSpacing) * gridSpacing;
 
+            ctx.fillStyle = "rgba(0, 255, 200, 0.18)";
             for (let gx = Math.max(0, startGridX); gx <= Math.min(mapSize, endGridX); gx += gridSpacing) {
                 for (let gy = Math.max(0, startGridY); gy <= Math.min(mapSize, endGridY); gy += gridSpacing) {
-                    let proj = get3DProjection(gx, gy, 0);
-                    if (proj) {
-                        renderQueue.push({ type: "gridDot", depth: proj.depth, proj: proj });
+                    if (get3DProjection(gx, gy, 0, tempGridProj)) {
+                        ctx.beginPath(); 
+                        ctx.arc(tempGridProj.x, tempGridProj.y, Math.max(1, 1.8 * tempGridProj.scale), 0, Math.PI * 2); 
+                        ctx.fill();
                     }
                 }
             }
 
-            structures.forEach(s => {
-                let proj = get3DProjection(s.x, s.y, 0);
-                if (proj) renderQueue.push({ type: "structure", depth: proj.depth, raw: s });
-            });
-
-            lasers.forEach(l => {
-                let proj = get3DProjection(l.x, l.y, 3.5); 
-                if (proj) renderQueue.push({ type: "laser", depth: proj.depth, proj: proj, raw: l });
-            });
-
-            particles.forEach(p => {
-                let proj = get3DProjection(p.x, p.y, p.z);
-                if (proj) renderQueue.push({ type: "particle", depth: proj.depth, proj: proj, raw: p });
-            });
-
-            entities.forEach(ent => {
-                let proj = get3DProjection(ent.x, ent.y, 0);
-                if (proj) renderQueue.push({ type: "entity", depth: proj.depth, proj: proj, raw: ent });
-            });
-
+            // OPTIMIZATION 2: Draw the storm wall safely to the environment base directly
             let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2;
@@ -721,40 +743,75 @@
                 let sx2 = storm.x + Math.cos(r2) * storm.radius;
                 let sy2 = storm.y + Math.sin(r2) * storm.radius;
 
-                let midProj = get3DProjection((sx1 + sx2)/2, (sy1 + sy2)/2, 0);
-                if (midProj) {
-                    renderQueue.push({ type: "stormWall", depth: midProj.depth, x1: sx1, y1: sy1, x2: sx2, y2: sy2 });
+                if (get3DProjection(sx1, sy1, 0, stormProjB1) &&
+                    get3DProjection(sx1, sy1, 45, stormProjT1) &&
+                    get3DProjection(sx2, sy2, 0, stormProjB2) &&
+                    get3DProjection(sx2, sy2, 45, stormProjT2)) {
+                    
+                    ctx.fillStyle = "rgba(255, 0, 85, 0.05)";
+                    ctx.strokeStyle = "rgba(255, 0, 85, 0.25)"; ctx.lineWidth = 1;
+                    ctx.beginPath(); 
+                    ctx.moveTo(stormProjB1.x, stormProjB1.y); 
+                    ctx.lineTo(stormProjT1.x, stormProjT1.y); 
+                    ctx.lineTo(stormProjT2.x, stormProjT2.y); 
+                    ctx.lineTo(stormProjB2.x, stormProjB2.y); 
+                    ctx.closePath();
+                    ctx.fill(); ctx.stroke();
                 }
             }
 
-            renderQueue.sort((a, b) => b.depth - a.depth);
+            // OPTIMIZATION 3: Collect only dynamic entities into recycled object pool slots
+            renderPoolIndex = 0;
+            activeRenderQueue.length = 0;
 
-            renderQueue.forEach(item => {
-                if (item.type === "gridDot") {
-                    ctx.fillStyle = "rgba(0, 255, 200, 0.18)";
-                    ctx.beginPath(); ctx.arc(item.proj.x, item.proj.y, Math.max(1, 1.8 * item.proj.scale), 0, Math.PI * 2); ctx.fill();
-                } 
-                else if (item.type === "structure") {
+            structures.forEach(s => {
+                if (get3DProjection(s.x, s.y, 0, itemProj)) {
+                    activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale));
+                }
+            });
+
+            lasers.forEach(l => {
+                if (get3DProjection(l.x, l.y, 3.5, itemProj)) {
+                    activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale));
+                }
+            });
+
+            particles.forEach(p => {
+                if (get3DProjection(p.x, p.y, p.z, itemProj)) {
+                    activeRenderQueue.push(getPooledItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale));
+                }
+            });
+
+            entities.forEach(ent => {
+                if (ent.isPlayer && viewMode === "1P") return; 
+                if (get3DProjection(ent.x, ent.y, 0, itemProj)) {
+                    activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
+                }
+            });
+
+            // Fast sort of index references only
+            activeRenderQueue.sort((a, b) => b.depth - a.depth);
+
+            // Execute depth rendering via pool
+            activeRenderQueue.forEach(item => {
+                if (item.type === "structure") {
                     draw3DBox(item.raw);
                 } 
                 else if (item.type === "laser") {
                     ctx.fillStyle = item.raw.color;
-                    ctx.beginPath(); ctx.arc(item.proj.x, item.proj.y, Math.max(1.5, 3 * item.proj.scale), 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(1.5, 3 * item.scale), 0, Math.PI * 2); ctx.fill();
                 } 
                 else if (item.type === "particle") {
                     ctx.save(); ctx.globalAlpha = item.raw.alpha; ctx.fillStyle = item.raw.color;
-                    ctx.beginPath(); ctx.arc(item.proj.x, item.proj.y, Math.max(0.5, item.raw.radius * item.proj.scale), 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(0.5, item.raw.radius * item.scale), 0, Math.PI * 2); ctx.fill();
                     ctx.restore();
                 } 
                 else if (item.type === "entity") {
-                    if (item.raw.isPlayer && viewMode === "1P") return; 
                     draw3DShip(item.raw);
-                } 
-                else if (item.type === "stormWall") {
-                    draw3DStormSegment(item.x1, item.y1, item.x2, item.y2);
                 }
             });
 
+            // Draw HUD layout 
             let healthDisplay = Math.ceil(player.hp);
             ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px 'Courier New'"; ctx.textAlign = "left";
             ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
@@ -778,7 +835,7 @@
 
                 ctx.fillStyle = "rgba(0, 255, 205, 0.12)";
                 ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; stroke();
                 ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
                 ctx.fillText("BUILD", mobileBuildBtn.x, mobileBuildBtn.y + 4);
 
@@ -789,59 +846,58 @@
             }
         }
 
+        // FIXED: Replaced standard array mapping loops with static structure reference assignments
         function draw3DBox(b) {
             let half = b.size / 2; let h = 18;
-            let corners = [
-                {x: b.x - half, y: b.y - half}, {x: b.x + half, y: b.y - half},
-                {x: b.x + half, y: b.y + half}, {x: b.x - half, y: b.y - half}
-            ];
-            let bottom = corners.map(c => get3DProjection(c.x, c.y, 0));
-            let top = corners.map(c => get3DProjection(c.x, c.y, h));
-
+            let cx = [b.x - half, b.x + half, b.x + half, b.x - half];
+            let cy = [b.y - half, b.y - half, b.y + half, b.y + half];
+            
             ctx.strokeStyle = b.borderColor; ctx.lineWidth = 1;
             ctx.fillStyle = b.color;
 
-            ctx.beginPath();
+            let valid = true;
+            for (let i = 0; i < 4; i++) {
+                if (get3DProjection(cx[i], cy[i], 0, itemProj)) {
+                    boxB[i].x = itemProj.x; boxB[i].y = itemProj.y;
+                } else { valid = false; break; }
+                
+                if (get3DProjection(cx[i], cy[i], h, itemProj)) {
+                    boxT[i].x = itemProj.x; boxT[i].y = itemProj.y;
+                } else { valid = false; break; }
+            }
+            
+            if (!valid) return;
+
             for (let i = 0; i < 4; i++) {
                 let next = (i + 1) % 4;
-                if (bottom[i] && bottom[next] && top[i] && top[next]) {
-                    ctx.moveTo(bottom[i].x, bottom[i].y); ctx.lineTo(bottom[next].x, bottom[next].y);
-                    ctx.lineTo(top[next].x, top[next].y); ctx.lineTo(top[i].x, top[i].y);
-                    ctx.closePath(); ctx.fill(); ctx.stroke();
-                }
+                ctx.beginPath();
+                ctx.moveTo(boxB[i].x, boxB[i].y);
+                ctx.lineTo(boxB[next].x, boxB[next].y);
+                ctx.lineTo(boxT[next].x, boxT[next].y);
+                ctx.lineTo(boxT[i].x, boxT[i].y);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
             }
         }
 
         function draw3DShip(s) {
             let r = s.radius; let a = s.angle;
-            let f = get3DProjection(s.x + Math.cos(a)*r, s.y + Math.sin(a)*r, 1.5);
-            let l = get3DProjection(s.x + Math.cos(a + 2.4)*r, s.y + Math.sin(a + 2.4)*r, 0);
-            let rW = get3DProjection(s.x + Math.cos(a - 2.4)*r, s.y + Math.sin(a - 2.4)*r, 0);
-            let tip = get3DProjection(s.x, s.y, 5);
-
-            if (f && l && rW && tip) {
+            
+            if (get3DProjection(s.x + Math.cos(a)*r, s.y + Math.sin(a)*r, 1.5, shipProjF) &&
+                get3DProjection(s.x + Math.cos(a + 2.4)*r, s.y + Math.sin(a + 2.4)*r, 0, shipProjL) &&
+                get3DProjection(s.x + Math.cos(a - 2.4)*r, s.y + Math.sin(a - 2.4)*r, 0, shipProjR) &&
+                get3DProjection(s.x, s.y, 5, shipProjTip)) {
+                
                 ctx.strokeStyle = s.color; ctx.lineWidth = 1.5;
                 ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
 
-                ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(l.x, l.y); ctx.lineTo(rW.x, rW.y); ctx.closePath(); ctx.fill(); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(l.x, l.y); ctx.moveTo(rW.x, rW.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.lineTo(shipProjR.x, shipProjR.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.moveTo(shipProjR.x, shipProjR.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.stroke();
 
-                let barW = 24 * tip.scale;
-                ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(tip.x - barW/2, tip.y - 12, barW, 3);
+                let barW = 24 * shipProjTip.scale;
+                ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW, 3);
                 ctx.fillStyle = s.isPlayer ? config.playerSkin : "#ff3333";
-                ctx.fillRect(tip.x - barW/2, tip.y - 12, barW * Math.max(0, s.hp / s.maxHp), 3);
-            }
-        }
-
-        function draw3DStormSegment(x1, y1, x2, y2) {
-            let b1 = get3DProjection(x1, y1, 0),   t1 = get3DProjection(x1, y1, 45);
-            let b2 = get3DProjection(x2, y2, 0),   t2 = get3DProjection(x2, y2, 45);
-
-            if (b1 && t1 && b2 && t2) {
-                ctx.fillStyle = "rgba(255, 0, 85, 0.05)";
-                ctx.strokeStyle = "rgba(255, 0, 85, 0.25)"; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.moveTo(b1.x, b1.y); ctx.lineTo(t1.x, t1.y); ctx.lineTo(t2.x, t2.y); ctx.lineTo(b2.x, b2.y); ctx.closePath();
-                ctx.fill(); ctx.stroke();
+                ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW * Math.max(0, s.hp / s.maxHp), 3);
             }
         }
 
