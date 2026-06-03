@@ -315,9 +315,15 @@
         const storm = { x: 0, y: 0, radius: 0, minRadius: 150, shrinkSpeed: 1.45 };
 
         let mouseX = 0, mouseY = 0;
+        
+        // Mobile Controls Structs
         const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
         const mobileBuildBtn = { x: 0, y: 0, radius: 35 };
         const mobileViewBtn = { x: 0, y: 0, radius: 35 };
+        const mobileShootBtn = { x: 0, y: 0, radius: 46 };
+        
+        let joystickTouchId = null;
+        let shootTouchId = null;
 
         const stormProjB1 = { x: 0, y: 0, scale: 0, depth: 0 };
         const stormProjT1 = { x: 0, y: 0, scale: 0, depth: 0 };
@@ -361,10 +367,14 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            mobileBuildBtn.x = canvas.width - 65;
-            mobileBuildBtn.y = canvas.height - 150;
-            mobileViewBtn.x = canvas.width - 65;
-            mobileViewBtn.y = canvas.height - 65;
+            
+            // Clean dynamic anchoring for mobile thumb clusters
+            mobileShootBtn.x = canvas.width - 85;
+            mobileShootBtn.y = canvas.height - 85;
+            mobileBuildBtn.x = canvas.width - 195;
+            mobileBuildBtn.y = canvas.height - 85;
+            mobileViewBtn.x = canvas.width - 85;
+            mobileViewBtn.y = canvas.height - 195;
         }
         window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
@@ -377,7 +387,6 @@
         }
 
         window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
-        
         window.addEventListener("contextmenu", (e) => e.preventDefault());
 
         window.addEventListener("mousedown", (e) => { 
@@ -389,40 +398,72 @@
             if(e.button === 2) rightMouseIsDown = false; 
         });
 
+        // Fixed Touch Isolation Interface
         window.addEventListener("touchstart", (e) => {
-            for(let i=0; i<e.touches.length; i++) {
-                let t = e.touches[i];
-                if (config.mobileOverlay && t.clientX < canvas.width / 2 && !joystick.active) {
+            if (!config.mobileOverlay || gameState !== "PLAYING") return;
+            
+            for(let i=0; i<e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                
+                if (getDistance(t.clientX, t.clientY, mobileBuildBtn.x, mobileBuildBtn.y) < mobileBuildBtn.radius) {
+                    deployStructure("player");
+                    continue;
+                }
+                if (getDistance(t.clientX, t.clientY, mobileViewBtn.x, mobileViewBtn.y) < mobileViewBtn.radius) {
+                    viewMode = (viewMode === "3P") ? "1P" : "3P";
+                    continue;
+                }
+                if (getDistance(t.clientX, t.clientY, mobileShootBtn.x, mobileShootBtn.y) < mobileShootBtn.radius) {
+                    mouseIsDown = true;
+                    shootTouchId = t.identifier;
+                    continue;
+                }
+                
+                if (t.clientX < canvas.width / 2 && joystickTouchId === null) {
                     joystick.active = true;
                     joystick.startX = t.clientX; joystick.startY = t.clientY;
                     joystick.curX = t.clientX; joystick.curY = t.clientY;
-                } else if (gameState === "PLAYING") {
-                    mouseIsDown = true;
-                }
-                if (config.mobileOverlay && gameState === "PLAYING") {
-                    if (getDistance(t.clientX, t.clientY, mobileBuildBtn.x, mobileBuildBtn.y) < mobileBuildBtn.radius) {
-                        deployStructure("player");
-                    }
-                    if (getDistance(t.clientX, t.clientY, mobileViewBtn.x, mobileViewBtn.y) < mobileViewBtn.radius) {
-                        viewMode = (viewMode === "3P") ? "1P" : "3P";
-                    }
+                    joystickTouchId = t.identifier;
                 }
             }
         });
 
         window.addEventListener("touchmove", (e) => {
-            for(let i=0; i<e.touches.length; i++) {
-                let t = e.touches[i];
-                if (joystick.active && t.clientX < canvas.width / 2) {
+            if (!config.mobileOverlay || gameState !== "PLAYING") return;
+            
+            for(let i=0; i<e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                if (t.identifier === joystickTouchId) {
                     joystick.curX = t.clientX; joystick.curY = t.clientY;
                 }
             }
         });
 
-        window.addEventListener("touchend", (e) => { 
-            if (e.touches.length === 0) {
-                joystick.active = false;
-                mouseIsDown = false;
+        window.addEventListener("touchend", (e) => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                if (t.identifier === joystickTouchId) {
+                    joystick.active = false;
+                    joystickTouchId = null;
+                }
+                if (t.identifier === shootTouchId) {
+                    mouseIsDown = false;
+                    shootTouchId = null;
+                }
+            }
+        });
+
+        window.addEventListener("touchcancel", (e) => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                if (t.identifier === joystickTouchId) {
+                    joystick.active = false;
+                    joystickTouchId = null;
+                }
+                if (t.identifier === shootTouchId) {
+                    mouseIsDown = false;
+                    shootTouchId = null;
+                }
             }
         });
 
@@ -694,6 +735,7 @@
             return outTarget;
         }
 
+        // Clock updating routine fixed at 60Hz step-rate
         function update() {
             if (gameState !== "PLAYING") return;
 
@@ -936,32 +978,14 @@
             let cy = canvas.height / 2;
 
             if (rightMouseIsDown) {
-                ctx.strokeStyle = "#ff0055";
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(cx, cy, 130, 0, Math.PI * 2);
-                ctx.stroke();
-
-                ctx.strokeStyle = "rgba(255, 0, 85, 0.4)";
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(cx - 130, cy); ctx.lineTo(cx - 15, cy);
-                ctx.moveTo(cx + 15, cy); ctx.lineTo(cx + 130, cy);
-                ctx.moveTo(cx, cy - 130); ctx.lineTo(cx, cy - 15);
-                ctx.moveTo(cx, cy + 15); ctx.lineTo(cx, cy + 130);
-                ctx.stroke();
-
-                ctx.fillStyle = "#ff0055";
-                ctx.beginPath();
-                ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.strokeStyle = "#ff0055"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 130, 0, Math.PI * 2); ctx.stroke();
+                ctx.strokeStyle = "rgba(255, 0, 85, 0.4)"; ctx.lineWidth = 1; ctx.beginPath();
+                ctx.moveTo(cx - 130, cy); ctx.lineTo(cx - 15, cy); ctx.moveTo(cx + 15, cy); ctx.lineTo(cx + 130, cy);
+                ctx.moveTo(cx, cy - 130); ctx.lineTo(cx, cy - 15); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx, cy + 130); ctx.stroke();
+                ctx.fillStyle = "#ff0055"; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill();
             } else {
-                ctx.strokeStyle = config.playerSkin;
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(cx - 12, cy); ctx.lineTo(cx + 12, cy);
-                ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12);
-                ctx.stroke();
+                ctx.strokeStyle = config.playerSkin; ctx.lineWidth = 2; ctx.beginPath();
+                ctx.moveTo(cx - 12, cy); ctx.lineTo(cx + 12, cy); ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12); ctx.stroke();
             }
 
             let healthDisplay = Math.ceil(player.hp);
@@ -988,6 +1012,7 @@
                     ctx.fillStyle = "#00ffcc"; ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
                 }
 
+                // Layout HUD Rendering for HUD Cluster
                 ctx.fillStyle = "rgba(0, 255, 205, 0.12)"; ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
@@ -996,6 +1021,10 @@
                 ctx.fillStyle = "rgba(255, 204, 0, 0.12)"; ctx.beginPath(); ctx.arc(mobileViewBtn.x, mobileViewBtn.y, mobileViewBtn.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#ffcc00"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#ffcc00"; ctx.fillText("VIEW", mobileViewBtn.x, mobileViewBtn.y + 4);
+
+                ctx.fillStyle = "rgba(255, 0, 85, 0.15)"; ctx.beginPath(); ctx.arc(mobileShootBtn.x, mobileShootBtn.y, mobileShootBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#ff0055"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#ff0055"; ctx.font = "bold 13px 'Courier New'"; ctx.fillText("FIRE", mobileShootBtn.x, mobileShootBtn.y + 5);
             }
         }
 
@@ -1041,8 +1070,29 @@
             }
         }
 
-        function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
-        gameLoop();
+        // High refresh rate accumulator system
+        let lastTime = performance.now();
+        let accumulator = 0;
+        const deltaTimeStep = 1000 / 60; // Locked to clean 60Hz processing velocity
+
+        function gameLoop(currentTime) {
+            if (!currentTime) currentTime = performance.now();
+            
+            accumulator += currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Cap the accumulator frame stack to protect against background lag spikes
+            if (accumulator > 250) accumulator = 250;
+
+            while (accumulator >= deltaTimeStep) {
+                update();
+                accumulator -= deltaTimeStep;
+            }
+            
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>
