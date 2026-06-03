@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Battle Royale - Full Screen</title>
+    <title>Space Battle Royale - With Builds</title>
     <style>
         body, html {
             background-color: #06060c;
@@ -40,25 +40,24 @@
         let entities = []; 
         let lasers = [];
         let particles = [];
+        let structures = []; // Array to hold built defensive walls
         
-        // Storm / Safe Zone Circle Setup
+        // Storm Setup
         const storm = {
             x: 0,
             y: 0,
             radius: 0,
             minRadius: 50,
-            shrinkSpeed: 0.2
+            shrinkSpeed: 0.18
         };
 
         let mouseX = 0;
         let mouseY = 0;
 
-        // Automatically resize canvas to fit the window dynamically
+        // Dynamic Resize Handling
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            
-            // Keep storm centered on screen resize
             storm.x = canvas.width / 2;
             storm.y = canvas.height / 2;
             
@@ -68,9 +67,9 @@
             }
         }
         window.addEventListener("resize", resizeCanvas);
-        resizeCanvas(); // Initial sizing call
+        resizeCanvas();
 
-        // Input Trackers
+        // Mouse & Touch Inputs
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
@@ -81,6 +80,14 @@
             const rect = canvas.getBoundingClientRect();
             mouseX = e.touches[0].clientX - rect.left;
             mouseY = e.touches[0].clientY - rect.top;
+        });
+
+        // Spacebar to Build Barrier
+        document.addEventListener("keydown", (e) => {
+            if (e.code === "Space" && gameState === "PLAYING") {
+                e.preventDefault();
+                deployStructure("player");
+            }
         });
 
         canvas.addEventListener("click", () => {
@@ -94,11 +101,11 @@
             entities = [];
             lasers = [];
             particles = [];
+            structures = [];
             
-            // Dynamically scale storm radius based on screen size
             storm.radius = Math.max(canvas.width, canvas.height) * 0.6;
 
-            // Spawn Player at screen center
+            // Spawn Player
             entities.push({
                 id: "player",
                 isPlayer: true,
@@ -110,10 +117,12 @@
                 maxHp: 100,
                 color: "#00ffcc",
                 fireCooldown: 0,
-                target: null
+                builds: 3,         // Current build charges
+                maxBuilds: 5,      // Max inventory capacity
+                buildRegenTimer: 0
             });
 
-            // Spawn 18 Bots spread randomly inside the initial map layout
+            // Spawn 18 Arena Bots
             for (let i = 0; i < 18; i++) {
                 let angle = Math.random() * Math.PI * 2;
                 let dist = Math.random() * (storm.radius * 0.8); 
@@ -131,19 +140,54 @@
                     maxHp: 85,
                     color: `hsl(${Math.random() * 55 + 10}, 100%, 60%)`, 
                     fireCooldown: Math.floor(Math.random() * 30),
-                    changeDirTimer: 0
+                    changeDirTimer: 0,
+                    buildCooldown: 0 // Prevent bots from spamming infinite walls
                 });
             }
         }
 
+        function deployStructure(creatorId) {
+            let creator = entities.find(e => e.id === creatorId);
+            if (!creator) return;
+
+            if (creator.isPlayer) {
+                if (creator.builds > 0) {
+                    structures.push({
+                        x: creator.x,
+                        y: creator.y,
+                        size: 36,
+                        hp: 120,
+                        maxHp: 120,
+                        color: "rgba(0, 255, 255, 0.4)",
+                        borderColor: "#00ffff"
+                    });
+                    creator.builds--;
+                    createExplosion(creator.x, creator.y, "#00ffff");
+                }
+            } else {
+                // Bot deploying structure
+                structures.push({
+                    x: creator.x,
+                    y: creator.y,
+                    size: 30,
+                    hp: 80,
+                    maxHp: 80,
+                    color: "rgba(255, 100, 0, 0.4)",
+                    borderColor: creator.color
+                });
+                creator.buildCooldown = 300; // 5-second cooldown for bots
+                createExplosion(creator.x, creator.y, creator.color);
+            }
+        }
+
         function createExplosion(x, y, color) {
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 12; i++) {
                 particles.push({
                     x: x,
                     y: y,
                     vx: (Math.random() - 0.5) * 6,
                     vy: (Math.random() - 0.5) * 6,
-                    radius: Math.random() * 3.5 + 1,
+                    radius: Math.random() * 3 + 1,
                     alpha: 1,
                     color: color || "#ff5500"
                 });
@@ -154,36 +198,53 @@
             return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
         }
 
+        // Circular object checking line/point collision for squares
+        function checkStructureCollision(projX, projY, struct) {
+            return (projX > struct.x - struct.size/2 && 
+                    projX < struct.x + struct.size/2 && 
+                    projY > struct.y - struct.size/2 && 
+                    projY < struct.y + struct.size/2);
+        }
+
         function update() {
             if (gameState !== "PLAYING") return;
 
-            // 1. Shrink Storm
+            // 1. Shrink Storm Area
             if (storm.radius > storm.minRadius) {
                 storm.radius -= storm.shrinkSpeed;
             }
 
-            // 2. Update Entities
+            // 2. Build Resource Regeneration for Player
+            let playerObj = entities.find(e => e.isPlayer);
+            if (playerObj && playerObj.builds < playerObj.maxBuilds) {
+                playerObj.buildRegenTimer++;
+                if (playerObj.buildRegenTimer >= 180) { // Gives 1 charge every 3 seconds
+                    playerObj.builds++;
+                    playerObj.buildRegenTimer = 0;
+                }
+            }
+
+            // 3. Update Entities
             for (let i = entities.length - 1; i >= 0; i--) {
                 let ent = entities[i];
 
-                // Storm Damage Check
+                // Check Storm Damage
                 let distFromCenter = getDistance(ent.x, ent.y, storm.x, storm.y);
                 if (distFromCenter > storm.radius) {
                     ent.hp -= 0.25; 
                 }
 
                 if (ent.isPlayer) {
-                    // Move Player towards Cursor
+                    // Control Processing
                     let dx = mouseX - ent.x;
                     let dy = mouseY - ent.y;
                     let dist = Math.sqrt(dx*dx + dy*dy);
-                    
                     if (dist > 5) {
                         ent.x += (dx / dist) * ent.speed;
                         ent.y += (dy / dist) * ent.speed;
                     }
 
-                    // Auto-Target nearest tracking bot
+                    // Targeting Engine
                     let nearestBot = null;
                     let recordDist = Infinity;
                     entities.forEach(other => {
@@ -196,7 +257,7 @@
                         }
                     });
 
-                    // Fire Weapon
+                    // Weapon System Processing
                     if (nearestBot && ent.fireCooldown <= 0) {
                         let tDx = nearestBot.x - ent.x;
                         let tDy = nearestBot.y - ent.y;
@@ -214,7 +275,7 @@
                     }
 
                 } else {
-                    // Bot AI wander adjustments
+                    // Bot Control Mechanics
                     ent.changeDirTimer++;
                     if (ent.changeDirTimer > 50) {
                         ent.vx = (Math.random() - 0.5) * ent.speed * 2;
@@ -225,11 +286,18 @@
                     ent.x += ent.vx;
                     ent.y += ent.vy;
 
-                    // Keep bots bounce-contained within total screen canvas edge
+                    // Bound constraints
                     if (ent.x < 15 || ent.x > canvas.width - 15) ent.vx *= -1;
                     if (ent.y < 15 || ent.y > canvas.height - 15) ent.vy *= -1;
 
-                    // Bot Engine Targeting
+                    if (ent.buildCooldown > 0) ent.buildCooldown--;
+
+                    // Tactical Panic Build Logic for Bots
+                    if (ent.hp < ent.maxHp * 0.5 && ent.buildCooldown === 0 && Math.random() < 0.02) {
+                        deployStructure(ent.id);
+                    }
+
+                    // Bot Target Engine
                     let nearestTarget = null;
                     let recordDist = Infinity;
                     entities.forEach(other => {
@@ -242,7 +310,7 @@
                         }
                     });
 
-                    // Bot Attack Actions
+                    // Bot Weapon Processing
                     if (nearestTarget && ent.fireCooldown <= 0 && recordDist < 300) {
                         let tDx = nearestTarget.x - ent.x;
                         let tDy = nearestTarget.y - ent.y;
@@ -262,22 +330,20 @@
 
                 if (ent.fireCooldown > 0) ent.fireCooldown--;
 
-                // Process Casualties
+                // Casualty Cleanup
                 if (ent.hp <= 0) {
                     createExplosion(ent.x, ent.y, ent.color);
-                    if (ent.isPlayer) {
-                        gameState = "GAMEOVER";
-                    }
+                    if (ent.isPlayer) gameState = "GAMEOVER";
                     entities.splice(i, 1);
                 }
             }
 
-            // Win evaluation
+            // Win state monitoring
             if (entities.length === 1 && entities[0].isPlayer) {
                 gameState = "VICTORY";
             }
 
-            // 3. Update Lasers
+            // 4. Update Projectiles (Lasers)
             for (let i = lasers.length - 1; i >= 0; i--) {
                 let l = lasers[i];
                 l.x += l.vx;
@@ -288,6 +354,22 @@
                     continue;
                 }
 
+                let laserRemoved = false;
+
+                // Collision Check: Lasers hitting Built Barriers
+                for (let k = structures.length - 1; k >= 0; k--) {
+                    let struct = structures[k];
+                    if (checkStructureCollision(l.x, l.y, struct)) {
+                        struct.hp -= 20; // Laser damages structural element
+                        createExplosion(l.x, l.y, struct.borderColor);
+                        lasers.splice(i, 1);
+                        laserRemoved = true;
+                        break;
+                    }
+                }
+                if (laserRemoved) continue;
+
+                // Collision Check: Lasers hitting Ships
                 for (let j = 0; j < entities.length; j++) {
                     let ent = entities[j];
                     if (ent.id !== l.ownerId) { 
@@ -302,7 +384,15 @@
                 }
             }
 
-            // 4. Update Explosions
+            // 5. Update Structure Health Conditions
+            for (let i = structures.length - 1; i >= 0; i--) {
+                if (structures[i].hp <= 0) {
+                    createExplosion(structures[i].x, structures[i].y, "#777777");
+                    structures.splice(i, 1);
+                }
+            }
+
+            // 6. Update Visual Particles
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx;
@@ -320,13 +410,15 @@
                 ctx.fillStyle = "#ff0055";
                 ctx.font = "bold 32px 'Courier New'";
                 ctx.textAlign = "center";
-                ctx.fillText("SPACE BATTLE ROYALE", canvas.width / 2, canvas.height / 2 - 50);
+                ctx.fillText("SPACE BATTLE ROYALE", canvas.width / 2, canvas.height / 2 - 60);
                 
                 ctx.fillStyle = "#ffffff";
                 ctx.font = "16px 'Courier New'";
-                ctx.fillText("19 Ships Drop In. 1 Survives.", canvas.width / 2, canvas.height / 2);
-                ctx.fillText("Avoid the shrinking Safe Zone Storm line.", canvas.width / 2, canvas.height / 2 + 25);
-                ctx.fillText("Guide ship with mouse. Target lock-on is automatic.", canvas.width / 2, canvas.height / 2 + 50);
+                ctx.fillText("19 Ships Drop In. 1 Survives.", canvas.width / 2, canvas.height / 2 - 10);
+                ctx.fillText("Guide ship with mouse. Target lock-on is automatic.", canvas.width / 2, canvas.height / 2 + 15);
+                
+                ctx.fillStyle = "#00ffff";
+                ctx.fillText("NEW MECHANIC: PRESS 'SPACEBAR' TO BUILD COVER", canvas.width / 2, canvas.height / 2 + 50);
                 
                 ctx.fillStyle = "#00ffcc";
                 ctx.font = "bold 20px 'Courier New'";
@@ -334,21 +426,35 @@
                 return;
             }
 
-            // --- WORLD RENDERING ---
+            // --- MAIN ARENA RENDERING ---
             
-            // Draw Storm Danger Boundaries
+            // Draw Storm Boundaries
             ctx.strokeStyle = "rgba(255, 0, 85, 0.7)";
             ctx.lineWidth = 5;
             ctx.beginPath();
             ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
             ctx.stroke();
 
-            // Mask visual tint outside boundaries
             ctx.fillStyle = "rgba(255, 0, 85, 0.07)";
             ctx.beginPath();
             ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
             ctx.rect(canvas.width, 0, -canvas.width, canvas.height);
             ctx.fill();
+
+            // Draw Structures (Builds)
+            structures.forEach(struct => {
+                ctx.fillStyle = struct.color;
+                ctx.fillRect(struct.x - struct.size/2, struct.y - struct.size/2, struct.size, struct.size);
+                ctx.strokeStyle = struct.borderColor;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(struct.x - struct.size/2, struct.y - struct.size/2, struct.size, struct.size);
+
+                // Mini health metric below the shield block
+                ctx.fillStyle = "rgba(255,255,255,0.2)";
+                ctx.fillRect(struct.x - struct.size/2, struct.y + struct.size/2 + 4, struct.size, 2);
+                ctx.fillStyle = "#00ffff";
+                ctx.fillRect(struct.x - struct.size/2, struct.y + struct.size/2 + 4, struct.size * (struct.hp / struct.maxHp), 2);
+            });
 
             // Draw Projectiles
             lasers.forEach(l => {
@@ -360,27 +466,24 @@
 
             // Draw Ships
             entities.forEach(ent => {
-                // Health Indicator Layout
                 ctx.fillStyle = "rgba(255,255,255,0.15)";
                 ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32, 4);
                 ctx.fillStyle = ent.isPlayer ? "#00ffcc" : "#ff3333";
                 let hpPct = Math.max(0, ent.hp / ent.maxHp);
                 ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32 * hpPct, 4);
 
-                // Ship hulls
                 ctx.fillStyle = ent.color;
                 ctx.beginPath();
                 ctx.arc(ent.x, ent.y, ent.radius, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Flight center design
                 ctx.fillStyle = "#ffffff";
                 ctx.beginPath();
                 ctx.arc(ent.x, ent.y, ent.radius * 0.4, 0, Math.PI * 2);
                 ctx.fill();
             });
 
-            // Draw Particle effects
+            // Draw Visual Particle Buffers
             particles.forEach(p => {
                 ctx.save();
                 ctx.globalAlpha = p.alpha;
@@ -392,26 +495,24 @@
             });
 
             // --- HUD DESIGN ---
-            let playerObj = entities.find(e => e.isPlayer);
-            let healthDisplay = playerObj ? Math.ceil(playerObj.hp) : 0;
+            let pObj = entities.find(e => e.isPlayer);
+            let healthDisplay = pObj ? Math.ceil(pObj.hp) : 0;
+            let buildDisplay = pObj ? pObj.builds : 0;
 
             ctx.fillStyle = "#ffffff";
             ctx.font = "bold 18px 'Courier New'";
             ctx.textAlign = "left";
             ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
             
+            // Build Counter Display Layout
+            ctx.fillStyle = "#00ffff";
+            ctx.fillText(`BUILDS: ${buildDisplay} / 5 (SPACEBAR)`, 30, 75);
+            
             ctx.textAlign = "right";
             ctx.fillStyle = "#ff0055";
             ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 30, 45);
 
-            if (storm.radius < (Math.max(canvas.width, canvas.height) * 0.15)) {
-                ctx.fillStyle = "#ff0055";
-                ctx.textAlign = "center";
-                ctx.font = "bold 16px 'Courier New'";
-                ctx.fillText("CRITICAL STORM COLLAPSE", canvas.width / 2, 45);
-            }
-
-            // --- RESOLUTION OVERLAYS ---
+            // --- SCREEN OVERLAYS ---
             if (gameState === "GAMEOVER") {
                 ctx.fillStyle = "rgba(2,2,5,0.85)";
                 ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -435,7 +536,7 @@
                 ctx.fillText("#1 VICTORY ROYALE", canvas.width / 2, canvas.height / 2 - 20);
                 ctx.fillStyle = "#ffffff";
                 ctx.font = "18px 'Courier New'";
-                ctx.fillText("Champion of the Sector!", canvas.width / 2, canvas.height / 2 + 25);
+                ctx.fillText("Champion of the Arena!", canvas.width / 2, canvas.height / 2 + 25);
                 ctx.fillStyle = "#ff0055";
                 ctx.fillText("CLICK TO REMATCH", canvas.width / 2, canvas.height / 2 + 80);
             }
