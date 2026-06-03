@@ -252,9 +252,7 @@
         let keysPressed = {};
         let activeRebindAction = null;
 
-        // UPDATED: Map scaled up 5x larger (from 3600 to 18000 units)
         const mapSize = 18000; 
-        // UPDATED: Shrink speed increased to 1.45 to account for the massive distances
         const storm = { x: 0, y: 0, radius: 0, minRadius: 150, shrinkSpeed: 1.45 };
 
         let mouseX = 0, mouseY = 0;
@@ -403,14 +401,22 @@
                 builds: 4, maxBuilds: 6, buildRegenTimer: 0
             });
 
-            // LOBBY SIZE KEPT AT 50: 1 Player + 49 AI targets scattered across the mega coordinate space
+            // FIXED: Bots are spawned relative to the center and strictly clamped inside map bounds
             for (let i = 0; i < 49; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let dist = Math.random() * (storm.radius * 0.8); 
+                let maxDist = storm.radius * 0.75;
+                let dist = Math.random() * maxDist; 
+                
+                let spawnX = storm.x + Math.cos(angle) * dist;
+                let spawnY = storm.y + Math.sin(angle) * dist;
+                
+                // Tight safety margin clamp
+                spawnX = Math.max(200, Math.min(mapSize - 200, spawnX));
+                spawnY = Math.max(200, Math.min(mapSize - 200, spawnY));
+
                 entities.push({
                     id: "bot_" + i, isPlayer: false,
-                    x: storm.x + Math.cos(angle) * dist,
-                    y: storm.y + Math.sin(angle) * dist,
+                    x: spawnX, y: spawnY,
                     angle: Math.random() * Math.PI * 2,
                     radius: 12, speed: Math.random() * 1.0 + 2.2,
                     vx: (Math.random() - 0.5) * 3.5, vy: (Math.random() - 0.5) * 3.5,
@@ -483,7 +489,8 @@
             let rotX = -dx * Math.sin(camAngle) + dy * Math.cos(camAngle);
             let rotY =  dx * Math.cos(camAngle) + dy * Math.sin(camAngle);
 
-            if (rotY <= 2) return null;
+            // FIXED: Added far-depth horizon culling (>2400 units) to save CPU sorting cycles on the massive canvas array
+            if (rotY <= 2 || rotY > 2400) return null;
 
             let fov = 450; 
             let screenX = canvas.width / 2 + (rotX / rotY) * fov;
@@ -508,7 +515,7 @@
             for (let i = entities.length - 1; i >= 0; i--) {
                 let ent = entities[i];
 
-                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.35; // Slightly increased edge friction danger
+                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.35;
 
                 if (ent.isPlayer) {
                     if (config.mobileOverlay && joystick.active) {
@@ -561,6 +568,8 @@
 
                     if (nearestBot && ent.fireCooldown <= 0 && recordDist < 380) {
                         let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        // FIXED: Safeguard against absolute zero tracking vector division
+                        if (tDist < 0.1) tDist = 0.1; 
                         lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.0, vy: (tDy / tDist) * 8.0, ownerId: ent.id, color: config.playerSkin });
                         ent.fireCooldown = 14; 
                     }
@@ -576,8 +585,11 @@
                         ent.angle = Math.atan2(ent.vy, ent.vx);
                     }
 
-                    if (ent.x < 20 || ent.x > mapSize - 20) ent.vx *= -1;
-                    if (ent.y < 20 || ent.y > mapSize - 20) ent.vy *= -1;
+                    // FIXED: Hard positional corrections added inside wall boundaries to prevent wall penetration glitch loops
+                    if (ent.x < 25) { ent.x = 25; ent.vx *= -1; }
+                    if (ent.x > mapSize - 25) { ent.x = mapSize - 25; ent.vx *= -1; }
+                    if (ent.y < 25) { ent.y = 25; ent.vy *= -1; }
+                    if (ent.y > mapSize - 25) { ent.y = mapSize - 25; ent.vy *= -1; }
 
                     if (ent.buildCooldown > 0) ent.buildCooldown--;
                     if (ent.hp < ent.maxHp * 0.4 && ent.buildCooldown === 0 && Math.random() < 0.02) deployStructure(ent.id);
@@ -592,6 +604,8 @@
 
                     if (nearestTarget && ent.fireCooldown <= 0 && rDist < 280) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        // FIXED: Safeguard against absolute zero tracking vector division
+                        if (tDist < 0.1) tDist = 0.1;
                         lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color });
                         ent.fireCooldown = 45 + Math.random() * 25;
                     }
@@ -614,7 +628,11 @@
             for (let i = lasers.length - 1; i >= 0; i--) {
                 let l = lasers[i]; l.x += l.vx; l.y += l.vy;
 
-                if (l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { lasers.splice(i, 1); continue; }
+                // FIXED: Catch clause added to drop lasers that accidentally process an invalid state
+                if (isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
+                    lasers.splice(i, 1); 
+                    continue; 
+                }
 
                 let hitRegistered = false;
                 for (let k = structures.length - 1; k >= 0; k--) {
@@ -659,7 +677,6 @@
 
             let renderQueue = [];
 
-            // Local spatial horizon calculation: ensures computing performance remains high even with 18000 total size units
             let gridSpacing = 60;
             let startGridX = Math.floor((player.x - 450) / gridSpacing) * gridSpacing;
             let endGridX = Math.floor((player.x + 450) / gridSpacing) * gridSpacing;
@@ -695,7 +712,7 @@
                 if (proj) renderQueue.push({ type: "entity", depth: proj.depth, proj: proj, raw: ent });
             });
 
-            let stormSegments = 64; // Enhanced line segments to keep smooth curvature on the 18000 diameter resolution
+            let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2;
                 let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
