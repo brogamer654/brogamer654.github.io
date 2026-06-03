@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Space Battle Royale - Optimized 3D Terrain</title>
+    <title>Space Battle Royale - Stylized Flat Arena</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020205; font-family: monospace; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #4fa33e; font-family: monospace; }
         canvas { display: block; }
-        #ui { position: absolute; top: 20px; left: 20px; color: #00ffcc; font-size: 16px; pointer-events: none; text-shadow: 0 0 5px #000; }
+        #ui { position: absolute; top: 20px; left: 20px; color: #ffffff; font-size: 16px; pointer-events: none; text-shadow: 2px 2px 0px #000; font-weight: bold; }
+        #storm-warning { position: absolute; top: 20px; right: 20px; color: #ff0055; font-size: 18px; text-shadow: 2px 2px 0px #000; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -16,14 +17,16 @@
         ALIVE: <span id="alive">50</span>/50<br>
         CONTROLS: W/S (Move), Mouse (Look/Steer), Left Click (Shoot)
     </div>
+    <div id="storm-warning">STORM SHRINKING</div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        const mapSize = 10000;
-        let player = { x: mapSize/2, y: mapSize/2, angle: 0, hp: 100, speed: 5, fireCooldown: 0 };
+        const mapSize = 8000;
+        let player = { x: mapSize/2, y: mapSize/2, angle: 0, hp: 100, speed: 5.5, fireCooldown: 0 };
+        let storm = { x: mapSize/2, y: mapSize/2, radius: 3500, minRadius: 200, shrinkSpeed: 0.5 };
         let entities = [];
         let lasers = [];
         let keys = {};
@@ -39,31 +42,25 @@
         window.addEventListener("mousedown", e => { if(e.button === 0) mousePressed = true; });
         window.addEventListener("mouseup", e => { if(e.button === 0) mousePressed = false; });
 
-        // --- NATURAL TERRAIN ENGINE ---
-        function getHeight(x, y) {
-            if (x < 0 || x > mapSize || y < 0 || y > mapSize) return 0;
-            return Math.sin(x * 0.001) * Math.cos(y * 0.001) * 120 + Math.sin(x * 0.004) * 30;
-        }
-
-        // Initialize Bot Enemies
+        // Initialize Bot Enemies with bright Fortnite-style colors
+        const colors = ["#ff3366", "#ffff33", "#3399ff", "#ff9933", "#ff33ff", "#33ffff"];
         for (let i = 0; i < 49; i++) {
             entities.push({
                 id: i,
-                x: mapSize/2 + (Math.random() - 0.5) * 3000,
-                y: mapSize/2 + (Math.random() - 0.5) * 3000,
+                x: mapSize/2 + (Math.random() - 0.5) * 4000,
+                y: mapSize/2 + (Math.random() - 0.5) * 4000,
                 angle: Math.random() * Math.PI * 2,
                 hp: 100,
-                color: `hsl(${Math.random() * 360}, 80%, 60%)`,
+                color: colors[Math.floor(Math.random() * colors.length)],
                 fireCooldown: Math.random() * 60
             });
         }
 
-        // --- 3D PERSPECTIVE PROJECTION ---
+        // --- 3D PERSPECTIVE PROJECTION (FLAT GROUND) ---
         function project3D(wx, wy, wz) {
-            let pGroundZ = getHeight(player.x, player.y);
-            let camX = player.x - Math.cos(player.angle) * 80;
-            let camY = player.y - Math.sin(player.angle) * 80;
-            let camZ = pGroundZ + 40;
+            let camX = player.x - Math.cos(player.angle) * 95;
+            let camY = player.y - Math.sin(player.angle) * 95;
+            let camZ = 40; // Flat constant camera height
 
             let dx = wx - camX, dy = wy - camY, dz = wz - camZ;
             let rx = -dx * Math.sin(player.angle) + dy * Math.cos(player.angle);
@@ -71,16 +68,19 @@
 
             if (ry <= 2) return null;
 
-            let fov = 500;
+            let fov = 550;
             return {
                 x: canvas.width / 2 + (rx / ry) * fov,
-                y: canvas.height / 2 - (dz / ry) * fov + canvas.height * 0.1,
+                y: canvas.height / 2 - (dz / ry) * fov + canvas.height * 0.12,
                 scale: fov / ry,
                 depth: ry
             };
         }
 
         function update() {
+            // Storm logic
+            if (storm.radius > storm.minRadius) storm.radius -= storm.shrinkSpeed;
+
             // Player Rotation via Horizon Mouse Look
             let mouseOffsetX = mouseX - canvas.width / 2;
             player.angle += (mouseOffsetX / (canvas.width / 2)) * 0.04;
@@ -95,26 +95,44 @@
                 player.y -= Math.sin(player.angle) * player.speed;
             }
 
+            // Map Bounds clamping
+            player.x = Math.max(50, Math.min(mapSize - 50, player.x));
+            player.y = Math.max(50, Math.min(mapSize - 50, player.y));
+
+            // Storm damage to player
+            if (Math.hypot(player.x - storm.x, player.y - storm.y) > storm.radius) {
+                player.hp -= 0.15;
+            }
+
             // Player Shooting
             if (player.fireCooldown > 0) player.fireCooldown--;
             if (mousePressed && player.fireCooldown === 0) {
-                lasers.push({ x: player.x, y: player.y, z: getHeight(player.x, player.y) + 5, vx: Math.cos(player.angle) * 20, vy: Math.sin(player.angle) * 20, isPlayer: true, life: 60 });
-                player.fireCooldown = 10;
+                lasers.push({ x: player.x, y: player.y, z: 6, vx: Math.cos(player.angle) * 22, vy: Math.sin(player.angle) * 22, isPlayer: true, life: 55 });
+                player.fireCooldown = 8;
             }
 
             // Update Bots
             entities.forEach(bot => {
-                bot.x += Math.cos(bot.angle) * 1.5;
-                bot.y += Math.sin(bot.angle) * 1.5;
+                bot.x += Math.cos(bot.angle) * 1.8;
+                bot.y += Math.sin(bot.angle) * 1.8;
                 if (Math.random() < 0.01) bot.angle = Math.random() * Math.PI * 2;
 
-                // Simple AI Shooting at player if close
+                // Clamp bots to map boundaries
+                bot.x = Math.max(50, Math.min(mapSize - 50, bot.x));
+                bot.y = Math.max(50, Math.min(mapSize - 50, bot.y));
+
+                // Storm damage to bots
+                if (Math.hypot(bot.x - storm.x, bot.y - storm.y) > storm.radius) {
+                    bot.hp -= 0.15;
+                }
+
+                // AI Shooting
                 let dist = Math.hypot(player.x - bot.x, player.y - bot.y);
                 if (bot.fireCooldown > 0) bot.fireCooldown--;
-                if (dist < 600 && bot.fireCooldown === 0) {
+                if (dist < 650 && bot.fireCooldown === 0) {
                     let aim = Math.atan2(player.y - bot.y, player.x - bot.x);
-                    lasers.push({ x: bot.x, y: bot.y, z: getHeight(bot.x, bot.y) + 5, vx: Math.cos(aim) * 15, vy: Math.sin(aim) * 15, isPlayer: false, life: 60 });
-                    bot.fireCooldown = 80;
+                    lasers.push({ x: bot.x, y: bot.y, z: 6, vx: Math.cos(aim) * 16, vy: Math.sin(aim) * 16, isPlayer: false, life: 55 });
+                    bot.fireCooldown = 70;
                 }
             });
 
@@ -123,22 +141,21 @@
                 let l = lasers[i];
                 l.x += l.vx; l.y += l.vy; l.life--;
 
-                let ground = getHeight(l.x, l.y);
-                if (l.life <= 0 || l.z < ground) { lasers.splice(i, 1); continue; }
+                if (l.life <= 0) { lasers.splice(i, 1); continue; }
 
                 if (l.isPlayer) {
                     for (let j = entities.length - 1; j >= 0; j--) {
                         let bot = entities[j];
-                        if (Math.hypot(l.x - bot.x, l.y - bot.y) < 20) {
-                            bot.hp -= 20;
+                        if (Math.hypot(l.x - bot.x, l.y - bot.y) < 22) {
+                            bot.hp -= 25;
                             lasers.splice(i, 1);
                             if (bot.hp <= 0) entities.splice(j, 1);
                             break;
                         }
                     }
                 } else {
-                    if (Math.hypot(l.x - player.x, l.y - player.y) < 20) {
-                        player.hp -= 5;
+                    if (Math.hypot(l.x - player.x, l.y - player.y) < 22) {
+                        player.hp -= 4;
                         lasers.splice(i, 1);
                     }
                 }
@@ -149,76 +166,135 @@
         }
 
         function draw() {
-            ctx.fillStyle = "#020207";
+            // Horizon level line calculation
+            let horizonY = canvas.height / 2 + canvas.height * 0.12;
+
+            // 1. Base Ground fill
+            ctx.fillStyle = "#4fa33e";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw Terrain Wireframe Lines (Optimized Grid)
-            ctx.strokeStyle = "rgba(0, 255, 204, 0.15)";
-            ctx.lineWidth = 1;
-            let step = 80;
-            let startX = Math.floor((player.x - 800) / step) * step;
-            let startY = Math.floor((player.y - 800) / step) * step;
+            // 2. Fortnite Stylized Sky Gradient
+            let skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+            skyGrad.addColorStop(0, "#22aaff");
+            skyGrad.addColorStop(0.8, "#66ccff");
+            skyGrad.addColorStop(1, "#e0f7ff");
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvas.width, horizonY);
 
-            for (let x = startX; x < player.x + 800; x += step) {
-                for (let y = startY; y < player.y + 800; y += step) {
-                    let p1 = project3D(x, y, getHeight(x, y));
-                    let p2 = project3D(x + step, y, getHeight(x + step, y));
-                    let p3 = project3D(x, y + step, getHeight(x, y + step));
+            // 3. Stylized Grass Tiling Grid (Checkerboard style)
+            let step = 120;
+            let startX = Math.floor((player.x - 1200) / step) * step;
+            let startY = Math.floor((player.y - 1200) / step) * step;
 
-                    if (p1) {
-                        if (p2) { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.stroke(); }
-                        if (p3) { ctx.beginPath(); ctx.moveTo(p1.x, p1.y); ctx.lineTo(p3.x, p3.y); ctx.stroke(); }
+            for (let x = startX; x < player.x + 1200; x += step) {
+                for (let y = startY; y < player.y + 1200; y += step) {
+                    if (x < 0 || x >= mapSize || y < 0 || y >= mapSize) continue;
+
+                    let p1 = project3D(x, y, 0);
+                    let p2 = project3D(x + step, y, 0);
+                    let p3 = project3D(x + step, y + step, 0);
+                    let p4 = project3D(x, y + step, 0);
+
+                    if (p1 && p2 && p3 && p4) {
+                        ctx.fillStyle = ((Math.floor(x/step) + Math.floor(y/step)) % 2 === 0) ? "#55b044" : "#4fa33e";
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+                        ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+                        ctx.closePath();
+                        ctx.fill();
                     }
                 }
             }
 
-            // 2. Build Render Queue for Entities and Lasers (Z-Sorting)
+            // 4. Purple Translucent Storm Wall Look
+            let stormSegments = 64; 
+            for (let i = 0; i < stormSegments; i++) {
+                let r1 = (i / stormSegments) * Math.PI * 2; 
+                let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
+                let sx1 = storm.x + Math.cos(r1) * storm.radius; 
+                let sy1 = storm.y + Math.sin(r1) * storm.radius;
+                let sx2 = storm.x + Math.cos(r2) * storm.radius; 
+                let sy2 = storm.y + Math.sin(r2) * storm.radius;
+
+                let pB1 = project3D(sx1, sy1, 0);
+                let pT1 = project3D(sx1, sy1, 150); 
+                let pB2 = project3D(sx2, sy2, 0);
+                let pT2 = project3D(sx2, sy2, 150);
+
+                if (pB1 && pT1 && pB2 && pT2) {
+                    ctx.fillStyle = "rgba(155, 50, 255, 0.18)"; 
+                    ctx.strokeStyle = "rgba(255, 50, 255, 0.7)"; 
+                    ctx.lineWidth = 3;
+                    ctx.beginPath(); 
+                    ctx.moveTo(pB1.x, pB1.y); ctx.lineTo(pT1.x, pT1.y); 
+                    ctx.lineTo(pT2.x, pT2.y); ctx.lineTo(pB2.x, pB2.y);
+                    ctx.closePath(); 
+                    ctx.fill(); ctx.stroke();
+                }
+            }
+
+            // 5. Render Queue for Players, Bots, and Weapon Fire (Depth Sorted)
             let queue = [];
 
             entities.forEach(bot => {
-                let p = project3D(bot.x, bot.y, getHeight(bot.x, bot.y));
-                if (p) queue.push({ depth: p.depth, draw: () => drawShip(p.x, p.y, p.scale, bot.color, bot.hp) });
+                let p = project3D(bot.x, bot.y, 0);
+                if (p) queue.push({ depth: p.depth, draw: () => drawCharacter(p.x, p.y, p.scale, bot.color, bot.hp) });
             });
 
             lasers.forEach(l => {
                 let p = project3D(l.x, l.y, l.z);
                 if (p) queue.push({ depth: p.depth, draw: () => {
-                    ctx.fillStyle = l.isPlayer ? "#00ffcc" : "#ff0055";
-                    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, 3 * p.scale), 0, Math.PI * 2); ctx.fill();
+                    ctx.fillStyle = l.isPlayer ? "#ffff00" : "#ff3333";
+                    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(3, 4 * p.scale), 0, Math.PI * 2); ctx.fill();
                 }});
             });
 
             queue.sort((a, b) => b.depth - a.depth);
             queue.forEach(item => item.draw());
 
-            // 3. Draw Dynamic Aligning Crosshair
+            // 6. TRUE WORLD-SPACE CENTERED CROSSHAIR
             let targetWorldX = player.x + Math.cos(player.angle) * 300;
             let targetWorldY = player.y + Math.sin(player.angle) * 300;
-            let targetWorldZ = getHeight(targetWorldX, targetWorldY) + 5;
+            let targetWorldZ = 6; // Tracks straight down the trajectory vector
             let crosshair = project3D(targetWorldX, targetWorldY, targetWorldZ);
 
             if (crosshair) {
-                ctx.strokeStyle = "#00ffcc"; ctx.lineWidth = 2;
+                ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 3;
                 ctx.beginPath();
-                ctx.moveTo(crosshair.x - 12, crosshair.y); ctx.lineTo(crosshair.x + 12, crosshair.y);
-                ctx.moveTo(crosshair.x, crosshair.y - 12); ctx.lineTo(crosshair.x, crosshair.y + 12);
+                ctx.arc(crosshair.x, crosshair.y, 5, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(crosshair.x - 16, crosshair.y); ctx.lineTo(crosshair.x - 8, crosshair.y);
+                ctx.moveTo(crosshair.x + 8, crosshair.y); ctx.lineTo(crosshair.x + 16, crosshair.y);
+                ctx.moveTo(crosshair.x, crosshair.y - 16); ctx.lineTo(crosshair.x, crosshair.y - 8);
+                ctx.moveTo(crosshair.x, crosshair.y + 8); ctx.lineTo(crosshair.x, crosshair.y + 16);
                 ctx.stroke();
             }
         }
 
-        function drawShip(x, y, scale, color, hp) {
-            let size = 12 * scale;
+        function drawCharacter(x, y, scale, color, hp) {
+            let size = 14 * scale;
+            
+            // Draw cartoonish character capsule/ship triangle
             ctx.fillStyle = color;
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(x, y - size);
             ctx.lineTo(x - size, y + size);
             ctx.lineTo(x + size, y + size);
             ctx.closePath();
             ctx.fill();
+            ctx.stroke();
 
-            // Health bar above ship
-            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(x - size, y - size - 8, size * 2, 3);
-            ctx.fillStyle = "#ff0055"; ctx.fillRect(x - size, y - size - 8, (size * 2) * (hp / 100), 3);
+            // Stylized Fortnite-like Health bars positioned directly above heads
+            let barW = size * 1.8;
+            ctx.fillStyle = "rgba(0,0,0,0.6)"; 
+            ctx.fillRect(x - barW/2, y - size - 12, barW, 5);
+            ctx.fillStyle = "#33cc33"; 
+            ctx.fillRect(x - barW/2, y - size - 12, barW * (hp / 100), 5);
         }
 
         function loop() {
