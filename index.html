@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Battle Royale - With Builds</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Battle Royale - Advanced Settings</title>
     <style>
         body, html {
             background-color: #06060c;
@@ -12,21 +12,183 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: #ffffff;
             font-family: 'Courier New', Courier, monospace;
             user-select: none;
+            touch-action: none; /* Prevents mobile zoom/scrolling physics */
         }
+
         canvas {
             display: block;
             background-color: #020205;
-            cursor: crosshair;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 2, 5, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 { color: #ff0055; font-size: 36px; margin-bottom: 10px; text-shadow: 0 0 10px rgba(255,0,85,0.5); }
+        h2 { color: #00ffcc; margin-top: 0; }
+        p { max-width: 500px; line-height: 1.5; font-size: 14px; margin: 5px 0 20px 0; color: #ccc; }
+
+        button {
+            background: transparent;
+            border: 2px solid #00ffcc;
+            color: #00ffcc;
+            font-family: inherit;
+            font-weight: bold;
+            padding: 12px 30px;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 10px;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.2);
+            transition: all 0.2s ease;
+        }
+        button:hover {
+            background: #00ffcc;
+            color: #020205;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.6);
+        }
+
+        button.secondary { border-color: #ff0055; color: #ff0055; }
+        button.secondary:hover { background: #ff0055; color: white; box-shadow: 0 0 20px rgba(255, 0, 85, 0.6); }
+
+        /* Settings Modal Panel */
+        #settings-menu {
+            background: rgba(10, 10, 25, 0.95);
+            border: 3px solid #00ffcc;
+            padding: 30px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 450px;
+            width: 85%;
+            box-shadow: 0 0 30px rgba(0,255,204,0.3);
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin: 12px 0;
+            font-size: 16px;
+        }
+
+        select {
+            background: #06060c;
+            border: 1px solid #00ffcc;
+            color: white;
+            font-family: inherit;
+            padding: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .bind-btn {
+            background: #111;
+            border: 1px dashed #ff0055;
+            color: #ff0055;
+            padding: 5px 12px;
+            font-size: 14px;
+            min-width: 100px;
+            margin: 0;
+        }
+        .bind-btn.waiting {
+            border-style: solid;
+            background: #ff0055;
+            color: white;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
+
+    <div id="start-screen" class="overlay">
+        <h1>SPACE BATTLE ROYALE</h1>
+        <p>19 Ships drop in. 1 survives. Auto-targeting defense weapon systems are online. Drop into the arena and protect your perimeter!</p>
+        <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
+        <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
+    </div>
+
+    <div id="settings-overlay" class="overlay" style="display: none;">
+        <div id="settings-menu">
+            <h2>GAME CONFIGURATION</h2>
+            
+            <div class="setting-row">
+                <label>Control Input:</label>
+                <select id="control-select" onchange="updateControlScheme()">
+                    <option value="mouse">Mouse / Touch Follow</option>
+                    <option value="keyboard">Keyboard Mode</option>
+                </select>
+            </div>
+
+            <div class="setting-row">
+                <label>Mobile Controls overlay:</label>
+                <select id="mobile-select" onchange="updateMobileControls()">
+                    <option value="false">Hidden (PC Default)</option>
+                    <option value="true">Visible (On-Screen Controls)</option>
+                </select>
+            </div>
+
+            <div style="border-bottom: 1px solid #333; width: 100%; margin: 15px 0;"></div>
+            <h3 style="margin: 0 0 10px 0; color: #ff0055;">KEYBOARD BINDS</h3>
+
+            <div class="setting-row">
+                <label>Build Barrier:</label>
+                <button class="bind-btn" id="bind-BUILD" onclick="startRebind('BUILD')">Space</button>
+            </div>
+            <div class="setting-row">
+                <label>Move Up:</label>
+                <button class="bind-btn" id="bind-UP" onclick="startRebind('UP')">KeyW</button>
+            </div>
+            <div class="setting-row">
+                <label>Move Down:</label>
+                <button class="bind-btn" id="bind-DOWN" onclick="startRebind('DOWN')">KeyS</button>
+            </div>
+            <div class="setting-row">
+                <label>Move Left:</label>
+                <button class="bind-btn" id="bind-LEFT" onclick="startRebind('LEFT')">KeyA</button>
+            </div>
+            <div class="setting-row">
+                <label>Move Right:</label>
+                <button class="bind-btn" id="bind-RIGHT" onclick="startRebind('RIGHT')">KeyD</button>
+            </div>
+
+            <button style="margin-top: 20px; width: 100%;" onclick="closeSettings()">SAVE & BACK</button>
+        </div>
+    </div>
+
+    <div id="gameover-screen" class="overlay" style="display: none;">
+        <h1 style="color: #ff3366;">ELIMINATED</h1>
+        <p id="placement-text">Placement: #0 / 19</p>
+        <button onclick="changeState('PLAYING')">DEPLOY AGAIN</button>
+        <button class="secondary" onclick="openSettings()">SETTINGS</button>
+    </div>
+
+    <div id="victory-screen" class="overlay" style="display: none;">
+        <h1 style="color: #00ffcc;">#1 VICTORY ROYALE</h1>
+        <p>Champion of the Sector!</p>
+        <button onclick="changeState('PLAYING')">PLAY REMATCH</button>
+        <button class="secondary" onclick="openSettings()">SETTINGS</button>
+    </div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -34,114 +196,186 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // Game States: "START", "PLAYING", "GAMEOVER", "VICTORY"
         let gameState = "START";
-        
         let entities = []; 
         let lasers = [];
         let particles = [];
-        let structures = []; // Array to hold built defensive walls
-        
-        // Storm Setup
-        const storm = {
-            x: 0,
-            y: 0,
-            radius: 0,
-            minRadius: 50,
-            shrinkSpeed: 0.18
+        let structures = []; 
+
+        // Configurations & Customizable Keybinds
+        let config = {
+            controlScheme: "mouse",     // "mouse" or "keyboard"
+            mobileOverlay: false,       // true or false
+            keybinds: {
+                BUILD: "Space",
+                UP: "KeyW",
+                DOWN: "KeyS",
+                LEFT: "KeyA",
+                RIGHT: "KeyD"
+            }
         };
 
-        let mouseX = 0;
-        let mouseY = 0;
+        let keysPressed = {};
+        let activeRebindAction = null;
 
-        // Dynamic Resize Handling
+        // Storm Setup
+        const storm = { x: 0, y: 0, radius: 0, minRadius: 50, shrinkSpeed: 0.18 };
+
+        // Mouse & Touch Tracking vectors
+        let mouseX = 0, mouseY = 0;
+        
+        // Virtual Mobile Joystick Data
+        const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
+        const mobileBuildBtn = { x: 0, y: 0, radius: 40 };
+
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             storm.x = canvas.width / 2;
             storm.y = canvas.height / 2;
             
-            if (gameState === "START") {
-                mouseX = canvas.width / 2;
-                mouseY = canvas.height / 2;
-            }
+            // Re-anchor responsive layout positions for mobile build buttons
+            mobileBuildBtn.x = canvas.width - 70;
+            mobileBuildBtn.y = canvas.height - 80;
         }
         window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
 
-        // Mouse & Touch Inputs
-        canvas.addEventListener("mousemove", (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
+        // Controls Processing Routing
+        window.addEventListener("mousemove", (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
         });
 
-        canvas.addEventListener("touchmove", (e) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.touches[0].clientX - rect.left;
-            mouseY = e.touches[0].clientY - rect.top;
+        // Combined Touch Handling (Joystick + Shooting logic)
+        window.addEventListener("touchstart", (e) => {
+            for(let i=0; i<e.touches.length; i++) {
+                let t = e.touches[i];
+                // Left half touch activates joystick tracking context
+                if (config.mobileOverlay && t.clientX < canvas.width / 2 && !joystick.active) {
+                    joystick.active = true;
+                    joystick.startX = t.clientX;
+                    joystick.startY = t.clientY;
+                    joystick.curX = t.clientX;
+                    joystick.curY = t.clientY;
+                }
+                // Check if touch directly hits on-screen build button space
+                if (config.mobileOverlay && gameState === "PLAYING") {
+                    let distToBuild = getDistance(t.clientX, t.clientY, mobileBuildBtn.x, mobileBuildBtn.y);
+                    if (distToBuild < mobileBuildBtn.radius) {
+                        deployStructure("player");
+                    }
+                }
+            }
         });
 
-        // Spacebar to Build Barrier
-        document.addEventListener("keydown", (e) => {
-            if (e.code === "Space" && gameState === "PLAYING") {
+        window.addEventListener("touchmove", (e) => {
+            if (!config.mobileOverlay) {
+                mouseX = e.touches[0].clientX;
+                mouseY = e.touches[0].clientY;
+            } else {
+                for(let i=0; i<e.touches.length; i++) {
+                    let t = e.touches[i];
+                    if (joystick.active && t.clientX < canvas.width / 2) {
+                        joystick.curX = t.clientX;
+                        joystick.curY = t.clientY;
+                    }
+                }
+            }
+        });
+
+        window.addEventListener("touchend", (e) => {
+            if (e.touches.length === 0) joystick.active = false;
+        });
+
+        // Key Press Listeners
+        window.addEventListener("keydown", (e) => {
+            if (activeRebindAction) {
+                e.preventDefault();
+                config.keybinds[activeRebindAction] = e.code;
+                document.getElementById(`bind-${activeRebindAction}`).innerText = e.code;
+                document.getElementById(`bind-${activeRebindAction}`).classList.remove("waiting");
+                activeRebindAction = null;
+                return;
+            }
+
+            keysPressed[e.code] = true;
+
+            if (gameState === "PLAYING" && e.code === config.keybinds.BUILD) {
                 e.preventDefault();
                 deployStructure("player");
             }
         });
 
-        canvas.addEventListener("click", () => {
-            if (gameState === "START" || gameState === "GAMEOVER" || gameState === "VICTORY") {
-                initBattleRoyale();
-                gameState = "PLAYING";
-            }
+        window.addEventListener("keyup", (e) => {
+            keysPressed[e.code] = false;
         });
 
+        // Settings Menu Interactions Panel
+        function openSettings() {
+            document.getElementById("start-screen").style.display = "none";
+            document.getElementById("gameover-screen").style.display = "none";
+            document.getElementById("victory-screen").style.display = "none";
+            document.getElementById("settings-overlay").style.display = "flex";
+        }
+
+        function closeSettings() {
+            document.getElementById("settings-overlay").style.display = "none";
+            changeState(gameState); // Route back safely to original environment state
+        }
+
+        function updateControlScheme() {
+            config.controlScheme = document.getElementById("control-select").value;
+        }
+
+        function updateMobileControls() {
+            config.mobileOverlay = document.getElementById("mobile-select").value === "true";
+        }
+
+        function startRebind(action) {
+            if(activeRebindAction) return; // Block double assignment processes
+            activeRebindAction = action;
+            const btn = document.getElementById(`bind-${action}`);
+            btn.innerText = "Listening...";
+            btn.classList.add("waiting");
+        }
+
+        // State Manager Flow Control UI mapping
+        function changeState(newState) {
+            gameState = newState;
+            document.getElementById("start-screen").style.display = (newState === "START") ? "flex" : "none";
+            document.getElementById("settings-overlay").style.display = "none";
+            document.getElementById("gameover-screen").style.display = (newState === "GAMEOVER") ? "flex" : "none";
+            document.getElementById("victory-screen").style.display = (newState === "VICTORY") ? "flex" : "none";
+
+            if (newState === "PLAYING") initBattleRoyale();
+        }
+
         function initBattleRoyale() {
-            entities = [];
-            lasers = [];
-            particles = [];
-            structures = [];
-            
+            entities = []; lasers = []; particles = []; structures = [];
             storm.radius = Math.max(canvas.width, canvas.height) * 0.6;
 
-            // Spawn Player
+            // Spawn Player Core Data Structure
             entities.push({
-                id: "player",
-                isPlayer: true,
-                x: canvas.width / 2,
-                y: canvas.height / 2,
-                radius: 14,
-                speed: 4.5,
-                hp: 100,
-                maxHp: 100,
-                color: "#00ffcc",
-                fireCooldown: 0,
-                builds: 3,         // Current build charges
-                maxBuilds: 5,      // Max inventory capacity
-                buildRegenTimer: 0
+                id: "player", isPlayer: true,
+                x: canvas.width / 2, y: canvas.height / 2,
+                radius: 14, speed: 4.5, hp: 100, maxHp: 100,
+                color: "#00ffcc", fireCooldown: 0,
+                builds: 3, maxBuilds: 5, buildRegenTimer: 0
             });
 
-            // Spawn 18 Arena Bots
+            // 18 Standard Bots
             for (let i = 0; i < 18; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let dist = Math.random() * (storm.radius * 0.8); 
-                
+                let dist = Math.random() * (storm.radius * 0.7); 
                 entities.push({
-                    id: "bot_" + i,
-                    isPlayer: false,
+                    id: "bot_" + i, isPlayer: false,
                     x: canvas.width / 2 + Math.cos(angle) * dist,
                     y: canvas.height / 2 + Math.sin(angle) * dist,
-                    radius: 12,
-                    speed: Math.random() * 1 + 2,
-                    vx: (Math.random() - 0.5) * 3,
-                    vy: (Math.random() - 0.5) * 3,
-                    hp: 85,
-                    maxHp: 85,
-                    color: `hsl(${Math.random() * 55 + 10}, 100%, 60%)`, 
-                    fireCooldown: Math.floor(Math.random() * 30),
-                    changeDirTimer: 0,
-                    buildCooldown: 0 // Prevent bots from spamming infinite walls
+                    radius: 12, speed: Math.random() * 1 + 2,
+                    vx: (Math.random() - 0.5) * 3, vy: (Math.random() - 0.5) * 3,
+                    hp: 85, maxHp: 85, color: `hsl(${Math.random() * 55 + 10}, 100%, 60%)`, 
+                    fireCooldown: Math.floor(Math.random() * 30), changeDirTimer: 0, buildCooldown: 0
                 });
             }
         }
@@ -152,402 +386,257 @@
 
             if (creator.isPlayer) {
                 if (creator.builds > 0) {
-                    structures.push({
-                        x: creator.x,
-                        y: creator.y,
-                        size: 36,
-                        hp: 120,
-                        maxHp: 120,
-                        color: "rgba(0, 255, 255, 0.4)",
-                        borderColor: "#00ffff"
-                    });
+                    structures.push({ x: creator.x, y: creator.y, size: 36, hp: 120, maxHp: 120, color: "rgba(0, 255, 255, 0.4)", borderColor: "#00ffff" });
                     creator.builds--;
                     createExplosion(creator.x, creator.y, "#00ffff");
                 }
             } else {
-                // Bot deploying structure
-                structures.push({
-                    x: creator.x,
-                    y: creator.y,
-                    size: 30,
-                    hp: 80,
-                    maxHp: 80,
-                    color: "rgba(255, 100, 0, 0.4)",
-                    borderColor: creator.color
-                });
-                creator.buildCooldown = 300; // 5-second cooldown for bots
+                structures.push({ x: creator.x, y: creator.y, size: 30, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.4)", borderColor: creator.color });
+                creator.buildCooldown = 300; 
                 createExplosion(creator.x, creator.y, creator.color);
             }
         }
 
         function createExplosion(x, y, color) {
-            for (let i = 0; i < 12; i++) {
+            for (let i = 0; i < 10; i++) {
                 particles.push({
-                    x: x,
-                    y: y,
-                    vx: (Math.random() - 0.5) * 6,
-                    vy: (Math.random() - 0.5) * 6,
-                    radius: Math.random() * 3 + 1,
-                    alpha: 1,
-                    color: color || "#ff5500"
+                    x: x, y: y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6,
+                    radius: Math.random() * 3 + 1, alpha: 1, color: color || "#ff5500"
                 });
             }
         }
 
-        function getDistance(x1, y1, x2, y2) {
-            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-        }
+        function getDistance(x1, y1, x2, y2) { return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2); }
 
-        // Circular object checking line/point collision for squares
-        function checkStructureCollision(projX, projY, struct) {
-            return (projX > struct.x - struct.size/2 && 
-                    projX < struct.x + struct.size/2 && 
-                    projY > struct.y - struct.size/2 && 
-                    projY < struct.y + struct.size/2);
+        function checkStructureCollision(pX, pY, struct) {
+            return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2);
         }
 
         function update() {
             if (gameState !== "PLAYING") return;
 
-            // 1. Shrink Storm Area
-            if (storm.radius > storm.minRadius) {
-                storm.radius -= storm.shrinkSpeed;
-            }
+            // Storm Compression Mechanics
+            if (storm.radius > storm.minRadius) storm.radius -= storm.shrinkSpeed;
 
-            // 2. Build Resource Regeneration for Player
+            // Player build replenishment pipeline
             let playerObj = entities.find(e => e.isPlayer);
             if (playerObj && playerObj.builds < playerObj.maxBuilds) {
                 playerObj.buildRegenTimer++;
-                if (playerObj.buildRegenTimer >= 180) { // Gives 1 charge every 3 seconds
+                if (playerObj.buildRegenTimer >= 180) { 
                     playerObj.builds++;
                     playerObj.buildRegenTimer = 0;
                 }
             }
 
-            // 3. Update Entities
+            // Entity Calculations
             for (let i = entities.length - 1; i >= 0; i--) {
                 let ent = entities[i];
 
-                // Check Storm Damage
-                let distFromCenter = getDistance(ent.x, ent.y, storm.x, storm.y);
-                if (distFromCenter > storm.radius) {
-                    ent.hp -= 0.25; 
-                }
+                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.25;
 
                 if (ent.isPlayer) {
-                    // Control Processing
-                    let dx = mouseX - ent.x;
-                    let dy = mouseY - ent.y;
-                    let dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist > 5) {
-                        ent.x += (dx / dist) * ent.speed;
-                        ent.y += (dy / dist) * ent.speed;
+                    // Control Processing Logic Routing Tree
+                    if (config.mobileOverlay && joystick.active) {
+                        // Mobile Joystick Scheme execution
+                        let jDx = joystick.curX - joystick.startX;
+                        let jDy = joystick.curY - joystick.startY;
+                        let jDist = Math.sqrt(jDx*jDx + jDy*jDy);
+                        if (jDist > 5) {
+                            ent.x += (jDx / jDist) * ent.speed;
+                            ent.y += (jDy / jDist) * ent.speed;
+                        }
+                    } else if (config.controlScheme === "mouse") {
+                        // Mouse vector flow follow scheme
+                        let dx = mouseX - ent.x;
+                        let dy = mouseY - ent.y;
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > 5) {
+                            ent.x += (dx / dist) * ent.speed;
+                            ent.y += (dy / dist) * ent.speed;
+                        }
+                    } else if (config.controlScheme === "keyboard") {
+                        // Custom Keybind Keyboard Mode Processing
+                        if (keysPressed[config.keybinds.UP]) ent.y -= ent.speed;
+                        if (keysPressed[config.keybinds.DOWN]) ent.y += ent.speed;
+                        if (keysPressed[config.keybinds.LEFT]) ent.x -= ent.speed;
+                        if (keysPressed[config.keybinds.RIGHT]) ent.x += ent.speed;
                     }
 
-                    // Targeting Engine
-                    let nearestBot = null;
-                    let recordDist = Infinity;
+                    // Keep player safe within global boundaries
+                    if (ent.x < 15) ent.x = 15; if (ent.x > canvas.width - 15) ent.x = canvas.width - 15;
+                    if (ent.y < 15) ent.y = 15; if (ent.y > canvas.height - 15) ent.y = canvas.height - 15;
+
+                    // Targeting Computations
+                    let nearestBot = null; let recordDist = Infinity;
                     entities.forEach(other => {
                         if (!other.isPlayer) {
                             let d = getDistance(ent.x, ent.y, other.x, other.y);
-                            if (d < recordDist) {
-                                recordDist = d;
-                                nearestBot = other;
-                            }
+                            if (d < recordDist) { recordDist = d; nearestBot = other; }
                         }
                     });
 
-                    // Weapon System Processing
+                    // Weapon fire handling logic
                     if (nearestBot && ent.fireCooldown <= 0) {
-                        let tDx = nearestBot.x - ent.x;
-                        let tDy = nearestBot.y - ent.y;
-                        let tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        
-                        lasers.push({
-                            x: ent.x,
-                            y: ent.y,
-                            vx: (tDx / tDist) * 8,
-                            vy: (tDy / tDist) * 8,
-                            ownerId: ent.id,
-                            color: "#00ffcc"
-                        });
+                        let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8, vy: (tDy / tDist) * 8, ownerId: ent.id, color: "#00ffcc" });
                         ent.fireCooldown = 15; 
                     }
-
                 } else {
-                    // Bot Control Mechanics
+                    // Bot AI Routine Cycles
                     ent.changeDirTimer++;
                     if (ent.changeDirTimer > 50) {
                         ent.vx = (Math.random() - 0.5) * ent.speed * 2;
                         ent.vy = (Math.random() - 0.5) * ent.speed * 2;
                         ent.changeDirTimer = 0;
                     }
+                    ent.x += ent.vx; ent.y += ent.vy;
 
-                    ent.x += ent.vx;
-                    ent.y += ent.vy;
-
-                    // Bound constraints
                     if (ent.x < 15 || ent.x > canvas.width - 15) ent.vx *= -1;
                     if (ent.y < 15 || ent.y > canvas.height - 15) ent.vy *= -1;
 
                     if (ent.buildCooldown > 0) ent.buildCooldown--;
+                    if (ent.hp < ent.maxHp * 0.5 && ent.buildCooldown === 0 && Math.random() < 0.02) deployStructure(ent.id);
 
-                    // Tactical Panic Build Logic for Bots
-                    if (ent.hp < ent.maxHp * 0.5 && ent.buildCooldown === 0 && Math.random() < 0.02) {
-                        deployStructure(ent.id);
-                    }
-
-                    // Bot Target Engine
-                    let nearestTarget = null;
-                    let recordDist = Infinity;
+                    let nearestTarget = null; let rDist = Infinity;
                     entities.forEach(other => {
                         if (other.id !== ent.id) {
                             let d = getDistance(ent.x, ent.y, other.x, other.y);
-                            if (d < recordDist) {
-                                recordDist = d;
-                                nearestTarget = other;
-                            }
+                            if (d < rDist) { rDist = d; nearestTarget = other; }
                         }
                     });
 
-                    // Bot Weapon Processing
-                    if (nearestTarget && ent.fireCooldown <= 0 && recordDist < 300) {
-                        let tDx = nearestTarget.x - ent.x;
-                        let tDy = nearestTarget.y - ent.y;
-                        let tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-
-                        lasers.push({
-                            x: ent.x,
-                            y: ent.y,
-                            vx: (tDx / tDist) * 6,
-                            vy: (tDy / tDist) * 6,
-                            ownerId: ent.id,
-                            color: ent.color
-                        });
-                        ent.fireCooldown = 40 + Math.random() * 20;
+                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 300) {
+                        let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6, vy: (tDy / tDist) * 6, ownerId: ent.id, color: ent.color });
+                        ent.fireCooldown = 45 + Math.random() * 20;
                     }
                 }
 
                 if (ent.fireCooldown > 0) ent.fireCooldown--;
 
-                // Casualty Cleanup
                 if (ent.hp <= 0) {
                     createExplosion(ent.x, ent.y, ent.color);
-                    if (ent.isPlayer) gameState = "GAMEOVER";
+                    if (ent.isPlayer) {
+                        document.getElementById("placement-text").innerText = `Placement: #${entities.length} / 19`;
+                        changeState("GAMEOVER");
+                    }
                     entities.splice(i, 1);
                 }
             }
 
-            // Win state monitoring
-            if (entities.length === 1 && entities[0].isPlayer) {
-                gameState = "VICTORY";
-            }
+            if (entities.length === 1 && entities[0].isPlayer) changeState("VICTORY");
 
-            // 4. Update Projectiles (Lasers)
+            // Projectile Vector Space Matrix Processing
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let l = lasers[i];
-                l.x += l.vx;
-                l.y += l.vy;
+                let l = lasers[i]; l.x += l.vx; l.y += l.vy;
 
-                if (l.x < 0 || l.x > canvas.width || l.y < 0 || l.y > canvas.height) {
-                    lasers.splice(i, 1);
-                    continue;
-                }
+                if (l.x < 0 || l.x > canvas.width || l.y < 0 || l.y > canvas.height) { lasers.splice(i, 1); continue; }
 
-                let laserRemoved = false;
-
-                // Collision Check: Lasers hitting Built Barriers
+                let hitRegistered = false;
                 for (let k = structures.length - 1; k >= 0; k--) {
-                    let struct = structures[k];
-                    if (checkStructureCollision(l.x, l.y, struct)) {
-                        struct.hp -= 20; // Laser damages structural element
-                        createExplosion(l.x, l.y, struct.borderColor);
-                        lasers.splice(i, 1);
-                        laserRemoved = true;
-                        break;
+                    let s = structures[k];
+                    if (checkStructureCollision(l.x, l.y, s)) {
+                        s.hp -= 20; createExplosion(l.x, l.y, s.borderColor);
+                        lasers.splice(i, 1); hitRegistered = true; break;
                     }
                 }
-                if (laserRemoved) continue;
+                if (hitRegistered) continue;
 
-                // Collision Check: Lasers hitting Ships
                 for (let j = 0; j < entities.length; j++) {
                     let ent = entities[j];
-                    if (ent.id !== l.ownerId) { 
-                        let d = getDistance(l.x, l.y, ent.x, ent.y);
-                        if (d < ent.radius + 3) {
-                            ent.hp -= 15; 
-                            createExplosion(l.x, l.y, l.color);
-                            lasers.splice(i, 1);
-                            break;
-                        }
+                    if (ent.id !== l.ownerId && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius + 3) {
+                        ent.hp -= 15; createExplosion(l.x, l.y, l.color);
+                        lasers.splice(i, 1); break;
                     }
                 }
             }
 
-            // 5. Update Structure Health Conditions
-            for (let i = structures.length - 1; i >= 0; i--) {
-                if (structures[i].hp <= 0) {
-                    createExplosion(structures[i].x, structures[i].y, "#777777");
-                    structures.splice(i, 1);
-                }
-            }
-
-            // 6. Update Visual Particles
-            for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.03;
-                if (p.alpha <= 0) particles.splice(i, 1);
-            }
+            for(let i=structures.length-1; i>=0; i--) { if(structures[i].hp <= 0) structures.splice(i,1); }
+            for(let i=particles.length-1; i>=0; i--) { p = particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 0.03; if(p.alpha <= 0) particles.splice(i,1); }
         }
 
         function draw() {
             ctx.fillStyle = "#020205";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            if (gameState === "START") {
-                ctx.fillStyle = "#ff0055";
-                ctx.font = "bold 32px 'Courier New'";
-                ctx.textAlign = "center";
-                ctx.fillText("SPACE BATTLE ROYALE", canvas.width / 2, canvas.height / 2 - 60);
-                
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "16px 'Courier New'";
-                ctx.fillText("19 Ships Drop In. 1 Survives.", canvas.width / 2, canvas.height / 2 - 10);
-                ctx.fillText("Guide ship with mouse. Target lock-on is automatic.", canvas.width / 2, canvas.height / 2 + 15);
-                
-                ctx.fillStyle = "#00ffff";
-                ctx.fillText("NEW MECHANIC: PRESS 'SPACEBAR' TO BUILD COVER", canvas.width / 2, canvas.height / 2 + 50);
-                
-                ctx.fillStyle = "#00ffcc";
-                ctx.font = "bold 20px 'Courier New'";
-                ctx.fillText("CLICK ANYWHERE TO DROP", canvas.width / 2, canvas.height / 2 + 120);
-                return;
-            }
+            if (gameState !== "PLAYING") return;
 
-            // --- MAIN ARENA RENDERING ---
-            
-            // Draw Storm Boundaries
-            ctx.strokeStyle = "rgba(255, 0, 85, 0.7)";
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
-            ctx.stroke();
+            // Draw Zone Boundary Storm Rings
+            ctx.strokeStyle = "rgba(255, 0, 85, 0.7)"; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = "rgba(255, 0, 85, 0.06)";
+            ctx.beginPath(); ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
+            ctx.rect(canvas.width, 0, -canvas.width, canvas.height); ctx.fill();
 
-            ctx.fillStyle = "rgba(255, 0, 85, 0.07)";
-            ctx.beginPath();
-            ctx.arc(storm.x, storm.y, storm.radius, 0, Math.PI * 2);
-            ctx.rect(canvas.width, 0, -canvas.width, canvas.height);
-            ctx.fill();
-
-            // Draw Structures (Builds)
-            structures.forEach(struct => {
-                ctx.fillStyle = struct.color;
-                ctx.fillRect(struct.x - struct.size/2, struct.y - struct.size/2, struct.size, struct.size);
-                ctx.strokeStyle = struct.borderColor;
-                ctx.lineWidth = 2;
-                ctx.strokeRect(struct.x - struct.size/2, struct.y - struct.size/2, struct.size, struct.size);
-
-                // Mini health metric below the shield block
-                ctx.fillStyle = "rgba(255,255,255,0.2)";
-                ctx.fillRect(struct.x - struct.size/2, struct.y + struct.size/2 + 4, struct.size, 2);
-                ctx.fillStyle = "#00ffff";
-                ctx.fillRect(struct.x - struct.size/2, struct.y + struct.size/2 + 4, struct.size * (struct.hp / struct.maxHp), 2);
+            // Draw Cover Blocks
+            structures.forEach(s => {
+                ctx.fillStyle = s.color; ctx.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
+                ctx.strokeStyle = s.borderColor; ctx.lineWidth = 2; ctx.strokeRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
             });
 
-            // Draw Projectiles
-            lasers.forEach(l => {
-                ctx.fillStyle = l.color;
-                ctx.beginPath();
-                ctx.arc(l.x, l.y, 3.5, 0, Math.PI * 2);
-                ctx.fill();
-            });
+            // Projectile Rendering Space Loop
+            lasers.forEach(l => { ctx.fillStyle = l.color; ctx.beginPath(); ctx.arc(l.x, l.y, 3.5, 0, Math.PI * 2); ctx.fill(); });
 
-            // Draw Ships
+            // Spacecraft Vectors Rendering Loop
             entities.forEach(ent => {
-                ctx.fillStyle = "rgba(255,255,255,0.15)";
-                ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32, 4);
+                ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32, 4);
                 ctx.fillStyle = ent.isPlayer ? "#00ffcc" : "#ff3333";
-                let hpPct = Math.max(0, ent.hp / ent.maxHp);
-                ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32 * hpPct, 4);
+                ctx.fillRect(ent.x - 16, ent.y - ent.radius - 10, 32 * Math.max(0, ent.hp / ent.maxHp), 4);
 
-                ctx.fillStyle = ent.color;
-                ctx.beginPath();
-                ctx.arc(ent.x, ent.y, ent.radius, 0, Math.PI * 2);
-                ctx.fill();
-                
-                ctx.fillStyle = "#ffffff";
-                ctx.beginPath();
-                ctx.arc(ent.x, ent.y, ent.radius * 0.4, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.fillStyle = ent.color; ctx.beginPath(); ctx.arc(ent.x, ent.y, ent.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(ent.x, ent.y, ent.radius * 0.4, 0, Math.PI * 2); ctx.fill();
             });
 
-            // Draw Visual Particle Buffers
             particles.forEach(p => {
-                ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
+                ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
             });
 
-            // --- HUD DESIGN ---
+            // --- HEADS UP DISPLAY RENDERING ---
             let pObj = entities.find(e => e.isPlayer);
-            let healthDisplay = pObj ? Math.ceil(pObj.hp) : 0;
-            let buildDisplay = pObj ? pObj.builds : 0;
+            let hpVal = pObj ? Math.ceil(pObj.hp) : 0;
+            let buildVal = pObj ? pObj.builds : 0;
 
-            ctx.fillStyle = "#ffffff";
-            ctx.font = "bold 18px 'Courier New'";
-            ctx.textAlign = "left";
-            ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
-            
-            // Build Counter Display Layout
+            ctx.fillStyle = "#ffffff"; ctx.font = "bold 18px 'Courier New'"; ctx.textAlign = "left";
+            ctx.fillText(`HEALTH: ${hpVal > 0 ? hpVal : 0}%`, 30, 45);
             ctx.fillStyle = "#00ffff";
-            ctx.fillText(`BUILDS: ${buildDisplay} / 5 (SPACEBAR)`, 30, 75);
+            ctx.fillText(`BUILDS: ${buildVal} / 5`, 30, 75);
             
-            ctx.textAlign = "right";
-            ctx.fillStyle = "#ff0055";
+            ctx.textAlign = "right"; ctx.fillStyle = "#ff0055";
             ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 30, 45);
 
-            // --- SCREEN OVERLAYS ---
-            if (gameState === "GAMEOVER") {
-                ctx.fillStyle = "rgba(2,2,5,0.85)";
-                ctx.fillRect(0,0,canvas.width,canvas.height);
-                ctx.fillStyle = "#ff3366";
-                ctx.font = "bold 36px 'Courier New'";
-                ctx.textAlign = "center";
-                ctx.fillText("ELIMINATED", canvas.width / 2, canvas.height / 2 - 20);
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "18px 'Courier New'";
-                ctx.fillText(`Placement: #${entities.length + 1} / 19`, canvas.width / 2, canvas.height / 2 + 25);
-                ctx.fillStyle = "#00ffcc";
-                ctx.fillText("CLICK TO DEPLOY AGAIN", canvas.width / 2, canvas.height / 2 + 80);
-            }
+            // --- RENDER MOBILE TOUCH GRAPHICS OVERLAYS ---
+            if (config.mobileOverlay) {
+                // Render Vector Trackpad Joystick Node
+                if (joystick.active) {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+                    ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = "rgba(0, 255, 204, 0.4)"; ctx.lineWidth = 2; ctx.stroke();
 
-            if (gameState === "VICTORY") {
-                ctx.fillStyle = "rgba(2,2,5,0.85)";
-                ctx.fillRect(0,0,canvas.width,canvas.height);
-                ctx.fillStyle = "#00ffcc";
-                ctx.font = "bold 38px 'Courier New'";
-                ctx.textAlign = "center";
-                ctx.fillText("#1 VICTORY ROYALE", canvas.width / 2, canvas.height / 2 - 20);
-                ctx.fillStyle = "#ffffff";
-                ctx.font = "18px 'Courier New'";
-                ctx.fillText("Champion of the Arena!", canvas.width / 2, canvas.height / 2 + 25);
-                ctx.fillStyle = "#ff0055";
-                ctx.fillText("CLICK TO REMATCH", canvas.width / 2, canvas.height / 2 + 80);
+                    // Active Thumb Pad element
+                    let jDx = joystick.curX - joystick.startX;
+                    let jDy = joystick.curY - joystick.startY;
+                    let jDist = Math.sqrt(jDx*jDx + jDy*jDy);
+                    let padX = joystick.startX + (jDx / (jDist > joystick.maxRadius ? jDist : 1)) * Math.min(jDist, joystick.maxRadius);
+                    let padY = joystick.startY + (jDy / (jDist > joystick.maxRadius ? jDist : 1)) * Math.min(jDist, joystick.maxRadius);
+
+                    ctx.fillStyle = "#00ffcc";
+                    ctx.beginPath(); ctx.arc(padX, padY, 20, 0, Math.PI * 2); ctx.fill();
+                }
+
+                // Render Action Build Target Pad Button
+                ctx.fillStyle = "rgba(0, 255, 255, 0.15)";
+                ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 3; ctx.stroke();
+                
+                ctx.fillStyle = "#00ffff"; ctx.font = "bold 14px 'Courier New'"; ctx.textAlign = "center";
+                ctx.fillText("BUILD", mobileBuildBtn.x, mobileBuildBtn.y + 5);
             }
         }
 
         function gameLoop() {
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
+            update(); draw(); requestAnimationFrame(gameLoop);
         }
-
         gameLoop();
     </script>
 </body>
