@@ -252,9 +252,10 @@
         let keysPressed = {};
         let activeRebindAction = null;
 
-        // UPDATED: Map boundaries expanded from 1200 to 3600 units
-        const mapSize = 3600; 
-        const storm = { x: 0, y: 0, radius: 0, minRadius: 100, shrinkSpeed: 0.35 };
+        // UPDATED: Map scaled up 5x larger (from 3600 to 18000 units)
+        const mapSize = 18000; 
+        // UPDATED: Shrink speed increased to 1.45 to account for the massive distances
+        const storm = { x: 0, y: 0, radius: 0, minRadius: 150, shrinkSpeed: 1.45 };
 
         let mouseX = 0, mouseY = 0;
         const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
@@ -396,23 +397,23 @@
             entities.push({
                 id: "player", isPlayer: true,
                 x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
-                radius: 14, speed: 4.5, hp: 100, maxHp: 100,
+                radius: 14, speed: 4.8, hp: 100, maxHp: 100,
                 color: config.playerSkin, 
                 fireCooldown: 0,
                 builds: 4, maxBuilds: 6, buildRegenTimer: 0
             });
 
-            // UPDATED: Increased bot count to 49 targets to fully fill the expanded deep space zone
+            // LOBBY SIZE KEPT AT 50: 1 Player + 49 AI targets scattered across the mega coordinate space
             for (let i = 0; i < 49; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let dist = Math.random() * (storm.radius * 0.75); 
+                let dist = Math.random() * (storm.radius * 0.8); 
                 entities.push({
                     id: "bot_" + i, isPlayer: false,
                     x: storm.x + Math.cos(angle) * dist,
                     y: storm.y + Math.sin(angle) * dist,
                     angle: Math.random() * Math.PI * 2,
-                    radius: 12, speed: Math.random() * 1.0 + 2.0,
-                    vx: (Math.random() - 0.5) * 3.0, vy: (Math.random() - 0.5) * 3.0,
+                    radius: 12, speed: Math.random() * 1.0 + 2.2,
+                    vx: (Math.random() - 0.5) * 3.5, vy: (Math.random() - 0.5) * 3.5,
                     hp: 85, maxHp: 85, color: `hsl(${Math.random() * 360}, 90%, 60%)`, 
                     fireCooldown: Math.floor(Math.random() * 40), changeDirTimer: 0, buildCooldown: 0
                 });
@@ -507,7 +508,7 @@
             for (let i = entities.length - 1; i >= 0; i--) {
                 let ent = entities[i];
 
-                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.25;
+                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.35; // Slightly increased edge friction danger
 
                 if (ent.isPlayer) {
                     if (config.mobileOverlay && joystick.active) {
@@ -658,7 +659,7 @@
 
             let renderQueue = [];
 
-            // Performance optimization matrix: limits dot calculations strictly near the pilot tracking horizon
+            // Local spatial horizon calculation: ensures computing performance remains high even with 18000 total size units
             let gridSpacing = 60;
             let startGridX = Math.floor((player.x - 450) / gridSpacing) * gridSpacing;
             let endGridX = Math.floor((player.x + 450) / gridSpacing) * gridSpacing;
@@ -694,7 +695,7 @@
                 if (proj) renderQueue.push({ type: "entity", depth: proj.depth, proj: proj, raw: ent });
             });
 
-            let stormSegments = 48; // Increased segmentation for smoother curvature on the larger map scale
+            let stormSegments = 64; // Enhanced line segments to keep smooth curvature on the 18000 diameter resolution
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2;
                 let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
@@ -759,7 +760,7 @@
                     ctx.fillStyle = "#00ffcc"; ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
                 }
 
-                ctx.fillStyle = "rgba(0, 255, 255, 0.12)";
+                ctx.fillStyle = "rgba(0, 255, 205, 0.12)";
                 ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
