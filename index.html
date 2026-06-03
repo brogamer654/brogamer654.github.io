@@ -401,7 +401,6 @@
                 builds: 4, maxBuilds: 6, buildRegenTimer: 0
             });
 
-            // FIXED: Bots are spawned relative to the center and strictly clamped inside map bounds
             for (let i = 0; i < 49; i++) {
                 let angle = Math.random() * Math.PI * 2;
                 let maxDist = storm.radius * 0.75;
@@ -410,7 +409,6 @@
                 let spawnX = storm.x + Math.cos(angle) * dist;
                 let spawnY = storm.y + Math.sin(angle) * dist;
                 
-                // Tight safety margin clamp
                 spawnX = Math.max(200, Math.min(mapSize - 200, spawnX));
                 spawnY = Math.max(200, Math.min(mapSize - 200, spawnY));
 
@@ -489,7 +487,6 @@
             let rotX = -dx * Math.sin(camAngle) + dy * Math.cos(camAngle);
             let rotY =  dx * Math.cos(camAngle) + dy * Math.sin(camAngle);
 
-            // FIXED: Added far-depth horizon culling (>2400 units) to save CPU sorting cycles on the massive canvas array
             if (rotY <= 2 || rotY > 2400) return null;
 
             let fov = 450; 
@@ -568,9 +565,9 @@
 
                     if (nearestBot && ent.fireCooldown <= 0 && recordDist < 380) {
                         let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        // FIXED: Safeguard against absolute zero tracking vector division
                         if (tDist < 0.1) tDist = 0.1; 
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.0, vy: (tDy / tDist) * 8.0, ownerId: ent.id, color: config.playerSkin });
+                        // FIXED: Added strict decay 'life' counter
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.0, vy: (tDy / tDist) * 8.0, ownerId: ent.id, color: config.playerSkin, life: 150 });
                         ent.fireCooldown = 14; 
                     }
                 } else {
@@ -585,7 +582,6 @@
                         ent.angle = Math.atan2(ent.vy, ent.vx);
                     }
 
-                    // FIXED: Hard positional corrections added inside wall boundaries to prevent wall penetration glitch loops
                     if (ent.x < 25) { ent.x = 25; ent.vx *= -1; }
                     if (ent.x > mapSize - 25) { ent.x = mapSize - 25; ent.vx *= -1; }
                     if (ent.y < 25) { ent.y = 25; ent.vy *= -1; }
@@ -604,9 +600,9 @@
 
                     if (nearestTarget && ent.fireCooldown <= 0 && rDist < 280) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        // FIXED: Safeguard against absolute zero tracking vector division
                         if (tDist < 0.1) tDist = 0.1;
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color });
+                        // FIXED: Added strict decay 'life' counter
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color, life: 150 });
                         ent.fireCooldown = 45 + Math.random() * 25;
                     }
                 }
@@ -626,10 +622,13 @@
             if (entities.length === 1 && entities[0].isPlayer) changeState("VICTORY");
 
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let l = lasers[i]; l.x += l.vx; l.y += l.vy;
+                let l = lasers[i]; 
+                l.x += l.vx; 
+                l.y += l.vy;
+                l.life--; // Count down the life frames
 
-                // FIXED: Catch clause added to drop lasers that accidentally process an invalid state
-                if (isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
+                // FIXED: Automatically discard lasers that exceed lifespan or break constraints
+                if (l.life <= 0 || isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
                     lasers.splice(i, 1); 
                     continue; 
                 }
