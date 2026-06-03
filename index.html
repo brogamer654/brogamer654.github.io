@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Space Battle Royale - True 3D Perspective</title>
+    <title>Space Battle Royale - 3D Terrain Engine</title>
     <style>
         body, html {
             background-color: #020205;
@@ -194,7 +194,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>W/A/S/D to Fly. Left Click to shoot weapon. Hold Right Click to zoom in with your targeting scope!</p>
+        <p>Left Click to shoot ultra-fast bullets. Hold Right Click to zoom. Use terrain ridges as dynamic tactical cover!</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -208,6 +208,7 @@
                 <select id="control-select" onchange="updateControlScheme()">
                     <option value="keyboard">Keyboard Binds</option>
                     <option value="mouse">Mouse Horizon Look</option>
+                    <option value="mouse-follow">Mouse Follow (Pointer Tracking)</option>
                 </select>
             </div>
 
@@ -251,7 +252,7 @@
     </div>
 
     <div id="gameover-screen" class="overlay" style="display: none;">
-        <h1 style="color: #ff3366;">ELIMINATED</h1>
+        <h1>ELIMINATED</h1>
         <p id="placement-text">Placement: #0 / 50</p>
         <button onclick="changeState('PLAYING')">RE-DEPLOY HULL</button>
         <button class="secondary" onclick="openSettings()">SETTINGS</button>
@@ -259,7 +260,7 @@
 
     <div id="victory-screen" class="overlay" style="display: none;">
         <h1 style="color: #00ffcc;">#1 VICTORY ROYALE</h1>
-        <p>You conquered the expanded 3D sector perimeter!</p>
+        <p>You conquered the expanded 3D terrain perimeter!</p>
         <button onclick="changeState('PLAYING')">PLAY REMATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS</button>
     </div>
@@ -285,8 +286,6 @@
         let lasers = [];
         let particles = [];
         let structures = []; 
-        let stars = [];
-        let killFeed = [];
 
         let config = {
             controlScheme: "keyboard", 
@@ -312,8 +311,8 @@
         let rightMouseIsDown = false; 
         let activeRebindAction = null;
 
-        const mapSize = 4000; // Scaled down slightly from 18000 for tight, interactive BR combat
-        const storm = { x: mapSize / 2, y: mapSize / 2, radius: mapSize * 0.7, minRadius: 100, shrinkSpeed: 0.25 };
+        const mapSize = 18000; 
+        const storm = { x: 0, y: 0, radius: 0, minRadius: 150, shrinkSpeed: 1.45 };
 
         let mouseX = 0, mouseY = 0;
         
@@ -326,9 +325,40 @@
         let joystickTouchId = null;
         let shootTouchId = null;
 
+        const stormProjB1 = { x: 0, y: 0, scale: 0, depth: 0 };
+        const stormProjT1 = { x: 0, y: 0, scale: 0, depth: 0 };
+        const stormProjB2 = { x: 0, y: 0, scale: 0, depth: 0 };
+        const stormProjT2 = { x: 0, y: 0, scale: 0, depth: 0 };
+        
+        const shipProjF = { x: 0, y: 0, scale: 0, depth: 0 };
+        const shipProjL = { x: 0, y: 0, scale: 0, depth: 0 };
+        const shipProjR = { x: 0, y: 0, scale: 0, depth: 0 };
+        const shipProjTip = { x: 0, y: 0, scale: 0, depth: 0 };
+
+        const boxB = [{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0}];
+        const boxT = [{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0}];
+        
+        const itemProj = { x: 0, y: 0, scale: 0, depth: 0 };
+        const tempGridProj = { x: 0, y: 0, scale: 0, depth: 0 };
+
         const activeRenderQueue = [];
         const renderPool = [];
         let renderPoolIndex = 0;
+
+        // --- NEW DETERMINISTIC FRACTAL TERRAIN HEIGHT ALGORITHM ---
+        function getHeight(x, y) {
+            // Out of bounds check
+            if (x < 0 || x > mapSize || y < 0 || y > mapSize) return 0;
+            
+            // Large mountain chains / valleys
+            let h = Math.sin(x * 0.0008) * Math.cos(y * 0.0008) * 160;
+            // Medium rolling hills
+            h += Math.sin(x * 0.0025 + y * 0.001) * Math.cos(y * 0.002) * 55;
+            // Small ground variance / craters
+            h += Math.sin(x * 0.008) * Math.sin(y * 0.008) * 12;
+            
+            return h;
+        }
 
         function getPooledItem(type, depth, raw, projX, projY, projScale) {
             let item;
@@ -363,15 +393,6 @@
         window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
 
-        // Starfield initialization
-        for (let i = 0; i < 200; i++) {
-            stars.push({
-                x: Math.random() * mapSize,
-                y: Math.random() * mapSize,
-                z: Math.random() * 20
-            });
-        }
-
         const savedSkin = localStorage.getItem("savedSpaceSkin");
         if (savedSkin) {
             config.playerSkin = savedSkin;
@@ -391,11 +412,12 @@
             if(e.button === 2) rightMouseIsDown = false; 
         });
 
-        // Touch Control Isolation Interface
         window.addEventListener("touchstart", (e) => {
             if (!config.mobileOverlay || gameState !== "PLAYING") return;
+            
             for(let i=0; i<e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
+                
                 if (getDistance(t.clientX, t.clientY, mobileBuildBtn.x, mobileBuildBtn.y) < mobileBuildBtn.radius) {
                     deployStructure("player");
                     continue;
@@ -409,6 +431,7 @@
                     shootTouchId = t.identifier;
                     continue;
                 }
+                
                 if (t.clientX < canvas.width / 2 && joystickTouchId === null) {
                     joystick.active = true;
                     joystick.startX = t.clientX; joystick.startY = t.clientY;
@@ -420,6 +443,7 @@
 
         window.addEventListener("touchmove", (e) => {
             if (!config.mobileOverlay || gameState !== "PLAYING") return;
+            
             for(let i=0; i<e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
                 if (t.identifier === joystickTouchId) {
@@ -431,8 +455,28 @@
         window.addEventListener("touchend", (e) => {
             for(let i=0; i<e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
-                if (t.identifier === joystickTouchId) { joystick.active = false; joystickTouchId = null; }
-                if (t.identifier === shootTouchId) { mouseIsDown = false; shootTouchId = null; }
+                if (t.identifier === joystickTouchId) {
+                    joystick.active = false;
+                    joystickTouchId = null;
+                }
+                if (t.identifier === shootTouchId) {
+                    mouseIsDown = false;
+                    shootTouchId = null;
+                }
+            }
+        });
+
+        window.addEventListener("touchcancel", (e) => {
+            for(let i=0; i<e.changedTouches.length; i++) {
+                let t = e.changedTouches[i];
+                if (t.identifier === joystickTouchId) {
+                    joystick.active = false;
+                    joystickTouchId = null;
+                }
+                if (t.identifier === shootTouchId) {
+                    mouseIsDown = false;
+                    shootTouchId = null;
+                }
             }
         });
 
@@ -443,6 +487,7 @@
                 document.getElementById(`bind-${activeRebindAction}`).innerText = e.code;
                 document.getElementById(`bind-${activeRebindAction}`).classList.remove("waiting");
                 activeRebindAction = null;
+                
                 let player = entities.find(ent => ent.isPlayer);
                 if (player) updateInventoryUI(player);
                 return;
@@ -451,14 +496,21 @@
             keysPressed[e.code] = true;
 
             if (gameState === "PLAYING") {
-                if (e.code === config.keybinds.TOGGLE_VIEW) viewMode = (viewMode === "3P") ? "1P" : "3P";
-                if (e.code === config.keybinds.BUILD) { e.preventDefault(); deployStructure("player"); }
+                if (e.code === config.keybinds.TOGGLE_VIEW) {
+                    viewMode = (viewMode === "3P") ? "1P" : "3P";
+                }
+                if (e.code === config.keybinds.BUILD) {
+                    e.preventDefault();
+                    deployStructure("player");
+                }
+                
                 if (e.code === config.keybinds.SLOT_1) selectSlot(0);
                 if (e.code === config.keybinds.SLOT_2) selectSlot(1);
                 if (e.code === config.keybinds.SLOT_3) selectSlot(2);
                 if (e.code === config.keybinds.SLOT_4) selectSlot(3);
                 if (e.code === config.keybinds.SLOT_5) selectSlot(4);
             }
+
             if (e.code === "Escape") {
                 if (gameState === "PLAYING") openSettings();
                 else if (document.getElementById("settings-overlay").style.display === "flex") closeSettings();
@@ -471,6 +523,7 @@
             config.playerSkin = hexColor;
             document.getElementById("skin-hex-text").innerText = hexColor.toUpperCase();
             localStorage.setItem("savedSpaceSkin", hexColor); 
+
             let player = entities.find(e => e.isPlayer);
             if (player) player.color = hexColor;
         }
@@ -478,15 +531,18 @@
         function selectSlot(index) {
             let player = entities.find(e => e.isPlayer);
             if (!player || player.hp <= 0) return;
+
             let item = player.inventory[index];
             
             if (item.type === "weapon") {
                 player.selectedSlot = index;
                 updateInventoryUI(player);
-            } else if (item.type === "utility") {
+            } 
+            else if (item.type === "utility") {
                 if (item.ammo > 0) {
                     executeUtilityItem(player, item.name);
                     item.ammo--;
+                    
                     let slotEl = document.getElementById(`slot-${index}`);
                     if(slotEl) {
                         slotEl.classList.add("utility-flash");
@@ -498,35 +554,44 @@
         }
 
         function executeUtilityItem(player, itemName) {
+            let currentGroundZ = getHeight(player.x, player.y);
             if (itemName === "SHIELD") {
                 player.hp = Math.min(player.maxHp, player.hp + 40);
-                createExplosion(player.x, player.y, 4, "#00ffcc");
-            } else if (itemName === "BOOST") {
+                createExplosion(player.x, player.y, currentGroundZ + 4, "#00ffcc");
+            } 
+            else if (itemName === "BOOST") {
                 player.speedTimer = 180; 
-                createExplosion(player.x, player.y, 1, "#ffff00");
-            } else if (itemName === "EMP") {
-                createExplosion(player.x, player.y, 0, "#ff00ff");
+                createExplosion(player.x, player.y, currentGroundZ + 1, "#ffff00");
+            } 
+            else if (itemName === "EMP") {
+                createExplosion(player.x, player.y, currentGroundZ, "#ff00ff");
                 entities.forEach(other => {
                     if (!other.isPlayer) {
-                        if (getDistance(player.x, player.y, other.x, other.y) < 400) {
+                        let dist = getDistance(player.x, player.y, other.x, other.y);
+                        if (dist < 400) {
                             other.hp -= 35; 
-                            createExplosion(other.x, other.y, 2, "#ff00ff");
+                            createExplosion(other.x, other.y, getHeight(other.x, other.y) + 2, "#ff00ff");
                         }
                     }
                 });
             }
         }
 
-        function cleanKeyLabel(codeStr) { return codeStr.replace("Digit", "").replace("Key", ""); }
+        function cleanKeyLabel(codeStr) {
+            return codeStr.replace("Digit", "").replace("Key", "");
+        }
 
         function updateInventoryUI(player) {
             const keyMappings = [config.keybinds.SLOT_1, config.keybinds.SLOT_2, config.keybinds.SLOT_3, config.keybinds.SLOT_4, config.keybinds.SLOT_5];
+            
             for (let i = 0; i < 5; i++) {
                 let slotEl = document.getElementById(`slot-${i}`);
                 let labelEl = document.getElementById(`lbl-slot-${i}`);
                 if (!slotEl) continue;
+
                 let item = player.inventory[i];
                 let displayAmmo = item.ammo === Infinity ? "" : ` (${item.ammo})`;
+                
                 slotEl.querySelector('.slot-name').innerText = `${item.name}${displayAmmo}`;
                 if (labelEl) labelEl.innerText = `[${cleanKeyLabel(keyMappings[i])}]`;
 
@@ -572,19 +637,24 @@
             document.getElementById("gameover-screen").style.display = (newState === "GAMEOVER") ? "flex" : "none";
             document.getElementById("victory-screen").style.display = (newState === "VICTORY") ? "flex" : "none";
             document.getElementById("inventory-container").style.display = (newState === "PLAYING") ? "flex" : "none";
+
             if (newState === "PLAYING") initBattleRoyale();
         }
 
         function initBattleRoyale() {
-            entities = []; lasers = []; particles = []; structures = []; killFeed = [];
-            storm.radius = mapSize * 0.7;
+            entities = []; lasers = []; particles = []; structures = [];
+            storm.x = mapSize / 2;
+            storm.y = mapSize / 2;
+            storm.radius = mapSize * 0.75;
 
             let pObj = {
-                id: "player", isPlayer: true, name: "YOU",
+                id: "player", isPlayer: true,
                 x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
                 radius: 14, baseSpeed: 4.8, speed: 4.8, speedTimer: 0, hp: 100, maxHp: 100,
-                color: config.playerSkin, fireCooldown: 0, kills: 0,
-                builds: 4, maxBuilds: 6, buildRegenTimer: 0, selectedSlot: 0,
+                color: config.playerSkin, 
+                fireCooldown: 0,
+                builds: 4, maxBuilds: 6, buildRegenTimer: 0,
+                selectedSlot: 0,
                 inventory: [
                     { name: "LASER", type: "weapon", ammo: Infinity },
                     { name: "SHOTGUN", type: "weapon", ammo: 24 },
@@ -598,11 +668,21 @@
 
             for (let i = 0; i < 49; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let dist = Math.random() * storm.radius * 0.6;
+                let maxDist = storm.radius * 0.75;
+                let dist = Math.random() * maxDist; 
+                
+                let spawnX = storm.x + Math.cos(angle) * dist;
+                let spawnY = storm.y + Math.sin(angle) * dist;
+                
+                spawnX = Math.max(200, Math.min(mapSize - 200, spawnX));
+                spawnY = Math.max(200, Math.min(mapSize - 200, spawnY));
+
                 entities.push({
-                    id: "bot_" + i, isPlayer: false, name: "Bot_" + Math.floor(Math.random()*900+100),
-                    x: storm.x + Math.cos(angle) * dist, y: storm.y + Math.sin(angle) * dist,
-                    angle: Math.random() * Math.PI * 2, radius: 12, speed: Math.random() * 1.0 + 2.2,
+                    id: "bot_" + i, isPlayer: false,
+                    x: spawnX, y: spawnY,
+                    angle: Math.random() * Math.PI * 2,
+                    radius: 12, speed: Math.random() * 1.0 + 2.2,
+                    vx: (Math.random() - 0.5) * 3.5, vy: (Math.random() - 0.5) * 3.5,
                     hp: 85, maxHp: 85, color: `hsl(${Math.random() * 360}, 90%, 60%)`, 
                     fireCooldown: Math.floor(Math.random() * 40), changeDirTimer: 0, buildCooldown: 0
                 });
@@ -612,22 +692,28 @@
         function deployStructure(creatorId) {
             let creator = entities.find(e => e.id === creatorId);
             if (!creator) return;
-            if (creator.isPlayer && creator.builds > 0) {
-                structures.push({ x: creator.x + Math.cos(creator.angle)*35, y: creator.y + Math.sin(creator.angle)*35, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 200, 0.15)", borderColor: config.playerSkin });
-                creator.builds--;
-                createExplosion(creator.x, creator.y, 0, config.playerSkin);
-            } else if (!creator.isPlayer && creator.buildCooldown <= 0) {
-                structures.push({ x: creator.x + Math.cos(creator.angle)*30, y: creator.y + Math.sin(creator.angle)*30, size: 28, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.15)", borderColor: creator.color });
-                creator.buildCooldown = 400;
-                createExplosion(creator.x, creator.y, 0, creator.color);
+
+            let structZ = getHeight(creator.x, creator.y);
+            if (creator.isPlayer) {
+                if (creator.builds > 0) {
+                    structures.push({ x: creator.x, y: creator.y, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 200, 0.15)", borderColor: config.playerSkin });
+                    creator.builds--;
+                    createExplosion(creator.x, creator.y, structZ, config.playerSkin);
+                }
+            } else {
+                structures.push({ x: creator.x, y: creator.y, size: 28, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.15)", borderColor: creator.color });
+                creator.buildCooldown = 300; 
+                createExplosion(creator.x, creator.y, structZ, creator.color);
             }
         }
 
         function createExplosion(x, y, z, color) {
             for (let i = 0; i < 12; i++) {
                 particles.push({
-                    x: x, y: y, z: z || 2,
-                    vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, vz: Math.random() * 4 + 1, 
+                    x: x, y: y, z: z || 0,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    vz: Math.random() * 4 + 1, 
                     radius: Math.random() * 2.5 + 1, alpha: 1, color: color || "#ff5500"
                 });
             }
@@ -636,31 +722,27 @@
         function getDistance(x1, y1, x2, y2) { return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2); }
         function checkStructureCollision(pX, pY, struct) { return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2); }
 
-        function addToKillFeed(killer, victim) {
-            killFeed.push(`${killer} destroyed ${victim}`);
-            if (killFeed.length > 4) killFeed.shift();
-        }
-
         function get3DProjection(worldX, worldY, worldZ, outTarget) {
             let player = entities.find(e => e.isPlayer);
             if (!player) return null;
 
             let camX, camY, camZ, camAngle;
             let horizonPitchOffset = 0; 
+            let playerGroundZ = getHeight(player.x, player.y);
 
             if (viewMode === "1P") {
-                camX = player.x; camY = player.y; camZ = 7; camAngle = player.angle; horizonPitchOffset = 0;
+                camX = player.x; camY = player.y; camZ = playerGroundZ + 7; camAngle = player.angle; horizonPitchOffset = 0;
             } else { 
-                camX = player.x - Math.cos(player.angle) * 85;
-                camY = player.y - Math.sin(player.angle) * 85;
-                camZ = 35; camAngle = player.angle; horizonPitchOffset = canvas.height * 0.12; 
+                camX = player.x - Math.cos(player.angle) * 75;
+                camY = player.y - Math.sin(player.angle) * 75;
+                camZ = playerGroundZ + 32; camAngle = player.angle; horizonPitchOffset = canvas.height * 0.12; 
             }
 
             let dx = worldX - camX; let dy = worldY - camY; let dz = worldZ - camZ;
             let rotX = -dx * Math.sin(camAngle) + dy * Math.cos(camAngle);
             let rotY =  dx * Math.cos(camAngle) + dy * Math.sin(camAngle);
 
-            if (rotY <= 2 || rotY > 2000) return null;
+            if (rotY <= 2 || rotY > 2400) return null;
 
             let fov = rightMouseIsDown ? 950 : 450; 
             outTarget.x = canvas.width / 2 + (rotX / rotY) * fov;
@@ -669,390 +751,421 @@
             return outTarget;
         }
 
-        function fireWeapon(ent) {
-            if (ent.fireCooldown > 0) return;
-            
-            if (ent.isPlayer) {
-                let slot = ent.inventory[ent.selectedSlot];
-                if (slot.name === "LASER") {
-                    lasers.push({ x: ent.x, y: ent.y, angle: ent.angle, speed: 12, owner: ent.id, color: ent.color, damage: 15 });
-                    ent.fireCooldown = 12;
-                } else if (slot.name === "SHOTGUN" && slot.ammo > 0) {
-                    for(let i = -2; i <= 2; i++) {
-                        lasers.push({ x: ent.x, y: ent.y, angle: ent.angle + (i * 0.12), speed: 10, owner: ent.id, color: "#ffaa00", damage: 10 });
-                    }
-                    slot.ammo--;
-                    ent.fireCooldown = 35;
-                    updateInventoryUI(ent);
-                }
-            } else {
-                lasers.push({ x: ent.x, y: ent.y, angle: ent.angle, speed: 8, owner: ent.id, color: ent.color, damage: 12 });
-                ent.fireCooldown = 40 + Math.random() * 30;
-            }
-        }
-
         function update() {
             if (gameState !== "PLAYING") return;
 
             if (storm.radius > storm.minRadius) storm.radius -= storm.shrinkSpeed;
 
             let player = entities.find(e => e.isPlayer);
-            if (player) {
-                if (player.builds < player.maxBuilds) {
-                    player.buildRegenTimer++;
-                    if (player.buildRegenTimer >= 150) { player.builds++; player.buildRegenTimer = 0; }
-                }
-                if (player.speedTimer > 0) {
-                    player.speed = player.baseSpeed * 1.8; player.speedTimer--;
-                } else { player.speed = player.baseSpeed; }
-
-                // Player Steering Inputs
-                if (config.mobileOverlay && joystick.active) {
-                    let jDx = joystick.curX - joystick.startX;
-                    let jDy = joystick.curY - joystick.startY;
-                    if (Math.sqrt(jDx*jDx + jDy*jDy) > 5) {
-                        player.angle = Math.atan2(jDy, jDx);
-                        player.x += Math.cos(player.angle) * player.speed;
-                        player.y += Math.sin(player.angle) * player.speed;
-                    }
-                } else {
-                    if (config.controlScheme === "keyboard") {
-                        if (keysPressed[config.keybinds.LEFT]) player.angle -= 0.045;
-                        if (keysPressed[config.keybinds.RIGHT]) player.angle += 0.045;
-                    } else if (config.controlScheme === "mouse") {
-                        let trackingX = mouseX - canvas.width / 2;
-                        player.angle += (trackingX * 0.0002);
-                    }
-                    
-                    if (keysPressed[config.keybinds.UP]) {
-                        player.x += Math.cos(player.angle) * player.speed;
-                        player.y += Math.sin(player.angle) * player.speed;
-                    }
-                    if (keysPressed[config.keybinds.DOWN]) {
-                        player.x -= Math.cos(player.angle) * (player.speed * 0.5);
-                        player.y -= Math.sin(player.angle) * (player.speed * 0.5);
-                    }
-                }
-                
-                if (mouseIsDown) fireWeapon(player);
-                if (player.fireCooldown > 0) player.fireCooldown--;
-
-                // Clamp to Map Limits
-                player.x = Math.max(10, Math.min(mapSize - 10, player.x));
-                player.y = Math.max(10, Math.min(mapSize - 10, player.y));
+            if (player && player.builds < player.maxBuilds) {
+                player.buildRegenTimer++;
+                if (player.buildRegenTimer >= 150) { player.builds++; player.buildRegenTimer = 0; }
             }
 
-            // Update Bots Logic
             for (let i = entities.length - 1; i >= 0; i--) {
                 let ent = entities[i];
-                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) {
-                    ent.hp -= 0.15;
-                }
 
-                if (!ent.isPlayer) {
-                    if (ent.fireCooldown > 0) ent.fireCooldown--;
+                if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.35;
+
+                if (ent.isPlayer) {
+                    if (ent.speedTimer > 0) {
+                        ent.speed = ent.baseSpeed * 2.5; ent.speedTimer--;
+                    } else { ent.speed = ent.baseSpeed; }
+
+                    if (config.mobileOverlay && joystick.active) {
+                        let jDx = joystick.curX - joystick.startX;
+                        let jDy = joystick.curY - joystick.startY;
+                        let jDist = Math.sqrt(jDx*jDx + jDy*jDy);
+                        if (jDist > 5) {
+                            ent.angle = Math.atan2(jDy, jDx);
+                            ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed;
+                        }
+                    } else {
+                        if (config.controlScheme === "mouse-follow") {
+                            let screenCenterX = canvas.width / 2;
+                            let screenCenterY = canvas.height / 2;
+                            let deltaX = mouseX - screenCenterX; let deltaY = mouseY - screenCenterY;
+                            if (Math.abs(deltaX) > 12) ent.angle += (deltaX / screenCenterX) * 0.035;
+                            if (deltaY < -40) {
+                                let forwardForce = Math.min(1, Math.abs(deltaY) / screenCenterY);
+                                ent.x += Math.cos(ent.angle) * ent.speed * forwardForce; ent.y += Math.sin(ent.angle) * ent.speed * forwardForce;
+                            } else if (deltaY > 40) {
+                                let reverseForce = Math.min(0.5, (deltaY / screenCenterY) * 0.5);
+                                ent.x -= Math.cos(ent.angle) * ent.speed * reverseForce; ent.y -= Math.sin(ent.angle) * ent.speed * reverseForce;
+                            }
+                        } 
+                        else if (config.controlScheme === "mouse") {
+                            let mouseOffsetX = mouseX - canvas.width / 2;
+                            ent.angle += (mouseOffsetX / (canvas.width / 2)) * 0.035;
+                            if (keysPressed[config.keybinds.UP]) { ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.DOWN]) { ent.x -= Math.cos(ent.angle) * ent.speed; ent.y -= Math.sin(ent.angle) * ent.speed; }
+                        } else {
+                            if (keysPressed[config.keybinds.LEFT])  ent.angle -= 0.045;
+                            if (keysPressed[config.keybinds.RIGHT]) ent.angle += 0.045;
+                            if (keysPressed[config.keybinds.UP]) { ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.DOWN]) { ent.x -= Math.cos(ent.angle) * ent.speed; ent.y -= Math.sin(ent.angle) * ent.speed; }
+                        }
+                    }
+
+                    if (ent.x < 20) ent.x = 20; if (ent.x > mapSize - 20) ent.x = mapSize - 20;
+                    if (ent.y < 20) ent.y = 20; if (ent.y > mapSize - 20) ent.y = mapSize - 20;
+
+                    if (mouseIsDown && ent.fireCooldown <= 0) {
+                        let currentWeapon = ent.inventory[ent.selectedSlot];
+                        let aimAngle = ent.angle;
+                        let spawnZ = getHeight(ent.x, ent.y) + 3.5;
+
+                        if (currentWeapon.name === "LASER") {
+                            lasers.push({ 
+                                x: ent.x, y: ent.y, z: spawnZ,
+                                vx: Math.cos(aimAngle) * 23.0, 
+                                vy: Math.sin(aimAngle) * 23.0, 
+                                ownerId: ent.id, color: config.playerSkin, baseDmg: 15, size: 3, life: 65, 
+                                isShotgun: false 
+                            });
+                            ent.fireCooldown = 9; 
+                        } 
+                        else if (currentWeapon.name === "SHOTGUN" && currentWeapon.ammo > 0) {
+                            for (let p = -2; p <= 2; p++) {
+                                let spreadAngle = aimAngle + (p * 0.095); 
+                                lasers.push({
+                                    x: ent.x, y: ent.y, z: spawnZ,
+                                    startX: ent.x, startY: ent.y,
+                                    vx: Math.cos(spreadAngle) * 21.0, 
+                                    vy: Math.sin(spreadAngle) * 21.0,
+                                    ownerId: ent.id, color: "#ffaa00", baseDmg: 32, size: 2.2, life: 25, 
+                                    isShotgun: true
+                                });
+                            }
+                            currentWeapon.ammo--;
+                            ent.fireCooldown = 38; 
+                            updateInventoryUI(ent);
+                        }
+                    }
+                } else {
+                    ent.changeDirTimer++;
+                    if (ent.changeDirTimer > 60) {
+                        ent.vx = (Math.random() - 0.5) * ent.speed * 1.8; ent.vy = (Math.random() - 0.5) * ent.speed * 1.8;
+                        ent.changeDirTimer = 0;
+                    }
+                    ent.x += ent.vx; ent.y += ent.vy;
+                    if (Math.abs(ent.vx) > 0.1 || Math.abs(ent.vy) > 0.1) ent.angle = Math.atan2(ent.vy, ent.vx);
+
+                    if (ent.x < 25) { ent.x = 25; ent.vx *= -1; } if (ent.x > mapSize - 25) { ent.x = mapSize - 25; ent.vx *= -1; }
+                    if (ent.y < 25) { ent.y = 25; ent.vy *= -1; } if (ent.y > mapSize - 25) { ent.y = mapSize - 25; ent.vy *= -1; }
+
                     if (ent.buildCooldown > 0) ent.buildCooldown--;
-                    
-                    ent.changeDirTimer--;
-                    if (ent.changeDirTimer <= 0 || ent.x <= 20 || ent.x >= mapSize-20 || ent.y <= 20 || ent.y >= mapSize-20) {
-                        // Dynamic routing towards map center or general safe zone shifting
-                        let targetAngle = Math.atan2(storm.y - ent.y, storm.x - ent.x);
-                        ent.angle = targetAngle + (Math.random() - 0.5) * 1.5;
-                        ent.changeDirTimer = 100 + Math.random() * 150;
-                    }
+                    if (ent.hp < ent.maxHp * 0.4 && ent.buildCooldown === 0 && Math.random() < 0.02) deployStructure(ent.id);
 
-                    ent.x += Math.cos(ent.angle) * ent.speed;
-                    ent.y += Math.sin(ent.angle) * ent.speed;
+                    let nearestTarget = null; let rDist = Infinity;
+                    entities.forEach(other => {
+                        if (other.id !== ent.id) {
+                            let d = getDistance(ent.x, ent.y, other.x, other.y);
+                            if (d < rDist) { rDist = d; nearestTarget = other; }
+                        }
+                    });
 
-                    // Super simple battle tracking behavior
-                    if (player && getDistance(ent.x, ent.y, player.x, player.y) < 350) {
-                        ent.angle = Math.atan2(player.y - ent.y, player.x - ent.x);
-                        if (ent.hp < 30 && ent.buildCooldown <= 0) deployStructure(ent.id);
-                        fireWeapon(ent);
+                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 350) {
+                        let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
+                        if (tDist < 0.1) tDist = 0.1;
+                        let botSpawnZ = getHeight(ent.x, ent.y) + 3.5;
+                        lasers.push({ x: ent.x, y: ent.y, z: botSpawnZ, vx: (tDx / tDist) * 18.0, vy: (tDy / tDist) * 18.0, ownerId: ent.id, color: ent.color, baseDmg: 12, size: 3, life: 70, isShotgun: false });
+                        ent.fireCooldown = 45 + Math.random() * 25;
                     }
                 }
+
+                if (ent.fireCooldown > 0) ent.fireCooldown--;
 
                 if (ent.hp <= 0) {
-                    createExplosion(ent.x, ent.y, 4, ent.color);
+                    createExplosion(ent.x, ent.y, getHeight(ent.x, ent.y) + 2, ent.color);
                     if (ent.isPlayer) {
                         document.getElementById("placement-text").innerText = `Placement: #${entities.length} / 50`;
                         changeState("GAMEOVER");
-                        return;
-                    } else {
-                        addToKillFeed("System Perimeter", ent.name);
                     }
                     entities.splice(i, 1);
                 }
             }
 
-            // Manage Structural Barriers
-            for (let i = structures.length - 1; i >= 0; i--) {
-                if (structures[i].hp <= 0) {
-                    createExplosion(structures[i].x, structures[i].y, 2, structures[i].borderColor);
-                    structures.splice(i, 1);
-                }
-            }
+            if (entities.length === 1 && entities[0].isPlayer) changeState("VICTORY");
 
-            // Project and Process Flying Lasers
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let l = lasers[i];
-                l.x += Math.cos(l.angle) * l.speed;
-                l.y += Math.sin(l.angle) * l.speed;
+                let l = lasers[i]; 
+                l.x += l.vx; l.y += l.vy; l.life--; 
 
-                let hit = false;
-
-                // Environment Obstacle Intersection
-                for (let s of structures) {
-                    if (checkStructureCollision(l.x, l.y, s)) {
-                        s.hp -= l.damage;
-                        hit = true; break;
-                    }
+                if (l.life <= 0 || isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
+                    lasers.splice(i, 1); continue; 
                 }
 
-                // Entity Hit Box Intersection
-                if (!hit) {
-                    for (let ent of entities) {
-                        if (ent.id !== l.owner && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius) {
-                            ent.hp -= l.damage;
-                            createExplosion(l.x, l.y, 2, l.color);
-                            hit = true;
-                            
-                            if (ent.hp <= 0) {
-                                let k = entities.find(e => e.id === l.owner);
-                                if (k) {
-                                    k.kills++;
-                                    addToKillFeed(k.name, ent.name);
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                if (hit || getDistance(l.x, l.y, storm.x, storm.y) > mapSize) {
+                // Dynamic Terrain Collision: If bullet height drops under local hill height, it impacts the ground
+                let groundHeightAtProj = getHeight(l.x, l.y);
+                if (l.z < groundHeightAtProj) {
+                    createExplosion(l.x, l.y, groundHeightAtProj, l.color);
                     lasers.splice(i, 1);
+                    continue;
+                }
+
+                let hitRegistered = false;
+                for (let k = structures.length - 1; k >= 0; k--) {
+                    let s = structures[k];
+                    if (checkStructureCollision(l.x, l.y, s)) {
+                        let calculatedDmg = l.baseDmg;
+                        if (l.isShotgun) {
+                            let dist = getDistance(l.startX, l.startY, s.x, s.y);
+                            calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
+                        }
+                        s.hp -= calculatedDmg; createExplosion(l.x, l.y, l.z, s.borderColor);
+                        lasers.splice(i, 1); hitRegistered = true; break;
+                    }
+                }
+                if (hitRegistered) continue;
+
+                for (let j = 0; j < entities.length; j++) {
+                    let ent = entities[j];
+                    if (ent.id !== l.ownerId && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius + 3) {
+                        let calculatedDmg = l.baseDmg;
+                        if (l.isShotgun) {
+                            let dist = getDistance(l.startX, l.startY, ent.x, ent.y);
+                            calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
+                        }
+                        ent.hp -= calculatedDmg; createExplosion(l.x, l.y, l.z, l.color);
+                        lasers.splice(i, 1); break;
+                    }
                 }
             }
 
-            // Particles fade mechanics
-            for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx; p.y += p.vy; p.z += p.vz * 0.1;
-                p.alpha -= 0.02;
-                if (p.alpha <= 0) particles.splice(i, 1);
-            }
-
-            // Check Win State
-            if (entities.length === 1 && entities[0].isPlayer) {
-                changeState("VICTORY");
+            for(let i=structures.length-1; i>=0; i--) { if(structures[i].hp <= 0) structures.splice(i,1); }
+            for(let i=particles.length-1; i>=0; i--) { 
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.z += p.vz; p.vz -= 0.15; 
+                let localPFloor = getHeight(p.x, p.y);
+                if (p.z < localPFloor) { p.z = localPFloor; p.vz = -p.vz * 0.5; p.vx *= 0.7; p.vy *= 0.7; }
+                p.alpha -= 0.02; if(p.alpha <= 0) particles.splice(i,1); 
             }
         }
 
-        function render() {
-            ctx.fillStyle = "#020205";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            renderPoolIndex = 0;
-            activeRenderQueue.length = 0;
+        function draw() {
+            ctx.fillStyle = "#010103"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (gameState !== "PLAYING") return;
 
             let player = entities.find(e => e.isPlayer);
             if (!player) return;
 
-            // Render background stars
-            stars.forEach(s => {
-                let proj = {};
-                if (get3DProjection(s.x, s.y, s.z, proj)) {
-                    ctx.fillStyle = `rgba(255,255,255,${0.3 + (1 - proj.depth / 2000)})`;
-                    ctx.fillRect(proj.x, proj.y, Math.max(1, proj.scale * 0.4), Math.max(1, proj.scale * 0.4));
-                }
-            });
+            // --- ADVANCED 3D NATURAL TERRAIN MESH RENDERER ---
+            let gridSpacing = 65;
+            let centerGridX = Math.floor(player.x / gridSpacing);
+            let centerGridY = Math.floor(player.y / gridSpacing);
+            let renderSteps = 13; 
 
-            // Populate Render Elements Array
+            let meshCache = {};
+            
+            // Step 1: Project localized cluster lines around player coordinate
+            for (let i = -renderSteps; i <= renderSteps; i++) {
+                for (let j = -renderSteps; j <= renderSteps; j++) {
+                    let gx = (centerGridX + i) * gridSpacing;
+                    let gy = (centerGridY + j) * gridSpacing;
+                    
+                    if (gx >= 0 && gx <= mapSize && gy >= 0 && gy <= mapSize) {
+                        let gz = getHeight(gx, gy);
+                        let pt = { x: 0, y: 0, scale: 0, depth: 0 };
+                        if (get3DProjection(gx, gy, gz, pt)) {
+                            meshCache[`${i}_${j}`] = pt;
+                        }
+                    }
+                }
+            }
+
+            // Step 2: Draw connecting wireframes with simulated distance fog coloring
+            for (let i = -renderSteps; i < renderSteps; i++) {
+                for (let j = -renderSteps; j < renderSteps; j++) {
+                    let pCurrent = meshCache[`${i}_${j}`];
+                    let pRight = meshCache[`${i + 1}_${j}`];
+                    let pBottom = meshCache[`${i}_${j + 1}`];
+
+                    if (pCurrent) {
+                        // Calculate depth alpha so grid lines gracefully fade to black in the distance
+                        let opacity = Math.max(0, 1.0 - (pCurrent.depth / 420));
+                        if (opacity <= 0) continue;
+
+                        ctx.lineWidth = 1;
+                        if (pRight) {
+                            ctx.strokeStyle = `rgba(0, 255, 204, ${opacity * 0.16})`;
+                            ctx.beginPath(); ctx.moveTo(pCurrent.x, pCurrent.y); ctx.lineTo(pRight.x, pRight.y); ctx.stroke();
+                        }
+                        if (pBottom) {
+                            ctx.strokeStyle = `rgba(0, 255, 204, ${opacity * 0.16})`;
+                            ctx.beginPath(); ctx.moveTo(pCurrent.x, pCurrent.y); ctx.lineTo(pBottom.x, pBottom.y); ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            let stormSegments = 64; 
+            for (let i = 0; i < stormSegments; i++) {
+                let r1 = (i / stormSegments) * Math.PI * 2; let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
+                let sx1 = storm.x + Math.cos(r1) * storm.radius; let sy1 = storm.y + Math.sin(r1) * storm.radius;
+                let sx2 = storm.x + Math.cos(r2) * storm.radius; let sy2 = storm.y + Math.sin(r2) * storm.radius;
+
+                let s1Ground = getHeight(sx1, sy1);
+                let s2Ground = getHeight(sx2, sy2);
+
+                if (get3DProjection(sx1, sy1, s1Ground, stormProjB1) && get3DProjection(sx1, sy1, s1Ground + 55, stormProjT1) &&
+                    get3DProjection(sx2, sy2, s2Ground, stormProjB2) && get3DProjection(sx2, sy2, s2Ground + 55, stormProjT2)) {
+                    ctx.fillStyle = "rgba(255, 0, 85, 0.04)"; ctx.strokeStyle = "rgba(255, 0, 85, 0.22)"; ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.moveTo(stormProjB1.x, stormProjB1.y); ctx.lineTo(stormProjT1.x, stormProjT1.y); ctx.lineTo(stormProjT2.x, stormProjT2.y); ctx.lineTo(stormProjB2.x, stormProjB2.y);
+                    ctx.closePath(); ctx.fill(); ctx.stroke();
+                }
+            }
+
+            renderPoolIndex = 0; activeRenderQueue.length = 0;
+            structures.forEach(s => { if (get3DProjection(s.x, s.y, getHeight(s.x, s.y), itemProj)) activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale)); });
+            lasers.forEach(l => { if (get3DProjection(l.x, l.y, l.z, itemProj)) activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale)); });
+            particles.forEach(p => { if (get3DProjection(p.x, p.y, p.z, itemProj)) activeRenderQueue.push(getPooledItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale)); });
             entities.forEach(ent => {
-                let proj = {};
-                if (get3DProjection(ent.x, ent.y, 0, proj)) {
-                    activeRenderQueue.push(getPooledItem("SHIP", proj.depth, ent, proj.x, proj.y, proj.scale));
-                }
+                if (ent.isPlayer && viewMode === "1P") return; 
+                if (get3DProjection(ent.x, ent.y, getHeight(ent.x, ent.y), itemProj)) activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
             });
 
-            structures.forEach(s => {
-                let proj = {};
-                if (get3DProjection(s.x, s.y, 0, proj)) {
-                    activeRenderQueue.push(getPooledItem("BARRIER", proj.depth, s, proj.x, proj.y, proj.scale));
-                }
-            });
-
-            lasers.forEach(l => {
-                let proj = {};
-                if (get3DProjection(l.x, l.y, 2, proj)) {
-                    activeRenderQueue.push(getPooledItem("LASER", proj.depth, l, proj.x, proj.y, proj.scale));
-                }
-            });
-
-            particles.forEach(p => {
-                let proj = {};
-                if (get3DProjection(p.x, p.y, p.z, proj)) {
-                    activeRenderQueue.push(getPooledItem("PARTICLE", proj.depth, p, proj.x, proj.y, proj.scale));
-                }
-            });
-
-            // Spatial Horizon Sorted Engine Algorithm (Painter's Sorting Method)
             activeRenderQueue.sort((a, b) => b.depth - a.depth);
 
-            // Execute Sorted Render Stack 
             activeRenderQueue.forEach(item => {
-                ctx.save();
-                if (item.type === "SHIP") {
-                    let ent = item.raw;
-                    ctx.translate(item.x, item.y);
-                    ctx.scale(item.scale, item.scale);
-                    
-                    // Render simple overhead triangular spaceship shape
-                    ctx.rotate(ent.angle - player.angle - Math.PI/2);
-                    ctx.strokeStyle = ent.color;
-                    ctx.lineWidth = 2;
-                    ctx.fillStyle = "rgba(10,15,30,0.8)";
-                    ctx.beginPath();
-                    ctx.moveTo(0, -12);
-                    ctx.lineTo(9, 10);
-                    ctx.lineTo(-9, 10);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-
-                    // Mini Health Overlay for visibility
-                    if (!ent.isPlayer) {
-                        ctx.rotate(-(ent.angle - player.angle - Math.PI/2));
-                        ctx.fillStyle = "red";
-                        ctx.fillRect(-15, -22, 30, 3);
-                        ctx.fillStyle = "#00ffcc";
-                        ctx.fillRect(-15, -22, (ent.hp / ent.maxHp) * 30, 3);
-                    }
+                if (item.type === "structure") draw3DBox(item.raw);
+                else if (item.type === "laser") {
+                    ctx.fillStyle = item.raw.color; ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(1.5, item.raw.size * item.scale), 0, Math.PI * 2); ctx.fill();
                 } 
-                else if (item.type === "BARRIER") {
-                    let s = item.raw;
-                    let size = s.size * item.scale * 0.5;
-                    ctx.strokeStyle = s.borderColor;
-                    ctx.fillStyle = s.color;
-                    ctx.lineWidth = Math.max(1, item.scale * 0.8);
-                    ctx.fillRect(item.x - size, item.y - size, size * 2, size * 2);
-                    ctx.strokeRect(item.x - size, item.y - size, size * 2, size * 2);
+                else if (item.type === "particle") {
+                    ctx.save(); ctx.globalAlpha = item.raw.alpha; ctx.fillStyle = item.raw.color;
+                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(0.5, item.raw.radius * item.scale), 0, Math.PI * 2); ctx.fill(); ctx.restore();
                 } 
-                else if (item.type === "LASER") {
-                    let l = item.raw;
-                    ctx.translate(item.x, item.y);
-                    ctx.rotate(l.angle - player.angle - Math.PI/2);
-                    ctx.strokeStyle = l.color;
-                    ctx.lineWidth = Math.max(2, item.scale * 0.3);
-                    ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(0, 15); ctx.stroke();
-                } 
-                else if (item.type === "PARTICLE") {
-                    let p = item.raw;
-                    ctx.globalAlpha = p.alpha;
-                    ctx.fillStyle = p.color;
-                    ctx.beginPath();
-                    ctx.arc(item.x, item.y, Math.max(0.5, p.radius * item.scale * 0.1), 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.restore();
+                else if (item.type === "entity") draw3DShip(item.raw);
             });
 
-            // -------------------------------------------------------------
-            // UI DRAW & HUD ENGINE SYSTEM DESIGN (2D Screen Space Overlay)
-            // -------------------------------------------------------------
-            if (gameState === "PLAYING") {
-                // Tactical Target Scope Reticle
-                ctx.strokeStyle = "rgba(0, 255, 204, 0.25)";
-                ctx.lineWidth = 1.5;
-                ctx.beginPath(); ctx.arc(canvas.width / 2, canvas.height / 2, 40, 0, Math.PI * 2); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(canvas.width / 2 - 60, canvas.height / 2); ctx.lineTo(canvas.width / 2 - 15, canvas.height / 2); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(canvas.width / 2 + 15, canvas.height / 2); ctx.lineTo(canvas.width / 2 + 60, canvas.height / 2); ctx.stroke();
+            // --- DYNAMIC 3D TARGET CROSSHAIR ---
+            let crosshairProj = {};
+            let targetWorldX = player.x + Math.cos(player.angle) * 300;
+            let targetWorldY = player.y + Math.sin(player.angle) * 300;
+            let targetWorldZ = getHeight(targetWorldX, targetWorldY) + 3.5;
 
-                // Health Bar Matrix Indicator
-                ctx.fillStyle = "rgba(10, 10, 20, 0.7)";
-                ctx.fillRect(30, 30, 250, 22);
-                ctx.fillStyle = "#ff0055";
-                ctx.fillRect(30, 30, (player.hp / player.maxHp) * 250, 22);
-                ctx.strokeStyle = "#ff0055";
-                ctx.strokeRect(30, 30, 250, 22);
-                ctx.fillStyle = "#fff";
-                ctx.font = "12px 'Courier New'";
-                ctx.fillText(`HULL: ${Math.max(0, Math.floor(player.hp))}%`, 40, 45);
+            if (get3DProjection(targetWorldX, targetWorldY, targetWorldZ, crosshairProj)) {
+                let cx = crosshairProj.x;
+                let cy = crosshairProj.y;
 
-                // Build Charges HUD Interface
-                ctx.fillStyle = "rgba(10, 10, 20, 0.7)";
-                ctx.fillRect(30, 60, 140, 18);
-                ctx.fillStyle = config.playerSkin;
-                ctx.font = "11px 'Courier New'";
-                ctx.fillText(`BARRIERS: ${player.builds}/${player.maxBuilds}`, 40, 73);
+                if (cx >= 0 && cx <= canvas.width && cy >= 0 && cy <= canvas.height) {
+                    if (rightMouseIsDown) {
+                        ctx.strokeStyle = "#ff0055"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 130, 0, Math.PI * 2); ctx.stroke();
+                        ctx.strokeStyle = "rgba(255, 0, 85, 0.4)"; ctx.lineWidth = 1; ctx.beginPath();
+                        ctx.moveTo(cx - 130, cy); ctx.lineTo(cx - 15, cy); ctx.moveTo(cx + 15, cy); ctx.lineTo(cx + 130, cy);
+                        ctx.moveTo(cx, cy - 130); ctx.lineTo(cx, cy - 15); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx, cy + 130); ctx.stroke();
+                        ctx.fillStyle = "#ff0055"; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill();
+                    } else {
+                        ctx.strokeStyle = config.playerSkin; ctx.lineWidth = 2; ctx.beginPath();
+                        ctx.moveTo(cx - 12, cy); ctx.lineTo(cx + 12, cy); ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12); ctx.stroke();
+                    }
+                }
+            }
 
-                // Match Status Indicators
-                ctx.fillStyle = "#00ffcc";
-                ctx.font = "14px 'Courier New'";
-                ctx.fillText(`SECTORS ACTIVE: ${entities.length} / 50`, canvas.width - 240, 45);
-                ctx.fillText(`CONFIRMED KILLS: ${player.kills}`, canvas.width - 240, 65);
+            let healthDisplay = Math.ceil(player.hp);
+            ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px 'Courier New'"; ctx.textAlign = "left";
+            ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
+            ctx.fillStyle = "#00ffff"; ctx.fillText(`BARRIERS: ${player.builds} / 6`, 30, 72);
+            ctx.fillStyle = "#ffcc00"; ctx.fillText(`CAMERA: ${viewMode}`, 30, 99);
+            
+            if (player.speedTimer > 0) {
+                ctx.fillStyle = "#ffff00"; ctx.fillText(`HYPERDRIVE ACTIVE: ${Math.ceil(player.speedTimer / 60)}s`, 30, 130);
+            }
+            
+            ctx.textAlign = "right"; ctx.fillStyle = "#ff0055";
+            ctx.fillText(`ALIVE: ${entities.length} / 50`, canvas.width - 30, 45);
 
-                // Active Battle Arena Kill Feed
-                ctx.fillStyle = "rgba(255,255,255,0.4)";
-                ctx.font = "11px 'Courier New'";
-                killFeed.forEach((log, idx) => {
-                    ctx.fillText(log, 30, 120 + idx * 18);
-                });
+            if (config.mobileOverlay) {
+                if (joystick.active) {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.05)"; ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fill();
+                    ctx.strokeStyle = "rgba(0, 255, 204, 0.3)"; ctx.lineWidth = 2; ctx.stroke();
 
-                // Circular Tactical Minimap Scanner Engine
-                let mapRadius = 55;
-                let mapCX = canvas.width - 85;
-                let mapCY = 150;
+                    let dx = joystick.curX - joystick.startX, dy = joystick.curY - joystick.startY, d = Math.sqrt(dx*dx + dy*dy);
+                    let px = joystick.startX + (dx / (d > joystick.maxRadius ? d : 1)) * Math.min(d, joystick.maxRadius);
+                    let py = joystick.startY + (dy / (d > joystick.maxRadius ? d : 1)) * Math.min(d, joystick.maxRadius);
+                    ctx.fillStyle = "#00ffcc"; ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
+                }
+
+                ctx.fillStyle = "rgba(0, 255, 205, 0.12)"; ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
+                ctx.fillText("BUILD", mobileBuildBtn.x, mobileBuildBtn.y + 4);
+
+                ctx.fillStyle = "rgba(255, 204, 0, 0.12)"; ctx.beginPath(); ctx.arc(mobileViewBtn.x, mobileViewBtn.y, mobileViewBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#ffcc00"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#ffcc00"; ctx.fillText("VIEW", mobileViewBtn.x, mobileViewBtn.y + 4);
+
+                ctx.fillStyle = "rgba(255, 0, 85, 0.15)"; ctx.beginPath(); ctx.arc(mobileShootBtn.x, mobileShootBtn.y, mobileShootBtn.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "#ff0055"; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = "#ff0055"; ctx.font = "bold 13px 'Courier New'"; ctx.fillText("FIRE", mobileShootBtn.x, mobileShootBtn.y + 5);
+            }
+        }
+
+        function draw3DBox(b) {
+            let half = b.size / 2; let h = 18;
+            let currentGroundZ = getHeight(b.x, b.y);
+            let cx = [b.x - half, b.x + half, b.x + half, b.x - half];
+            let cy = [b.y - half, b.y - half, b.y + half, b.y + half];
+            
+            ctx.strokeStyle = b.borderColor; ctx.lineWidth = 1; ctx.fillStyle = b.color;
+
+            let valid = true;
+            for (let i = 0; i < 4; i++) {
+                if (get3DProjection(cx[i], cy[i], currentGroundZ, itemProj)) { boxB[i].x = itemProj.x; boxB[i].y = itemProj.y; } else { valid = false; break; }
+                if (get3DProjection(cx[i], cy[i], currentGroundZ + h, itemProj)) { boxT[i].x = itemProj.x; boxT[i].y = itemProj.y; } else { valid = false; break; }
+            }
+            if (!valid) return;
+
+            for (let i = 0; i < 4; i++) {
+                let next = (i + 1) % 4;
+                ctx.beginPath(); ctx.moveTo(boxB[i].x, boxB[i].y); ctx.lineTo(boxB[next].x, boxB[next].y); ctx.lineTo(boxT[next].x, boxT[next].y); ctx.lineTo(boxT[i].x, boxT[i].y);
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+            }
+        }
+
+        function draw3DShip(s) {
+            let r = s.radius; let a = s.angle;
+            let currentGroundZ = getHeight(s.x, s.y);
+            
+            if (get3DProjection(s.x + Math.cos(a)*r, s.y + Math.sin(a)*r, currentGroundZ + 1.5, shipProjF) &&
+                get3DProjection(s.x + Math.cos(a + 2.4)*r, s.y + Math.sin(a + 2.4)*r, currentGroundZ, shipProjL) &&
+                get3DProjection(s.x + Math.cos(a - 2.4)*r, s.y + Math.sin(a - 2.4)*r, currentGroundZ, shipProjR) &&
+                get3DProjection(s.x, s.y, currentGroundZ + 5, shipProjTip)) {
                 
-                ctx.save();
-                ctx.beginPath(); ctx.arc(mapCX, mapCY, mapRadius, 0, Math.PI * 2); ctx.clip();
-                ctx.fillStyle = "rgba(5, 5, 15, 0.85)";
-                ctx.fillRect(mapCX - mapRadius, mapCY - mapRadius, mapRadius * 2, mapRadius * 2);
+                ctx.strokeStyle = s.color; ctx.lineWidth = 1.5;
+                ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
 
-                // Map Storm Zone inside scanner
-                let conversion = mapRadius / (mapSize / 2);
-                let stormScannerR = storm.radius * conversion;
-                let stormScannerX = mapCX + (storm.x - player.x) * conversion;
-                let stormScannerY = mapCY + (storm.y - player.y) * conversion;
+                ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.lineTo(shipProjR.x, shipProjR.y); ctx.closePath(); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.moveTo(shipProjR.x, shipProjR.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); stroke();
 
-                ctx.strokeStyle = "rgba(255, 0, 85, 0.5)";
-                ctx.lineWidth = 2;
-                ctx.beginPath(); ctx.arc(stormScannerX, stormScannerY, stormScannerR, 0, Math.PI*2); ctx.stroke();
+                let barW = 24 * shipProjTip.scale;
+                ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW, 3);
+                ctx.fillStyle = s.isPlayer ? config.playerSkin : "#ff3333";
+                ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW * Math.max(0, s.hp / s.maxHp), 3);
+            }
+        }
 
-                // Mark Hostile Radar Contacts
-                entities.forEach(ent => {
-                    let rX = mapCX + (ent.x - player.x) * conversion;
-                    let rY = mapCY + (ent.y - player.y) * conversion;
-                    if (getDistance(mapCX, mapCY, rX, rY) < mapRadius) {
-                        ctx.fillStyle = ent.isPlayer ? config.playerSkin : "red";
-                        ctx.fillRect(rX - 2, rY - 2, 4, 4);
-                    }
-                });
-                ctx.restore();
-                ctx.strokeStyle = "rgba(0, 255, 204, 0.3)";
-                ctx.beginPath(); ctx.arc(mapCX, mapCY, mapRadius, 0, Math.PI * 2); ctx.stroke();
+        let lastTime = performance.now();
+        let accumulator = 0;
+        const deltaTimeStep = 1000 / 60; 
 
-                // Draw Mobile On-Screen Interactive Layout Buttons
-                if (config.mobileOverlay) {
-                    ctx.lineWidth = 2;
-                    // Joystick bounding pad boundary
-                    if (joystick.active) {
-                        ctx.strokeStyle = "rgba(0, 255, 204, 0.3)";
-                        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.stroke();
-                        ctx.fillStyle = "rgba(0, 255, 204, 0.4)";
-                        ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2); ctx.fill();
-                    }
+        function gameLoop(currentTime) {
+            if (!currentTime) currentTime = performance.now();
+            
+            accumulator += currentTime - lastTime;
+            lastTime = currentTime;
 
-                    // Mobile Primary Trigger Controls
-                    ctx.fillStyle = "rgba(255, 0, 85, 0.25)";
-                    ctx.strokeStyle = "#ff0055";
-                    ctx.beginPath(); ctx.arc(mobileShootBtn.x, mobileShootBtn.y, mobileShootBtn.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = "#fff"; ctx.font = "11px Arial"; ctx.fillText("FIRE", mobileShootBtn.x - 12, mobileShootBtn.y + 4);
+            if (accumulator > 250) accumulator = 250;
 
-                    ctx.fillStyle = "rgba(0, 255, 204, 0.15)";
-                    ctx.strokeStyle = "#00ffcc";
-                    ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = "#fff"; ctx.fillText("WALL", mobileBuildBtn.x - 15, mobileBuildBtn.y + 4);
-
-                    ctx.beginPath(); ctx.arc(mobileViewBtn.x, mobileViewBtn.y, mobileViewBtn.radius, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-                    ctx.fillStyle = "#fff"; ctx.fillText("VIEW", mobileViewBtn.x - 13
+            while (accumulator >= deltaTimeStep) {
+                update();
+                accumulator -= deltaTimeStep;
+            }
+            
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
