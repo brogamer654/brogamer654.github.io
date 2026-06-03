@@ -141,7 +141,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>19 Ships drop into a 3D matrix. Auto-aim lock weapons active. Tap 'V' to switch seamlessly between First-Person cockpit and Third-Person view track!</p>
+        <p>50 Ships drop into a massive 3D matrix. Auto-aim lock weapons active. Tap 'V' to switch seamlessly between First-Person cockpit and Third-Person view track!</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -209,14 +209,14 @@
 
     <div id="gameover-screen" class="overlay" style="display: none;">
         <h1 style="color: #ff3366;">ELIMINATED</h1>
-        <p id="placement-text">Placement: #0 / 19</p>
+        <p id="placement-text">Placement: #0 / 50</p>
         <button onclick="changeState('PLAYING')">RE-DEPLOY HULL</button>
         <button class="secondary" onclick="openSettings()">SETTINGS</button>
     </div>
 
     <div id="victory-screen" class="overlay" style="display: none;">
         <h1 style="color: #00ffcc;">#1 VICTORY ROYALE</h1>
-        <p>You conquered the 3D sector perimeter!</p>
+        <p>You conquered the expanded 3D sector perimeter!</p>
         <button onclick="changeState('PLAYING')">PLAY REMATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS</button>
     </div>
@@ -252,8 +252,9 @@
         let keysPressed = {};
         let activeRebindAction = null;
 
-        const mapSize = 1200; 
-        const storm = { x: 0, y: 0, radius: 0, minRadius: 60, shrinkSpeed: 0.22 };
+        // UPDATED: Map boundaries expanded from 1200 to 3600 units
+        const mapSize = 3600; 
+        const storm = { x: 0, y: 0, radius: 0, minRadius: 100, shrinkSpeed: 0.35 };
 
         let mouseX = 0, mouseY = 0;
         const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
@@ -271,7 +272,6 @@
         window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
 
-        // Run sync configurations immediately after window layout dimensions initialize
         const savedSkin = localStorage.getItem("savedSpaceSkin");
         if (savedSkin) {
             config.playerSkin = savedSkin;
@@ -391,29 +391,30 @@
             entities = []; lasers = []; particles = []; structures = [];
             storm.x = mapSize / 2;
             storm.y = mapSize / 2;
-            storm.radius = mapSize * 0.7;
+            storm.radius = mapSize * 0.75;
 
             entities.push({
                 id: "player", isPlayer: true,
                 x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
-                radius: 14, speed: 4.2, hp: 100, maxHp: 100,
+                radius: 14, speed: 4.5, hp: 100, maxHp: 100,
                 color: config.playerSkin, 
                 fireCooldown: 0,
-                builds: 3, maxBuilds: 5, buildRegenTimer: 0
+                builds: 4, maxBuilds: 6, buildRegenTimer: 0
             });
 
-            for (let i = 0; i < 18; i++) {
+            // UPDATED: Increased bot count to 49 targets to fully fill the expanded deep space zone
+            for (let i = 0; i < 49; i++) {
                 let angle = Math.random() * Math.PI * 2;
-                let dist = Math.random() * (storm.radius * 0.6); 
+                let dist = Math.random() * (storm.radius * 0.75); 
                 entities.push({
                     id: "bot_" + i, isPlayer: false,
                     x: storm.x + Math.cos(angle) * dist,
                     y: storm.y + Math.sin(angle) * dist,
                     angle: Math.random() * Math.PI * 2,
-                    radius: 12, speed: Math.random() * 0.8 + 1.8,
-                    vx: (Math.random() - 0.5) * 2.5, vy: (Math.random() - 0.5) * 2.5,
-                    hp: 85, maxHp: 85, color: `hsl(${Math.random() * 55 + 10}, 100%, 60%)`, 
-                    fireCooldown: Math.floor(Math.random() * 30), changeDirTimer: 0, buildCooldown: 0
+                    radius: 12, speed: Math.random() * 1.0 + 2.0,
+                    vx: (Math.random() - 0.5) * 3.0, vy: (Math.random() - 0.5) * 3.0,
+                    hp: 85, maxHp: 85, color: `hsl(${Math.random() * 360}, 90%, 60%)`, 
+                    fireCooldown: Math.floor(Math.random() * 40), changeDirTimer: 0, buildCooldown: 0
                 });
             }
         }
@@ -430,7 +431,7 @@
                 }
             } else {
                 structures.push({ x: creator.x, y: creator.y, size: 28, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.15)", borderColor: creator.color });
-                creator.buildCooldown = 360; 
+                creator.buildCooldown = 300; 
                 createExplosion(creator.x, creator.y, 0, creator.color);
             }
         }
@@ -498,7 +499,7 @@
             let player = entities.find(e => e.isPlayer);
             if (player && player.builds < player.maxBuilds) {
                 player.buildRegenTimer++;
-                if (player.buildRegenTimer >= 180) { 
+                if (player.buildRegenTimer >= 150) { 
                     player.builds++; player.buildRegenTimer = 0;
                 }
             }
@@ -557,10 +558,10 @@
                         }
                     });
 
-                    if (nearestBot && ent.fireCooldown <= 0 && recordDist < 350) {
+                    if (nearestBot && ent.fireCooldown <= 0 && recordDist < 380) {
                         let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 7.5, vy: (tDy / tDist) * 7.5, ownerId: ent.id, color: config.playerSkin });
-                        ent.fireCooldown = 16; 
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.0, vy: (tDy / tDist) * 8.0, ownerId: ent.id, color: config.playerSkin });
+                        ent.fireCooldown = 14; 
                     }
                 } else {
                     ent.changeDirTimer++;
@@ -588,10 +589,10 @@
                         }
                     });
 
-                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 260) {
+                    if (nearestTarget && ent.fireCooldown <= 0 && rDist < 280) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 5.5, vy: (tDy / tDist) * 5.5, ownerId: ent.id, color: ent.color });
-                        ent.fireCooldown = 50 + Math.random() * 25;
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color });
+                        ent.fireCooldown = 45 + Math.random() * 25;
                     }
                 }
 
@@ -600,7 +601,7 @@
                 if (ent.hp <= 0) {
                     createExplosion(ent.x, ent.y, 2, ent.color);
                     if (ent.isPlayer) {
-                        document.getElementById("placement-text").innerText = `Placement: #${entities.length} / 19`;
+                        document.getElementById("placement-text").innerText = `Placement: #${entities.length} / 50`;
                         changeState("GAMEOVER");
                     }
                     entities.splice(i, 1);
@@ -657,11 +658,12 @@
 
             let renderQueue = [];
 
+            // Performance optimization matrix: limits dot calculations strictly near the pilot tracking horizon
             let gridSpacing = 60;
-            let startGridX = Math.floor((player.x - 400) / gridSpacing) * gridSpacing;
-            let endGridX = Math.floor((player.x + 400) / gridSpacing) * gridSpacing;
-            let startGridY = Math.floor((player.y - 400) / gridSpacing) * gridSpacing;
-            let endGridY = Math.floor((player.y + 400) / gridSpacing) * gridSpacing;
+            let startGridX = Math.floor((player.x - 450) / gridSpacing) * gridSpacing;
+            let endGridX = Math.floor((player.x + 450) / gridSpacing) * gridSpacing;
+            let startGridY = Math.floor((player.y - 450) / gridSpacing) * gridSpacing;
+            let endGridY = Math.floor((player.y + 450) / gridSpacing) * gridSpacing;
 
             for (let gx = Math.max(0, startGridX); gx <= Math.min(mapSize, endGridX); gx += gridSpacing) {
                 for (let gy = Math.max(0, startGridY); gy <= Math.min(mapSize, endGridY); gy += gridSpacing) {
@@ -692,7 +694,7 @@
                 if (proj) renderQueue.push({ type: "entity", depth: proj.depth, proj: proj, raw: ent });
             });
 
-            let stormSegments = 36;
+            let stormSegments = 48; // Increased segmentation for smoother curvature on the larger map scale
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2;
                 let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
@@ -739,11 +741,11 @@
             let healthDisplay = Math.ceil(player.hp);
             ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px 'Courier New'"; ctx.textAlign = "left";
             ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
-            ctx.fillStyle = "#00ffff"; ctx.fillText(`BUILDS: ${player.builds} / 5`, 30, 72);
+            ctx.fillStyle = "#00ffff"; ctx.fillText(`BUILDS: ${player.builds} / 6`, 30, 72);
             ctx.fillStyle = "#ffcc00"; ctx.fillText(`CAMERA: ${viewMode}`, 30, 99);
             
             ctx.textAlign = "right"; ctx.fillStyle = "#ff0055";
-            ctx.fillText(`ALIVE: ${entities.length}`, canvas.width - 30, 45);
+            ctx.fillText(`ALIVE: ${entities.length} / 50`, canvas.width - 30, 45);
 
             if (config.mobileOverlay) {
                 if (joystick.active) {
