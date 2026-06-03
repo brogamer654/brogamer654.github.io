@@ -98,7 +98,6 @@
             outline: none;
         }
 
-        /* Styling for the custom skin color picker button wrapper */
         .color-picker-wrapper {
             display: flex;
             align-items: center;
@@ -239,7 +238,7 @@
         let config = {
             controlScheme: "keyboard", 
             mobileOverlay: false,       
-            playerSkin: "#00ffcc", // Default custom skin fallback
+            playerSkin: "#00ffcc", 
             keybinds: {
                 TOGGLE_VIEW: "KeyV",
                 BUILD: "Space",
@@ -249,15 +248,6 @@
                 RIGHT: "KeyD"
             }
         };
-
-        // NEW: Load saved custom skin from local memory immediately on boot
-        const savedSkin = localStorage.getItem("savedSpaceSkin");
-        if (savedSkin) {
-            config.playerSkin = savedSkin;
-            // Update UI elements to display saved skin configuration data
-            document.getElementById("skin-picker").value = savedSkin;
-            document.getElementById("skin-hex-text").innerText = savedSkin.toUpperCase();
-        }
 
         let keysPressed = {};
         let activeRebindAction = null;
@@ -280,6 +270,14 @@
         }
         window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
+
+        // Run sync configurations immediately after window layout dimensions initialize
+        const savedSkin = localStorage.getItem("savedSpaceSkin");
+        if (savedSkin) {
+            config.playerSkin = savedSkin;
+            document.getElementById("skin-picker").value = savedSkin;
+            document.getElementById("skin-hex-text").innerText = savedSkin.toUpperCase();
+        }
 
         window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
 
@@ -335,7 +333,6 @@
                 }
             }
 
-            // Optional Escape Hotkey to easily access settings mid-game
             if (e.code === "Escape") {
                 if (gameState === "PLAYING") openSettings();
                 else if (document.getElementById("settings-overlay").style.display === "flex") closeSettings();
@@ -344,18 +341,15 @@
 
         window.addEventListener("keyup", (e) => { keysPressed[e.code] = false; });
 
-        // NEW: Custom Skin color storage processor
         function saveCustomSkin(hexColor) {
             config.playerSkin = hexColor;
             document.getElementById("skin-hex-text").innerText = hexColor.toUpperCase();
-            localStorage.setItem("savedSpaceSkin", hexColor); // Lock into persistent browser memory
+            localStorage.setItem("savedSpaceSkin", hexColor); 
 
-            // Live refresh skin indicator if player is actively moving on map grid
             let player = entities.find(e => e.isPlayer);
             if (player) player.color = hexColor;
         }
 
-        // NEW: Clean Match Abort Routine
         function exitToMenu() {
             changeState("START");
         }
@@ -403,7 +397,7 @@
                 id: "player", isPlayer: true,
                 x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
                 radius: 14, speed: 4.2, hp: 100, maxHp: 100,
-                color: config.playerSkin, // Generates player with saved custom skin preference
+                color: config.playerSkin, 
                 fireCooldown: 0,
                 builds: 3, maxBuilds: 5, buildRegenTimer: 0
             });
@@ -811,7 +805,7 @@
                 ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
 
                 ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(l.x, l.y); ctx.lineTo(rW.x, rW.y); ctx.closePath(); ctx.fill(); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(l.x, l.y); ctx.moveTo(rW.x, rW.y); ctx.lineTo(tip.x, tip.y); stroke();
+                ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(tip.x, tip.y); ctx.lineTo(l.x, l.y); ctx.moveTo(rW.x, rW.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
 
                 let barW = 24 * tip.scale;
                 ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(tip.x - barW/2, tip.y - 12, barW, 3);
