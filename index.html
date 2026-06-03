@@ -134,6 +134,60 @@
             animation: blink 1s infinite;
         }
 
+        /* INVENTORY UI SYSTEM */
+        #inventory-container {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 8px;
+            z-index: 5;
+            background: rgba(5, 5, 15, 0.75);
+            padding: 6px;
+            border: 1px solid rgba(0, 255, 204, 0.2);
+            border-radius: 6px;
+            backdrop-filter: blur(4px);
+        }
+
+        .inv-slot {
+            width: 85px;
+            height: 50px;
+            background: rgba(10, 10, 20, 0.9);
+            border: 2px solid #333;
+            border-radius: 4px;
+            color: #888;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .inv-slot .slot-num {
+            font-size: 9px;
+            color: #555;
+            margin-bottom: 2px;
+        }
+
+        .inv-slot.active {
+            border-color: #00ffcc;
+            color: #ffffff;
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.4);
+        }
+
+        .inv-slot.utility-flash {
+            animation: flashUse 0.3s ease-out;
+        }
+
+        @keyframes flashUse {
+            0% { border-color: #ff0055; background: rgba(255, 0, 85, 0.3); }
+            100% { border-color: #333; background: rgba(10, 10, 20, 0.9); }
+        }
+
         @keyframes blink { 50% { opacity: 0.5; } }
     </style>
 </head>
@@ -141,7 +195,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>50 Ships drop into a massive 3D matrix. Auto-aim lock weapons active. Tap 'V' to switch seamlessly between First-Person cockpit and Third-Person view track!</p>
+        <p>50 Ships drop into a massive 3D matrix. Use hotkeys [1-5] to swap inventory slots! Tap 'V' to switch seamlessly between First-Person cockpit and Third-Person tracking.</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -219,6 +273,14 @@
         <p>You conquered the expanded 3D sector perimeter!</p>
         <button onclick="changeState('PLAYING')">PLAY REMATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS</button>
+    </div>
+
+    <div id="inventory-container">
+        <div class="inv-slot active" id="slot-0" onclick="selectSlot(0)"><div class="slot-num">[1]</div><div class="slot-name">LASER</div></div>
+        <div class="inv-slot" id="slot-1" onclick="selectSlot(1)"><div class="slot-num">[2]</div><div class="slot-name">MISSILE</div></div>
+        <div class="inv-slot" id="slot-2" onclick="selectSlot(2)"><div class="slot-num">[3]</div><div class="slot-name">SHIELD</div></div>
+        <div class="inv-slot" id="slot-3" onclick="selectSlot(3)"><div class="slot-num">[4]</div><div class="slot-name">BOOST</div></div>
+        <div class="inv-slot" id="slot-4" onclick="selectSlot(4)"><div class="slot-num">[5]</div><div class="slot-name">EMP</div></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -370,6 +432,12 @@
                     e.preventDefault();
                     deployStructure("player");
                 }
+                // INVENTORY HOTKEYS 1-5
+                if (e.code === "Digit1") selectSlot(0);
+                if (e.code === "Digit2") selectSlot(1);
+                if (e.code === "Digit3") selectSlot(2);
+                if (e.code === "Digit4") selectSlot(3);
+                if (e.code === "Digit5") selectSlot(4);
             }
 
             if (e.code === "Escape") {
@@ -389,6 +457,77 @@
             if (player) player.color = hexColor;
         }
 
+        // INVENTORY CONTROL LOGIC (REACTIVE SELECTION MAPPED TO UI DOM)
+        function selectSlot(index) {
+            let player = entities.find(e => e.isPlayer);
+            if (!player || player.hp <= 0) return;
+
+            let item = player.inventory[index];
+            
+            // If it's a weapon, simply switch to it
+            if (item.type === "weapon") {
+                player.selectedSlot = index;
+                updateInventoryUI(player);
+            } 
+            // If it's a utility consumable, check ammo, fire instantly, and snap back to weapon
+            else if (item.type === "utility") {
+                if (item.ammo > 0) {
+                    executeUtilityItem(player, item.name);
+                    item.ammo--;
+                    
+                    let slotEl = document.getElementById(`slot-${index}`);
+                    if(slotEl) {
+                        slotEl.classList.add("utility-flash");
+                        setTimeout(() => slotEl.classList.remove("utility-flash"), 300);
+                    }
+                }
+                updateInventoryUI(player);
+            }
+        }
+
+        function executeUtilityItem(player, itemName) {
+            if (itemName === "SHIELD") {
+                player.hp = Math.min(player.maxHp, player.hp + 40);
+                createExplosion(player.x, player.y, 4, "#00ffcc");
+            } 
+            else if (itemName === "BOOST") {
+                player.speedTimer = 180; // 3 seconds at 60fps
+                createExplosion(player.x, player.y, 1, "#ffff00");
+            } 
+            else if (itemName === "EMP") {
+                createExplosion(player.x, player.y, 0, "#ff00ff");
+                entities.forEach(other => {
+                    if (!other.isPlayer) {
+                        let dist = getDistance(player.x, player.y, other.x, other.y);
+                        if (dist < 400) {
+                            other.hp -= 35; // Direct structural damage
+                            createExplosion(other.x, other.y, 2, "#ff00ff");
+                        }
+                    }
+                });
+            }
+        }
+
+        function updateInventoryUI(player) {
+            for (let i = 0; i < 5; i++) {
+                let slotEl = document.getElementById(`slot-${i}`);
+                if (!slotEl) continue;
+
+                let item = player.inventory[i];
+                let displayAmmo = item.ammo === Infinity ? "" : ` (${item.ammo})`;
+                
+                slotEl.querySelector('.slot-name').innerText = `${item.name}${displayAmmo}`;
+
+                if (i === player.selectedSlot) {
+                    slotEl.classList.add("active");
+                    slotEl.style.borderColor = config.playerSkin;
+                } else {
+                    slotEl.classList.remove("active");
+                    slotEl.style.borderColor = "#333";
+                }
+            }
+        }
+
         function exitToMenu() {
             changeState("START");
         }
@@ -397,6 +536,7 @@
             document.getElementById("start-screen").style.display = "none";
             document.getElementById("gameover-screen").style.display = "none";
             document.getElementById("victory-screen").style.display = "none";
+            document.getElementById("inventory-container").style.display = "none";
             document.getElementById("settings-overlay").style.display = "flex";
         }
 
@@ -422,6 +562,7 @@
             document.getElementById("settings-overlay").style.display = "none";
             document.getElementById("gameover-screen").style.display = (newState === "GAMEOVER") ? "flex" : "none";
             document.getElementById("victory-screen").style.display = (newState === "VICTORY") ? "flex" : "none";
+            document.getElementById("inventory-container").style.display = (newState === "PLAYING") ? "flex" : "none";
 
             if (newState === "PLAYING") initBattleRoyale();
         }
@@ -432,14 +573,24 @@
             storm.y = mapSize / 2;
             storm.radius = mapSize * 0.75;
 
-            entities.push({
+            let pObj = {
                 id: "player", isPlayer: true,
                 x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
-                radius: 14, speed: 4.8, hp: 100, maxHp: 100,
+                radius: 14, baseSpeed: 4.8, speed: 4.8, speedTimer: 0, hp: 100, maxHp: 100,
                 color: config.playerSkin, 
                 fireCooldown: 0,
-                builds: 4, maxBuilds: 6, buildRegenTimer: 0
-            });
+                builds: 4, maxBuilds: 6, buildRegenTimer: 0,
+                selectedSlot: 0,
+                inventory: [
+                    { name: "LASER", type: "weapon", ammo: Infinity },
+                    { name: "MISSILE", type: "weapon", ammo: 8 },
+                    { name: "SHIELD", type: "utility", ammo: 3 },
+                    { name: "BOOST", type: "utility", ammo: 2 },
+                    { name: "EMP", type: "utility", ammo: 1 }
+                ]
+            };
+            entities.push(pObj);
+            updateInventoryUI(pObj);
 
             for (let i = 0; i < 49; i++) {
                 let angle = Math.random() * Math.PI * 2;
@@ -499,7 +650,6 @@
             return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2);
         }
 
-        // FIXED: Streamlines projection straight into referenced memory target, reducing allocation to zero bytes
         function get3DProjection(worldX, worldY, worldZ, outTarget) {
             let player = entities.find(e => e.isPlayer);
             if (!player) return null;
@@ -558,6 +708,14 @@
                 if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius) ent.hp -= 0.35;
 
                 if (ent.isPlayer) {
+                    // Update Speed Status Condition safely
+                    if (ent.speedTimer > 0) {
+                        ent.speed = ent.baseSpeed * 2.5;
+                        ent.speedTimer--;
+                    } else {
+                        ent.speed = ent.baseSpeed;
+                    }
+
                     if (config.mobileOverlay && joystick.active) {
                         let jDx = joystick.curX - joystick.startX;
                         let jDy = joystick.curY - joystick.startY;
@@ -606,11 +764,22 @@
                         }
                     });
 
-                    if (nearestBot && ent.fireCooldown <= 0 && recordDist < 380) {
+                    // INVENTORY WEAPON RESOLUTION SYSTEM
+                    if (nearestBot && ent.fireCooldown <= 0 && recordDist < 420) {
+                        let currentWeapon = ent.inventory[ent.selectedSlot];
                         let tDx = nearestBot.x - ent.x, tDy = nearestBot.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
-                        if (tDist < 0.1) tDist = 0.1; 
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.0, vy: (tDy / tDist) * 8.0, ownerId: ent.id, color: config.playerSkin, life: 150 });
-                        ent.fireCooldown = 14; 
+                        if (tDist < 0.1) tDist = 0.1;
+
+                        if (currentWeapon.name === "LASER") {
+                            lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 8.5, vy: (tDy / tDist) * 8.5, ownerId: ent.id, color: config.playerSkin, dmg: 14, size: 3, life: 140 });
+                            ent.fireCooldown = 13; 
+                        } 
+                        else if (currentWeapon.name === "MISSILE" && currentWeapon.ammo > 0) {
+                            lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 5.5, vy: (tDy / tDist) * 5.5, ownerId: ent.id, color: "#ff0055", dmg: 40, size: 7, life: 200 });
+                            currentWeapon.ammo--;
+                            ent.fireCooldown = 55; // Slower reload time
+                            updateInventoryUI(ent);
+                        }
                     }
                 } else {
                     ent.changeDirTimer++;
@@ -643,7 +812,7 @@
                     if (nearestTarget && ent.fireCooldown <= 0 && rDist < 280) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
                         if (tDist < 0.1) tDist = 0.1;
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color, life: 150 });
+                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 6.0, vy: (tDy / tDist) * 6.0, ownerId: ent.id, color: ent.color, dmg: 12, size: 3, life: 150 });
                         ent.fireCooldown = 45 + Math.random() * 25;
                     }
                 }
@@ -677,7 +846,7 @@
                 for (let k = structures.length - 1; k >= 0; k--) {
                     let s = structures[k];
                     if (checkStructureCollision(l.x, l.y, s)) {
-                        s.hp -= 20; createExplosion(l.x, l.y, 3, s.borderColor);
+                        s.hp -= l.dmg; createExplosion(l.x, l.y, 3, s.borderColor);
                         lasers.splice(i, 1); hitRegistered = true; break;
                     }
                 }
@@ -686,7 +855,7 @@
                 for (let j = 0; j < entities.length; j++) {
                     let ent = entities[j];
                     if (ent.id !== l.ownerId && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius + 3) {
-                        ent.hp -= 15; createExplosion(l.x, l.y, 3, l.color);
+                        ent.hp -= l.dmg; createExplosion(l.x, l.y, 3, l.color);
                         lasers.splice(i, 1); break;
                     }
                 }
@@ -714,7 +883,6 @@
             let player = entities.find(e => e.isPlayer);
             if (!player) return;
 
-            // OPTIMIZATION 1: Draw the base matrix grid instantly (Bypasses rendering queue/heap allocation)
             let gridSpacing = 60;
             let startGridX = Math.floor((player.x - 450) / gridSpacing) * gridSpacing;
             let endGridX = Math.floor((player.x + 450) / gridSpacing) * gridSpacing;
@@ -732,7 +900,6 @@
                 }
             }
 
-            // OPTIMIZATION 2: Draw the storm wall safely to the environment base directly
             let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2;
@@ -760,7 +927,6 @@
                 }
             }
 
-            // OPTIMIZATION 3: Collect only dynamic entities into recycled object pool slots
             renderPoolIndex = 0;
             activeRenderQueue.length = 0;
 
@@ -789,17 +955,15 @@
                 }
             });
 
-            // Fast sort of index references only
             activeRenderQueue.sort((a, b) => b.depth - a.depth);
 
-            // Execute depth rendering via pool
             activeRenderQueue.forEach(item => {
                 if (item.type === "structure") {
                     draw3DBox(item.raw);
                 } 
                 else if (item.type === "laser") {
                     ctx.fillStyle = item.raw.color;
-                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(1.5, 3 * item.scale), 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(item.x, item.y, Math.max(1.5, item.raw.size * item.scale), 0, Math.PI * 2); ctx.fill();
                 } 
                 else if (item.type === "particle") {
                     ctx.save(); ctx.globalAlpha = item.raw.alpha; ctx.fillStyle = item.raw.color;
@@ -811,12 +975,17 @@
                 }
             });
 
-            // Draw HUD layout 
+            // Status Effects HUD Tracker
             let healthDisplay = Math.ceil(player.hp);
             ctx.fillStyle = "#ffffff"; ctx.font = "bold 16px 'Courier New'"; ctx.textAlign = "left";
             ctx.fillText(`HEALTH: ${healthDisplay > 0 ? healthDisplay : 0}%`, 30, 45);
-            ctx.fillStyle = "#00ffff"; ctx.fillText(`BUILDS: ${player.builds} / 6`, 30, 72);
+            ctx.fillStyle = "#00ffff"; ctx.fillText(`BARRIERS: ${player.builds} / 6`, 30, 72);
             ctx.fillStyle = "#ffcc00"; ctx.fillText(`CAMERA: ${viewMode}`, 30, 99);
+            
+            if (player.speedTimer > 0) {
+                ctx.fillStyle = "#ffff00";
+                ctx.fillText(`HYPERDRIVE ACTIVE: ${Math.ceil(player.speedTimer / 60)}s`, 30, 130);
+            }
             
             ctx.textAlign = "right"; ctx.fillStyle = "#ff0055";
             ctx.fillText(`ALIVE: ${entities.length} / 50`, canvas.width - 30, 45);
@@ -835,7 +1004,7 @@
 
                 ctx.fillStyle = "rgba(0, 255, 205, 0.12)";
                 ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
-                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; stroke();
+                ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
                 ctx.fillText("BUILD", mobileBuildBtn.x, mobileBuildBtn.y + 4);
 
@@ -846,7 +1015,6 @@
             }
         }
 
-        // FIXED: Replaced standard array mapping loops with static structure reference assignments
         function draw3DBox(b) {
             let half = b.size / 2; let h = 18;
             let cx = [b.x - half, b.x + half, b.x + half, b.x - half];
