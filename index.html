@@ -182,7 +182,6 @@
             animation: flashUse 0.3s ease-out;
         }
 
-        /* HUD Live Kill Stat Container Styles */
         #hud-stats {
             position: absolute;
             top: 20px;
@@ -218,7 +217,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>W/A/S/D or Mouse to navigate. Left Click to shoot ultra-fast bullets. Hold Right Click to zoom your tactical scope!</p>
+        <p>W/A/S/D or Move Mouse to steer. Left Click to shoot ultra-fast bullets. Hold Right Click to zoom your tactical scope!</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -579,7 +578,6 @@
             entities.push(pObj);
             updateInventoryUI(pObj);
 
-            // Update Counter elements on initial setup
             document.getElementById("kill-count").innerText = "0";
             document.getElementById("alive-count").innerText = "50";
 
@@ -643,6 +641,7 @@
                 camX = player.x - Math.cos(player.angle) * 90;
                 camY = player.y - Math.sin(player.angle) * 90;
                 camZ = 35; camAngle = player.angle; horizonPitchOffset = canvas.height * 0.15; 
+             CAM_Z = 35;
             }
 
             let dx = worldX - camX; let dy = worldY - camY; let dz = worldZ - camZ;
@@ -731,7 +730,7 @@
                         }
                     }
 
-                    // Firing Mechanics
+                    // Firing Mechanics (Bridged and completed)
                     if (mouseIsDown && ent.fireCooldown <= 0) {
                         let activeWeapon = ent.inventory[ent.selectedSlot];
                         if (activeWeapon.ammo > 0) {
@@ -743,84 +742,90 @@
                                     lasers.push({ x: ent.x, y: ent.y, angle: ent.angle + a, speed: 16, range: 450, owner: "player", color: ent.color });
                                 }
                                 activeWeapon.ammo--;
-                                ent.fireCooldown = 24;
+                                ent.fireCooldown = 25;
+                                if(activeWeapon.ammo <= 0) selectSlot(0);
                             }
-                            updateInventoryUI(ent);
                         }
                     }
+
+                    ent.x = Math.max(0, Math.min(mapSize, ent.x));
+                    ent.y = Math.max(0, Math.min(mapSize, ent.y));
+
                 } else {
-                    // Primitive Bot AI Architecture
+                    // Bot logic behavior
                     ent.changeDirTimer--;
                     if (ent.changeDirTimer <= 0) {
                         ent.angle = Math.random() * Math.PI * 2;
-                        ent.changeDirTimer = Math.floor(Math.random() * 120) + 60;
+                        ent.changeDirTimer = Math.floor(Math.random() * 100) + 50;
+                    }
+                    if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius * 0.8) {
+                        ent.angle = Math.atan2(storm.y - ent.y, storm.x - ent.x) + (Math.random() - 0.5) * 0.4;
                     }
                     ent.x += Math.cos(ent.angle) * ent.speed;
                     ent.y += Math.sin(ent.angle) * ent.speed;
 
-                    if (Math.random() < 0.01 && ent.fireCooldown <= 0) {
-                        lasers.push({ x: ent.x, y: ent.y, angle: ent.angle, speed: 12, range: 600, owner: ent.id, color: ent.color });
-                        ent.fireCooldown = 50;
+                    ent.x = Math.max(0, Math.min(mapSize, ent.x));
+                    ent.y = Math.max(0, Math.min(mapSize, ent.y));
+
+                    if (ent.fireCooldown <= 0 && getDistance(ent.x, ent.y, player.x, player.y) < 600) {
+                        ent.angle = Math.atan2(player.y - ent.y, player.x - ent.x);
+                        lasers.push({ x: ent.x, y: ent.y, angle: ent.angle, speed: 14, range: 600, owner: ent.id, color: ent.color });
+                        ent.fireCooldown = Math.floor(Math.random() * 30) + 40;
                     }
                 }
-
-                // Map Boundaries Restraints
-                ent.x = Math.max(50, Math.min(mapSize - 50, ent.x));
-                ent.y = Math.max(50, Math.min(mapSize - 50, ent.y));
             }
 
-            // Laser Processing logic
+            // Lasers Updates
             for (let i = lasers.length - 1; i >= 0; i--) {
                 let l = lasers[i];
                 l.x += Math.cos(l.angle) * l.speed;
                 l.y += Math.sin(l.angle) * l.speed;
                 l.range -= l.speed;
 
-                if (l.range <= 0) { lasers.splice(i, 1); continue; }
-
-                // Check Hit Collisions against Combat Entities
-                let hitSomething = false;
-                for (let j = 0; j < entities.length; j++) {
-                    let target = entities[j];
-                    if (target.id === l.owner) continue;
-
-                    if (getDistance(l.x, l.y, target.x, target.y) < target.radius + 5) {
-                        target.hp -= 20;
-                        createExplosion(l.x, l.y, 2, l.color);
-                        hitSomething = true;
-
-                        // Increment Kills if player secures the finishing blow
-                        if (target.hp <= 0 && l.owner === "player") {
-                            player.kills++;
-                            document.getElementById("kill-count").innerText = player.kills;
-                        }
-                        break;
-                    }
-                }
-
-                if (hitSomething) { lasers.splice(i, 1); continue; }
-
-                // Structure Damage checks
-                for (let s = structures.length - 1; s >= 0; s--) {
+                let hit = false;
+                for(let s=0; s<structures.length; s++) {
                     let struct = structures[s];
-                    if (getDistance(l.x, l.y, struct.x, struct.y) < struct.size / 2) {
-                        struct.hp -= 25;
-                        createExplosion(l.x, l.y, 2, l.color);
-                        hitSomething = true;
-                        if (struct.hp <= 0) structures.splice(s, 1);
-                        break;
+                    if (getDistance(l.x, l.y, struct.x, struct.y) < struct.size) {
+                        struct.hp -= 30;
+                        createExplosion(l.x, l.y, 4, "#aaaaaa");
+                        hit = true; break;
                     }
                 }
-                if (hitSomething) lasers.splice(i, 1);
+
+                if (!hit) {
+                    for (let e = 0; e < entities.length; e++) {
+                        let target = entities[e];
+                        if (target.id !== l.owner) {
+                            if (getDistance(l.x, l.y, target.x, target.y) < target.radius + 6) {
+                                target.hp -= 15;
+                                createExplosion(l.x, l.y, 4, "#ff3300");
+                                if (target.hp <= 0 && l.owner === "player") {
+                                    player.kills++;
+                                    document.getElementById("kill-count").innerText = player.kills;
+                                }
+                                hit = true; break;
+                            }
+                        }
+                    }
+                }
+
+                if (hit || l.range <= 0 || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) {
+                    lasers.splice(i, 1);
+                }
             }
 
-            // Particle Updates
+            // Clean broken structures
+            for (let i = structures.length - 1; i >= 0; i--) {
+                if (structures[i].hp <= 0) structures.splice(i, 1);
+            }
+
+            // Particles physics 
             for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx; p.y += p.vy; p.z += p.vz;
-                p.vz -= 0.1; // simulated gravity decay
-                p.alpha -= 0.02;
-                if (p.alpha <= 0 || p.z < 0) particles.splice(i, 1);
+                let pt = particles[i];
+                pt.x += pt.vx; pt.y += pt.vy; pt.z += pt.vz;
+                pt.vz -= 0.1;
+                pt.alpha -= 0.02;
+                if (pt.alpha <= 0 || pt.z < -10) particles.splice(i, 1);
             }
         }
 
@@ -828,127 +833,129 @@
             ctx.fillStyle = "#020205";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            if (gameState === "PLAYING") {
-                renderPoolIndex = 0;
-                activeRenderQueue.length = 0;
+            activeRenderQueue.length = 0;
+            renderPoolIndex = 0;
+            let ptObj = { x: 0, y: 0, scale: 0, depth: 0 };
 
-                let tProj = { x: 0, y: 0, scale: 0, depth: 0 };
+            let player = entities.find(e => e.isPlayer);
+            if (!player) return;
 
-                // Process Starfield Background Elements Into 3D Space
-                stars.forEach(st => {
-                    if (get3DProjection(st.x, st.y, st.z, tProj)) {
-                        activeRenderQueue.push(getPooledItem("star", tProj.depth, null, tProj.x, tProj.y, tProj.scale));
+            stars.forEach(star => {
+                let proj = get3DProjection(star.x, star.y, star.z, ptObj);
+                if (proj) activeRenderQueue.push(getPooledItem("star", proj.depth, star, proj.x, proj.y, proj.scale));
+            });
+
+            structures.forEach(struct => {
+                let proj = get3DProjection(struct.x, struct.y, 0, ptObj);
+                if (proj) activeRenderQueue.push(getPooledItem("structure", proj.depth, struct, proj.x, proj.y, proj.scale));
+            });
+
+            entities.forEach(ent => {
+                if (viewMode === "1P" && ent.isPlayer) return;
+                let proj = get3DProjection(ent.x, ent.y, 0, ptObj);
+                if (proj) activeRenderQueue.push(getPooledItem("entity", proj.depth, ent, proj.x, proj.y, proj.scale));
+            });
+
+            lasers.forEach(laser => {
+                let proj = get3DProjection(laser.x, laser.y, 4, ptObj);
+                if (proj) activeRenderQueue.push(getPooledItem("laser", proj.depth, laser, proj.x, proj.y, proj.scale));
+            });
+
+            particles.forEach(pt => {
+                let proj = get3DProjection(pt.x, pt.y, pt.z, ptObj);
+                if (proj) activeRenderQueue.push(getPooledItem("particle", proj.depth, pt, proj.x, proj.y, proj.scale));
+            });
+
+            // Painter's algorithm sort
+            activeRenderQueue.sort((a, b) => b.depth - a.depth);
+
+            activeRenderQueue.forEach(item => {
+                ctx.save();
+                if (item.type === "star") {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, Math.max(0.5, item.scale * 0.3), 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (item.type === "structure") {
+                    let size = item.raw.size * item.scale;
+                    ctx.fillStyle = item.raw.color;
+                    ctx.strokeStyle = item.raw.borderColor;
+                    ctx.lineWidth = Math.max(1, item.scale * 0.4);
+                    ctx.beginPath();
+                    ctx.rect(item.x - size / 2, item.y - size, size, size);
+                    ctx.fill(); ctx.stroke();
+                } else if (item.type === "entity") {
+                    let r = item.raw.radius * item.scale;
+                    ctx.strokeStyle = item.raw.color;
+                    ctx.lineWidth = Math.max(2, item.scale * 0.5);
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, r, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    let barW = r * 1.6;
+                    ctx.fillStyle = "rgba(255,0,0,0.4)";
+                    ctx.fillRect(item.x - barW / 2, item.y - r - 12, barW, 3);
+                    ctx.fillStyle = "#00ffcc";
+                    ctx.fillRect(item.x - barW / 2, item.y - r - 12, barW * (item.raw.hp / item.raw.maxHp), 3);
+                } else if (item.type === "laser") {
+                    ctx.strokeStyle = item.raw.color;
+                    ctx.lineWidth = Math.max(3, item.scale * 0.5);
+                    ctx.beginPath();
+                    ctx.moveTo(item.x, item.y);
+                    ctx.lineTo(item.x, item.y + (10 * item.scale));
+                    ctx.stroke();
+                } else if (item.type === "particle") {
+                    ctx.fillStyle = item.raw.color;
+                    ctx.globalAlpha = item.raw.alpha;
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, Math.max(0.5, item.raw.radius * item.scale * 0.2), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
+            });
+
+            // --- RED STORM IMPLEMENTATION ---
+            ctx.save();
+            ctx.strokeStyle = "#ff0033"; // Crimson Red Storm Line
+            ctx.lineWidth = 5;
+            ctx.shadowColor = "#ff0000";
+            ctx.shadowBlur = 15; // Cool glowing atmospheric effect
+            ctx.beginPath();
+            
+            let pointsCount = 72; 
+            let structuralFirst = true;
+            for (let i = 0; i <= pointsCount; i++) {
+                let stepAngle = (i / pointsCount) * Math.PI * 2;
+                let sx = storm.x + Math.cos(stepAngle) * storm.radius;
+                let sy = storm.y + Math.sin(stepAngle) * storm.radius;
+                
+                let proj = get3DProjection(sx, sy, 0, ptObj);
+                if (proj) {
+                    if (structuralFirst) {
+                        ctx.moveTo(proj.x, proj.y);
+                        structuralFirst = false;
+                    } else {
+                        ctx.lineTo(proj.x, proj.y);
                     }
-                });
-
-                // Process Structures
-                structures.forEach(str => {
-                    if (get3DProjection(str.x, str.y, 0, tProj)) {
-                        activeRenderQueue.push(getPooledItem("structure", tProj.depth, str, tProj.x, tProj.y, tProj.scale));
-                    }
-                });
-
-                // Process Entities
-                entities.forEach(ent => {
-                    if (get3DProjection(ent.x, ent.y, 2, tProj)) {
-                        activeRenderQueue.push(getPooledItem("entity", tProj.depth, ent, tProj.x, tProj.y, tProj.scale));
-                    }
-                });
-
-                // Process Projectiles
-                lasers.forEach(l => {
-                    if (get3DProjection(l.x, l.y, 3, tProj)) {
-                        activeRenderQueue.push(getPooledItem("laser", tProj.depth, l, tProj.x, tProj.y, tProj.scale));
-                    }
-                });
-
-                // Process Visual Particles
-                particles.forEach(p => {
-                    if (get3DProjection(p.x, p.y, p.z, tProj)) {
-                        activeRenderQueue.push(getPooledItem("particle", tProj.depth, p, tProj.x, tProj.y, tProj.scale));
-                    }
-                });
-
-                // Sort queue by painter depth algorithm (descending)
-                activeRenderQueue.sort((a, b) => b.depth - a.depth);
-
-                // Draw Elements inside the 3D Projection Stack
-                activeRenderQueue.forEach(item => {
-                    if (item.type === "star") {
-                        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-                        ctx.fillRect(item.x, item.y, Math.max(1, item.scale * 0.8), Math.max(1, item.scale * 0.8));
-                    } 
-                    else if (item.type === "structure") {
-                        let s = item.raw;
-                        let size = s.size * item.scale;
-                        ctx.fillStyle = s.color;
-                        ctx.strokeStyle = s.borderColor;
-                        ctx.lineWidth = Math.max(1, item.scale * 0.5);
-                        ctx.fillRect(item.x - size/2, item.y - size, size, size);
-                        ctx.strokeRect(item.x - size/2, item.y - size, size, size);
-                    } 
-                    else if (item.type === "entity") {
-                        let ent = item.raw;
-                        let r = ent.radius * item.scale;
-                        
-                        // Drawn as a sleek 3D triangle targeting forward look vector
-                        ctx.save();
-                        ctx.translate(item.x, item.y);
-                        
-                        ctx.fillStyle = ent.color;
-                        ctx.beginPath();
-                        ctx.moveTo(Math.cos(0) * r, Math.sin(0) * r);
-                        ctx.lineTo(Math.cos(Math.PI * 0.8) * r, Math.sin(Math.PI * 0.8) * r);
-                        ctx.lineTo(Math.cos(Math.PI * 1.2) * r, Math.sin(Math.PI * 1.2) * r);
-                        ctx.closePath();
-                        ctx.fill();
-
-                        // Render Component Healthbar above ship systems
-                        if (ent.hp < ent.maxHp) {
-                            let hw = r * 1.5;
-                            ctx.fillStyle = "rgba(255,0,0,0.5)";
-                            ctx.fillRect(-hw/2, -r - 8, hw, 4);
-                            ctx.fillStyle = "#00ffcc";
-                            ctx.fillRect(-hw/2, -r - 8, hw * (ent.hp / ent.maxHp), 4);
-                        }
-                        ctx.restore();
-                    } 
-                    else if (item.type === "laser") {
-                        let l = item.raw;
-                        ctx.strokeStyle = l.color;
-                        ctx.lineWidth = Math.max(2, item.scale * 0.4);
-                        ctx.beginPath();
-                        ctx.moveTo(item.x, item.y);
-                        ctx.lineTo(item.x - Math.cos(l.angle) * (15 * item.scale), item.y - Math.sin(l.angle) * (15 * item.scale));
-                        ctx.stroke();
-                    } 
-                    else if (item.type === "particle") {
-                        let p = item.raw;
-                        ctx.fillStyle = p.color;
-                        ctx.globalAlpha = p.alpha;
-                        ctx.beginPath();
-                        ctx.arc(item.x, item.y, Math.max(1, p.radius * item.scale * 0.2), 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.globalAlpha = 1.0;
-                    }
-                });
-
-                // Display crosshair HUD elements
-                ctx.strokeStyle = "rgba(0, 255, 204, 0.3)";
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(canvas.width / 2, canvas.height / 2, 20, 0, Math.PI * 2);
-                ctx.moveTo(canvas.width / 2 - 30, canvas.height / 2); ctx.lineTo(canvas.width / 2 - 10, canvas.height / 2);
-                ctx.moveTo(canvas.width / 2 + 10, canvas.height / 2); ctx.lineTo(canvas.width / 2 + 30, canvas.height / 2);
-                ctx.stroke();
+                }
             }
+            ctx.stroke();
+            ctx.restore();
 
-            update();
-            requestAnimationFrame(draw);
+            // Simple crosshair HUD
+            ctx.strokeStyle = "rgba(0, 255, 204, 0.3)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, canvas.height / 2, 8, 0, Math.PI * 2);
+            ctx.stroke();
         }
 
-        // Initialize execution sequences
-        requestAnimationFrame(draw);
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop();
     </script>
 </body>
 </html>
