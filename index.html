@@ -182,6 +182,7 @@
             animation: flashUse 0.3s ease-out;
         }
 
+        /* HUD Live Kill Stat Container Styles */
         #hud-stats {
             position: absolute;
             top: 20px;
@@ -341,6 +342,7 @@
 
         let mouseX = 0, mouseY = 0;
         
+        // Mobile Layout placeholders
         const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
         const mobileBuildBtn = { x: 0, y: 0, radius: 35 };
         const mobileViewBtn = { x: 0, y: 0, radius: 35 };
@@ -349,12 +351,13 @@
         let joystickTouchId = null;
         let shootTouchId = null;
 
-        let activeRenderQueue = [];
+        const activeRenderQueue = [];
         const renderPool = [];
         let renderPoolIndex = 0;
 
+        // Populate field backgrounds
         for(let i=0; i<300; i++) {
-            stars.push({ x: Math.random() * mapSize, y: Math.random() * mapSize, z: Math.random() * -15 - 5 });
+            stars.push({ x: Math.random() * mapSize, y: Math.random() * mapSize, z: Math.random() * 10 });
         }
 
         function getPooledItem(type, depth, raw, projX, projY, projScale) {
@@ -576,6 +579,7 @@
             entities.push(pObj);
             updateInventoryUI(pObj);
 
+            // Update Counter elements on initial setup
             document.getElementById("kill-count").innerText = "0";
             document.getElementById("alive-count").innerText = "50";
 
@@ -654,7 +658,6 @@
             return outTarget;
         }
 
-        // --- SIMULATION LOOP (RESTORED & EXPANDED) ---
         function update() {
             if (gameState !== "PLAYING") return;
 
@@ -666,14 +669,6 @@
             if (player.builds < player.maxBuilds) {
                 player.buildRegenTimer++;
                 if (player.buildRegenTimer >= 120) { player.builds++; player.buildRegenTimer = 0; }
-            }
-
-            // Loop and process all structural defense obstacles
-            for (let i = structures.length - 1; i >= 0; i--) {
-                if (structures[i].hp <= 0) {
-                    createExplosion(structures[i].x, structures[i].y, 5, "#444455");
-                    structures.splice(i, 1);
-                }
             }
 
             // Engine Simulation Loop
@@ -711,6 +706,7 @@
                         ent.speed = ent.baseSpeed * 1.8; ent.speedTimer--;
                     } else { ent.speed = ent.baseSpeed; }
 
+                    // Movement Inputs Handling
                     if (config.controlScheme === "mouse") {
                         let deltaLook = (mouseX - canvas.width / 2) * 0.0001;
                         ent.angle += deltaLook;
@@ -735,6 +731,7 @@
                         }
                     }
 
+                    // Firing Mechanics
                     if (mouseIsDown && ent.fireCooldown <= 0) {
                         let activeWeapon = ent.inventory[ent.selectedSlot];
                         if (activeWeapon.ammo > 0) {
@@ -746,269 +743,212 @@
                                     lasers.push({ x: ent.x, y: ent.y, angle: ent.angle + a, speed: 16, range: 450, owner: "player", color: ent.color });
                                 }
                                 activeWeapon.ammo--;
-                                ent.fireCooldown = 25;
+                                ent.fireCooldown = 24;
                             }
                             updateInventoryUI(ent);
                         }
                     }
                 } else {
-                    // Bot logic loop
-                    if (ent.buildCooldown > 0) ent.buildCooldown--;
+                    // Primitive Bot AI Architecture
                     ent.changeDirTimer--;
-                    
                     if (ent.changeDirTimer <= 0) {
                         ent.angle = Math.random() * Math.PI * 2;
-                        ent.changeDirTimer = Math.floor(Math.random() * 100) + 50;
+                        ent.changeDirTimer = Math.floor(Math.random() * 120) + 60;
                     }
-
                     ent.x += Math.cos(ent.angle) * ent.speed;
                     ent.y += Math.sin(ent.angle) * ent.speed;
 
-                    // Keep bots moving inside the perimeter bounds
-                    if (getDistance(ent.x, ent.y, storm.x, storm.y) > storm.radius - 100) {
-                        ent.angle = Math.atan2(storm.y - ent.y, storm.x - ent.x) + (Math.random() - 0.5);
-                    }
-
-                    // Dynamic tactical engagement tracking
-                    let targetDist = getDistance(ent.x, ent.y, player.x, player.y);
-                    if (targetDist < 600 && ent.fireCooldown <= 0) {
-                        ent.angle = Math.atan2(player.y - ent.y, player.x - ent.x);
-                        lasers.push({ x: ent.x, y: ent.y, angle: ent.angle, speed: 14, range: 650, owner: ent.id, color: ent.color });
-                        ent.fireCooldown = Math.floor(Math.random() * 30) + 40;
-
-                        if (targetDist < 200 && ent.buildCooldown <= 0 && Math.random() < 0.4) {
-                            deployStructure(ent.id);
-                        }
+                    if (Math.random() < 0.01 && ent.fireCooldown <= 0) {
+                        lasers.push({ x: ent.x, y: ent.y, angle: ent.angle, speed: 12, range: 600, owner: ent.id, color: ent.color });
+                        ent.fireCooldown = 50;
                     }
                 }
 
-                // Prevent moving out of macro bounding box boundary maps
+                // Map Boundaries Restraints
                 ent.x = Math.max(50, Math.min(mapSize - 50, ent.x));
                 ent.y = Math.max(50, Math.min(mapSize - 50, ent.y));
             }
 
-            // Bullet simulation mechanics
+            // Laser Processing logic
             for (let i = lasers.length - 1; i >= 0; i--) {
                 let l = lasers[i];
                 l.x += Math.cos(l.angle) * l.speed;
                 l.y += Math.sin(l.angle) * l.speed;
                 l.range -= l.speed;
 
-                if (l.range <= 0) {
-                    lasers.splice(i, 1);
-                    continue;
-                }
+                if (l.range <= 0) { lasers.splice(i, 1); continue; }
 
-                let laserHit = false;
+                // Check Hit Collisions against Combat Entities
+                let hitSomething = false;
+                for (let j = 0; j < entities.length; j++) {
+                    let target = entities[j];
+                    if (target.id === l.owner) continue;
 
-                // Check structural defense blocking intersections
-                for (let s of structures) {
-                    if (getDistance(l.x, l.y, s.x, s.y) < s.size / 2) {
-                        s.hp -= 25;
+                    if (getDistance(l.x, l.y, target.x, target.y) < target.radius + 5) {
+                        target.hp -= 20;
                         createExplosion(l.x, l.y, 2, l.color);
-                        laserHit = true;
-                        break;
-                    }
-                }
-                if (laserHit) { lasers.splice(i, 1); continue; }
+                        hitSomething = true;
 
-                // Check entity target matrix collisions
-                for (let ent of entities) {
-                    if (l.owner === ent.id) continue;
-
-                    if (getDistance(l.x, l.y, ent.x, ent.y) < ent.radius) {
-                        ent.hp -= 20;
-                        createExplosion(l.x, l.y, 3, l.color);
-                        laserHit = true;
-
-                        if (ent.hp <= 0 && l.owner === "player") {
+                        // Increment Kills if player secures the finishing blow
+                        if (target.hp <= 0 && l.owner === "player") {
                             player.kills++;
                             document.getElementById("kill-count").innerText = player.kills;
                         }
                         break;
                     }
                 }
-                if (laserHit) lasers.splice(i, 1);
+
+                if (hitSomething) { lasers.splice(i, 1); continue; }
+
+                // Structure Damage checks
+                for (let s = structures.length - 1; s >= 0; s--) {
+                    let struct = structures[s];
+                    if (getDistance(l.x, l.y, struct.x, struct.y) < struct.size / 2) {
+                        struct.hp -= 25;
+                        createExplosion(l.x, l.y, 2, l.color);
+                        hitSomething = true;
+                        if (struct.hp <= 0) structures.splice(s, 1);
+                        break;
+                    }
+                }
+                if (hitSomething) lasers.splice(i, 1);
             }
 
-            // FX particle update loop
+            // Particle Updates
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.z += p.vz;
+                p.x += p.vx; p.y += p.vy; p.z += p.vz;
+                p.vz -= 0.1; // simulated gravity decay
                 p.alpha -= 0.02;
-                if (p.alpha <= 0) particles.splice(i, 1);
+                if (p.alpha <= 0 || p.z < 0) particles.splice(i, 1);
             }
         }
 
-        // --- RENDER ENGINE PIPELINE (RESTORED & DEPTH-SORTED) ---
-        function render() {
+        function draw() {
             ctx.fillStyle = "#020205";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            let player = entities.find(e => e.isPlayer);
-            if (!player) return;
+            if (gameState === "PLAYING") {
+                renderPoolIndex = 0;
+                activeRenderQueue.length = 0;
 
-            renderPoolIndex = 0;
-            activeRenderQueue = [];
+                let tProj = { x: 0, y: 0, scale: 0, depth: 0 };
 
-            let target = { x: 0, y: 0, scale: 0, depth: 0 };
+                // Process Starfield Background Elements Into 3D Space
+                stars.forEach(st => {
+                    if (get3DProjection(st.x, st.y, st.z, tProj)) {
+                        activeRenderQueue.push(getPooledItem("star", tProj.depth, null, tProj.x, tProj.y, tProj.scale));
+                    }
+                });
 
-            // 1. Process Starfield Array Background Depth
-            for (let s of stars) {
-                if (get3DProjection(s.x, s.y, s.z, target)) {
-                    activeRenderQueue.push(getPooledItem("star", target.depth, s, target.x, target.y, target.scale));
-                }
-            }
+                // Process Structures
+                structures.forEach(str => {
+                    if (get3DProjection(str.x, str.y, 0, tProj)) {
+                        activeRenderQueue.push(getPooledItem("structure", tProj.depth, str, tProj.x, tProj.y, tProj.scale));
+                    }
+                });
 
-            // 2. Process Build Structures Obstacles
-            for (let s of structures) {
-                if (get3DProjection(s.x, s.y, 0, target)) {
-                    activeRenderQueue.push(getPooledItem("structure", target.depth, s, target.x, target.y, target.scale));
-                }
-            }
+                // Process Entities
+                entities.forEach(ent => {
+                    if (get3DProjection(ent.x, ent.y, 2, tProj)) {
+                        activeRenderQueue.push(getPooledItem("entity", tProj.depth, ent, tProj.x, tProj.y, tProj.scale));
+                    }
+                });
 
-            // 3. Process Entities
-            for (let ent of entities) {
-                if (ent.isPlayer && viewMode === "1P") continue; // Don't render avatar hull mesh in first person
-                if (get3DProjection(ent.x, ent.y, 0, target)) {
-                    activeRenderQueue.push(getPooledItem(ent.isPlayer ? "player" : "bot", target.depth, ent, target.x, target.y, target.scale));
-                }
-            }
+                // Process Projectiles
+                lasers.forEach(l => {
+                    if (get3DProjection(l.x, l.y, 3, tProj)) {
+                        activeRenderQueue.push(getPooledItem("laser", tProj.depth, l, tProj.x, tProj.y, tProj.scale));
+                    }
+                });
 
-            // 4. Process Projectiles
-            for (let l of lasers) {
-                if (get3DProjection(l.x, l.y, 2, target)) {
-                    activeRenderQueue.push(getPooledItem("laser", target.depth, l, target.x, target.y, target.scale));
-                }
-            }
+                // Process Visual Particles
+                particles.forEach(p => {
+                    if (get3DProjection(p.x, p.y, p.z, tProj)) {
+                        activeRenderQueue.push(getPooledItem("particle", tProj.depth, p, tProj.x, tProj.y, tProj.scale));
+                    }
+                });
 
-            // 5. Process Particle Systems
-            for (let p of particles) {
-                if (get3DProjection(p.x, p.y, p.z, target)) {
-                    activeRenderQueue.push(getPooledItem("particle", target.depth, p, target.x, target.y, target.scale));
-                }
-            }
+                // Sort queue by painter depth algorithm (descending)
+                activeRenderQueue.sort((a, b) => b.depth - a.depth);
 
-            // Painter's Algorithm: Sort items descending by spatial depth distance
-            activeRenderQueue.sort((a, b) => b.depth - a.depth);
+                // Draw Elements inside the 3D Projection Stack
+                activeRenderQueue.forEach(item => {
+                    if (item.type === "star") {
+                        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+                        ctx.fillRect(item.x, item.y, Math.max(1, item.scale * 0.8), Math.max(1, item.scale * 0.8));
+                    } 
+                    else if (item.type === "structure") {
+                        let s = item.raw;
+                        let size = s.size * item.scale;
+                        ctx.fillStyle = s.color;
+                        ctx.strokeStyle = s.borderColor;
+                        ctx.lineWidth = Math.max(1, item.scale * 0.5);
+                        ctx.fillRect(item.x - size/2, item.y - size, size, size);
+                        ctx.strokeRect(item.x - size/2, item.y - size, size, size);
+                    } 
+                    else if (item.type === "entity") {
+                        let ent = item.raw;
+                        let r = ent.radius * item.scale;
+                        
+                        // Drawn as a sleek 3D triangle targeting forward look vector
+                        ctx.save();
+                        ctx.translate(item.x, item.y);
+                        
+                        ctx.fillStyle = ent.color;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(0) * r, Math.sin(0) * r);
+                        ctx.lineTo(Math.cos(Math.PI * 0.8) * r, Math.sin(Math.PI * 0.8) * r);
+                        ctx.lineTo(Math.cos(Math.PI * 1.2) * r, Math.sin(Math.PI * 1.2) * r);
+                        ctx.closePath();
+                        ctx.fill();
 
-            // Execute Sorted Drawer Dispatch Matrix Loops
-            for (let item of activeRenderQueue) {
-                let sc = item.scale;
-                if (sc <= 0.05) continue;
+                        // Render Component Healthbar above ship systems
+                        if (ent.hp < ent.maxHp) {
+                            let hw = r * 1.5;
+                            ctx.fillStyle = "rgba(255,0,0,0.5)";
+                            ctx.fillRect(-hw/2, -r - 8, hw, 4);
+                            ctx.fillStyle = "#00ffcc";
+                            ctx.fillRect(-hw/2, -r - 8, hw * (ent.hp / ent.maxHp), 4);
+                        }
+                        ctx.restore();
+                    } 
+                    else if (item.type === "laser") {
+                        let l = item.raw;
+                        ctx.strokeStyle = l.color;
+                        ctx.lineWidth = Math.max(2, item.scale * 0.4);
+                        ctx.beginPath();
+                        ctx.moveTo(item.x, item.y);
+                        ctx.lineTo(item.x - Math.cos(l.angle) * (15 * item.scale), item.y - Math.sin(l.angle) * (15 * item.scale));
+                        ctx.stroke();
+                    } 
+                    else if (item.type === "particle") {
+                        let p = item.raw;
+                        ctx.fillStyle = p.color;
+                        ctx.globalAlpha = p.alpha;
+                        ctx.beginPath();
+                        ctx.arc(item.x, item.y, Math.max(1, p.radius * item.scale * 0.2), 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                    }
+                });
 
-                ctx.save();
-                ctx.translate(item.x, item.y);
-
-                if (item.type === "star") {
-                    ctx.fillStyle = "rgba(255,255,255,0.75)";
-                    ctx.fillRect(-sc * 2, -sc * 2, sc * 4, sc * 4);
-                } 
-                else if (item.type === "player" || item.type === "bot") {
-                    let raw = item.raw;
-                    ctx.rotate(raw.angle - player.angle - Math.PI/2);
-                    
-                    // Render Vector Triangle Space Ship Hull Layout
-                    ctx.strokeStyle = raw.color;
-                    ctx.lineWidth = Math.max(1, sc * 2);
-                    ctx.fillStyle = "rgba(10,15,30,0.8)";
-                    ctx.beginPath();
-                    ctx.moveTo(0, -raw.radius * sc);
-                    ctx.lineTo(-raw.radius * sc * 0.8, raw.radius * sc * 0.8);
-                    ctx.lineTo(raw.radius * sc * 0.8, raw.radius * sc * 0.8);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-
-                    // Render Overhead HP Mini-Bar HUD
-                    ctx.rotate(-(raw.angle - player.angle - Math.PI/2));
-                    let barW = raw.radius * sc * 2;
-                    let barH = 4 * Math.max(0.5, sc * 0.1);
-                    ctx.fillStyle = "rgba(255,0,0,0.5)";
-                    ctx.fillRect(-barW/2, -raw.radius * sc - 15, barW, barH);
-                    ctx.fillStyle = "#00ffcc";
-                    ctx.fillRect(-barW/2, -raw.radius * sc - 15, barW * (raw.hp / raw.maxHp), barH);
-                } 
-                else if (item.type === "structure") {
-                    let raw = item.raw;
-                    let sz = raw.size * sc;
-                    ctx.fillStyle = raw.color;
-                    ctx.strokeStyle = raw.borderColor;
-                    ctx.lineWidth = Math.max(1.5, sc * 2);
-                    ctx.fillRect(-sz/2, -sz, sz, sz);
-                    ctx.strokeRect(-sz/2, -sz, sz, sz);
-                } 
-                else if (item.type === "laser") {
-                    let raw = item.raw;
-                    ctx.rotate(raw.angle - player.angle - Math.PI/2);
-                    ctx.strokeStyle = raw.color;
-                    ctx.lineWidth = Math.max(2, sc * 3);
-                    ctx.beginPath();
-                    ctx.moveTo(0, -15 * sc);
-                    ctx.lineTo(0, 15 * sc);
-                    ctx.stroke();
-                } 
-                else if (item.type === "particle") {
-                    let raw = item.raw;
-                    ctx.fillStyle = raw.color;
-                    ctx.globalAlpha = raw.alpha;
-                    let pr = Math.max(1, raw.radius * sc * 0.5);
-                    ctx.beginPath();
-                    ctx.arc(0, 0, pr, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.restore();
-            }
-
-            // Draw Storm Boundary Horizon Radar Warning Map Flash Indicators
-            let dPlayerStorm = getDistance(player.x, player.y, storm.x, storm.y);
-            if (dPlayerStorm > storm.radius - 600) {
-                ctx.save();
-                ctx.strokeStyle = "rgba(255, 0, 85, 0.35)";
-                ctx.lineWidth = 4;
-                ctx.setLineDash([20, 15]);
+                // Display crosshair HUD elements
+                ctx.strokeStyle = "rgba(0, 255, 204, 0.3)";
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.arc(canvas.width / 2, canvas.height / 2 + (viewMode === "3P" ? canvas.height * 0.15 : 0), 200, 0, Math.PI * 2);
+                ctx.arc(canvas.width / 2, canvas.height / 2, 20, 0, Math.PI * 2);
+                ctx.moveTo(canvas.width / 2 - 30, canvas.height / 2); ctx.lineTo(canvas.width / 2 - 10, canvas.height / 2);
+                ctx.moveTo(canvas.width / 2 + 10, canvas.height / 2); ctx.lineTo(canvas.width / 2 + 30, canvas.height / 2);
                 ctx.stroke();
-                ctx.restore();
             }
 
-            // Draw Fixed 2D Target Crosshair Reticle Layout Overlay
-            ctx.strokeStyle = "rgba(0, 255, 204, 0.4)";
-            ctx.lineWidth = 2;
-            let centerX = canvas.width / 2;
-            let centerY = canvas.height / 2 + (viewMode === "3P" ? canvas.height * 0.15 : 0);
-            ctx.beginPath();
-            ctx.moveTo(centerX - 15, centerY); ctx.lineTo(centerX - 5, centerY);
-            ctx.moveTo(centerX + 5, centerY);  ctx.lineTo(centerX + 15, centerY);
-            ctx.moveTo(centerX, centerY - 15); ctx.lineTo(centerX, centerY - 5);
-            ctx.moveTo(centerX, centerY + 5);  ctx.lineTo(centerX, centerY + 15);
-            ctx.stroke();
-
-            // Render Dynamic Cockpit Text readouts HUD Layer over projection canvas
-            ctx.fillStyle = "#fff";
-            ctx.font = "14px 'Courier New'";
-            ctx.fillText(`HULL HP: ${Math.floor(player.hp)}%`, 30, canvas.height - 130);
-            ctx.fillText(`BARRIER STOCK: ${player.builds}/${player.maxBuilds}`, 30, canvas.height - 110);
-            ctx.fillText(`POSITION: ${Math.floor(player.x)}X , ${Math.floor(player.y)}Y`, 30, canvas.height - 90);
-
-            let curWeapon = player.inventory[player.selectedSlot];
-            ctx.fillStyle = "#00ffcc";
-            ctx.fillText(`WEAPON: ${curWeapon.name} [AMMO: ${curWeapon.ammo === Infinity ? "UNLIMITED" : curWeapon.ammo}]`, 30, canvas.height - 150);
-        }
-
-        // Master Frame Animation Tick Controller
-        function loop() {
             update();
-            render();
-            requestAnimationFrame(loop);
+            requestAnimationFrame(draw);
         }
 
-        // Bootstrap application engine launch loop
-        changeState("START");
-        requestAnimationFrame(loop);
+        // Initialize execution sequences
+        requestAnimationFrame(draw);
     </script>
 </body>
 </html>
