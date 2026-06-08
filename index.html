@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Space Battle Royale - True 3D Perspective</title>
+    <title>Space Battle Royale - True 3D Terrain Edition</title>
     <style>
         body, html {
             background-color: #020205;
@@ -194,7 +194,7 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>Left Click to shoot ultra-fast bullets. Hold Right Click to zoom in with your targeting scope!</p>
+        <p>Left Click to shoot ultra-fast bullets. Hold Right Click to zoom in with your targeting scope! Use rolling hills and valleys as physical cover.</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
     </div>
@@ -345,6 +345,16 @@
         const renderPool = [];
         let renderPoolIndex = 0;
 
+        // Procedural 3D Terrain Function (Layered Topographical Waves)
+        function getTerrainHeight(x, y) {
+            if (x < 0 || x > mapSize || y < 0 || y > mapSize) return 0;
+            // Layered sine and cosine math mimicking rolling valleys and sudden mountain ridges
+            let h = Math.sin(x * 0.002) * Math.cos(y * 0.002) * 110; 
+            h += Math.cos(x * 0.0051) * Math.sin(y * 0.0049) * 40;   
+            h += Math.sin(x * 0.015) * Math.cos(y * 0.015) * 10;     
+            return h;
+        }
+
         function getPooledItem(type, depth, raw, projX, projY, projScale) {
             let item;
             if (renderPoolIndex < renderPool.length) {
@@ -368,7 +378,6 @@
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             
-            // Clean dynamic anchoring for mobile thumb clusters
             mobileShootBtn.x = canvas.width - 85;
             mobileShootBtn.y = canvas.height - 85;
             mobileBuildBtn.x = canvas.width - 195;
@@ -398,7 +407,6 @@
             if(e.button === 2) rightMouseIsDown = false; 
         });
 
-        // Fixed Touch Isolation Interface
         window.addEventListener("touchstart", (e) => {
             if (!config.mobileOverlay || gameState !== "PLAYING") return;
             
@@ -541,22 +549,23 @@
         }
 
         function executeUtilityItem(player, itemName) {
+            let pz = getTerrainHeight(player.x, player.y);
             if (itemName === "SHIELD") {
                 player.hp = Math.min(player.maxHp, player.hp + 40);
-                createExplosion(player.x, player.y, 4, "#00ffcc");
+                createExplosion(player.x, player.y, pz + 2, "#00ffcc");
             } 
             else if (itemName === "BOOST") {
                 player.speedTimer = 180; 
-                createExplosion(player.x, player.y, 1, "#ffff00");
+                createExplosion(player.x, player.y, pz + 2, "#ffff00");
             } 
             else if (itemName === "EMP") {
-                createExplosion(player.x, player.y, 0, "#ff00ff");
+                createExplosion(player.x, player.y, pz + 2, "#ff00ff");
                 entities.forEach(other => {
                     if (!other.isPlayer) {
                         let dist = getDistance(player.x, player.y, other.x, other.y);
                         if (dist < 400) {
                             other.hp -= 35; 
-                            createExplosion(other.x, other.y, 2, "#ff00ff");
+                            createExplosion(other.x, other.y, getTerrainHeight(other.x, other.y) + 2, "#ff00ff");
                         }
                     }
                 });
@@ -679,23 +688,25 @@
             let creator = entities.find(e => e.id === creatorId);
             if (!creator) return;
 
+            let cz = getTerrainHeight(creator.x, creator.y);
             if (creator.isPlayer) {
                 if (creator.builds > 0) {
                     structures.push({ x: creator.x, y: creator.y, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 200, 0.15)", borderColor: config.playerSkin });
                     creator.builds--;
-                    createExplosion(creator.x, creator.y, 0, config.playerSkin);
+                    createExplosion(creator.x, creator.y, cz, config.playerSkin);
                 }
             } else {
                 structures.push({ x: creator.x, y: creator.y, size: 28, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.15)", borderColor: creator.color });
                 creator.buildCooldown = 300; 
-                createExplosion(creator.x, creator.y, 0, creator.color);
+                createExplosion(creator.x, creator.y, cz, creator.color);
             }
         }
 
         function createExplosion(x, y, z, color) {
+            let baseZ = (z !== undefined) ? z : getTerrainHeight(x, y);
             for (let i = 0; i < 12; i++) {
                 particles.push({
-                    x: x, y: y, z: z || 2,
+                    x: x, y: y, z: baseZ + 1,
                     vx: (Math.random() - 0.5) * 5,
                     vy: (Math.random() - 0.5) * 5,
                     vz: Math.random() * 4 + 1, 
@@ -705,7 +716,6 @@
         }
 
         function getDistance(x1, y1, x2, y2) { return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2); }
-        function checkStructureCollision(pX, pY, struct) { return (pX > struct.x - struct.size/2 && pX < struct.x + struct.size/2 && pY > struct.y - struct.size/2 && pY < struct.y + struct.size/2); }
 
         function get3DProjection(worldX, worldY, worldZ, outTarget) {
             let player = entities.find(e => e.isPlayer);
@@ -714,12 +724,15 @@
             let camX, camY, camZ, camAngle;
             let horizonPitchOffset = 0; 
 
+            // Track camera offset aligned directly onto procedural ground elevation
+            let playerZ = getTerrainHeight(player.x, player.y);
+
             if (viewMode === "1P") {
-                camX = player.x; camY = player.y; camZ = 7; camAngle = player.angle; horizonPitchOffset = 0;
+                camX = player.x; camY = player.y; camZ = playerZ + 7; camAngle = player.angle; horizonPitchOffset = 0;
             } else { 
                 camX = player.x - Math.cos(player.angle) * 75;
                 camY = player.y - Math.sin(player.angle) * 75;
-                camZ = 32; camAngle = player.angle; horizonPitchOffset = canvas.height * 0.12; 
+                camZ = playerZ + 32; camAngle = player.angle; horizonPitchOffset = canvas.height * 0.12; 
             }
 
             let dx = worldX - camX; let dy = worldY - camY; let dz = worldZ - camZ;
@@ -735,7 +748,6 @@
             return outTarget;
         }
 
-        // Clock updating routine fixed at 60Hz step-rate
         function update() {
             if (gameState !== "PLAYING") return;
 
@@ -757,13 +769,15 @@
                         ent.speed = ent.baseSpeed * 2.5; ent.speedTimer--;
                     } else { ent.speed = ent.baseSpeed; }
 
+                    let moveDx = 0, moveDy = 0;
+
                     if (config.mobileOverlay && joystick.active) {
                         let jDx = joystick.curX - joystick.startX;
                         let jDy = joystick.curY - joystick.startY;
                         let jDist = Math.sqrt(jDx*jDx + jDy*jDy);
                         if (jDist > 5) {
                             ent.angle = Math.atan2(jDy, jDx);
-                            ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed;
+                            moveDx = Math.cos(ent.angle) * ent.speed; moveDy = Math.sin(ent.angle) * ent.speed;
                         }
                     } else {
                         if (config.controlScheme === "mouse-follow") {
@@ -773,23 +787,35 @@
                             if (Math.abs(deltaX) > 12) ent.angle += (deltaX / screenCenterX) * 0.05;
                             if (deltaY < -40) {
                                 let forwardForce = Math.min(1, Math.abs(deltaY) / screenCenterY);
-                                ent.x += Math.cos(ent.angle) * ent.speed * forwardForce; ent.y += Math.sin(ent.angle) * ent.speed * forwardForce;
+                                moveDx = Math.cos(ent.angle) * ent.speed * forwardForce; moveDy = Math.sin(ent.angle) * ent.speed * forwardForce;
                             } else if (deltaY > 40) {
                                 let reverseForce = Math.min(0.5, (deltaY / screenCenterY) * 0.5);
-                                ent.x -= Math.cos(ent.angle) * ent.speed * reverseForce; ent.y -= Math.sin(ent.angle) * ent.speed * reverseForce;
+                                moveDx = -Math.cos(ent.angle) * ent.speed * reverseForce; moveDy = -Math.sin(ent.angle) * ent.speed * reverseForce;
                             }
                         } 
                         else if (config.controlScheme === "mouse") {
                             let mouseOffsetX = mouseX - canvas.width / 2;
                             ent.angle += (mouseOffsetX / (canvas.width / 2)) * 0.045;
-                            if (keysPressed[config.keybinds.UP]) { ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed; }
-                            if (keysPressed[config.keybinds.DOWN]) { ent.x -= Math.cos(ent.angle) * ent.speed; ent.y -= Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.UP]) { moveDx = Math.cos(ent.angle) * ent.speed; moveDy = Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.DOWN]) { moveDx = -Math.cos(ent.angle) * ent.speed; moveDy = -Math.sin(ent.angle) * ent.speed; }
                         } else {
                             if (keysPressed[config.keybinds.LEFT])  ent.angle -= 0.045;
                             if (keysPressed[config.keybinds.RIGHT]) ent.angle += 0.045;
-                            if (keysPressed[config.keybinds.UP]) { ent.x += Math.cos(ent.angle) * ent.speed; ent.y += Math.sin(ent.angle) * ent.speed; }
-                            if (keysPressed[config.keybinds.DOWN]) { ent.x -= Math.cos(ent.angle) * ent.speed; ent.y -= Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.UP]) { moveDx = Math.cos(ent.angle) * ent.speed; moveDy = Math.sin(ent.angle) * ent.speed; }
+                            if (keysPressed[config.keybinds.DOWN]) { moveDx = -Math.cos(ent.angle) * ent.speed; moveDy = -Math.sin(ent.angle) * ent.speed; }
                         }
+                    }
+
+                    // Topography Hill Velocity Drag Mechanics (Uphill slows down, Downhill speeds up)
+                    if (moveDx !== 0 || moveDy !== 0) {
+                        let hNow = getTerrainHeight(ent.x, ent.y);
+                        let hNext = getTerrainHeight(ent.x + moveDx, ent.y + moveDy);
+                        let slope = hNext - hNow;
+                        let slopeModifier = 1.0;
+                        if (slope > 0) slopeModifier = Math.max(0.42, 1.0 - slope * 0.08); 
+                        else if (slope < 0) slopeModifier = Math.min(1.45, 1.0 - slope * 0.04);
+                        ent.x += moveDx * slopeModifier;
+                        ent.y += moveDy * slopeModifier;
                     }
 
                     if (ent.x < 20) ent.x = 20; if (ent.x > mapSize - 20) ent.x = mapSize - 20;
@@ -798,12 +824,33 @@
                     if (mouseIsDown && ent.fireCooldown <= 0) {
                         let currentWeapon = ent.inventory[ent.selectedSlot];
                         let aimAngle = ent.angle;
+                        let pz = getTerrainHeight(ent.x, ent.y) + 3.5;
+                        let bulletVz = 0;
+
+                        // Smart vertical aim targeting: Automatically matches height projection of enemies inside crosshairs
+                        let bestTarget = null; let narrowAngle = 0.35; let scanDistance = 450;
+                        entities.forEach(other => {
+                            if (!other.isPlayer) {
+                                let d = getDistance(ent.x, ent.y, other.x, other.y);
+                                if (d < scanDistance) {
+                                    let absAngle = Math.atan2(other.y - ent.y, other.x - ent.x);
+                                    let diff = Math.abs(aimAngle - absAngle);
+                                    if (diff < narrowAngle) { scanDistance = d; bestTarget = other; }
+                                }
+                            }
+                        });
+                        if (bestTarget) {
+                            let flightTime = scanDistance / (currentWeapon.name === "LASER" ? 23.0 : 21.0);
+                            let targetZ = getTerrainHeight(bestTarget.x, bestTarget.y) + 3.5;
+                            bulletVz = (targetZ - pz) / flightTime;
+                        }
 
                         if (currentWeapon.name === "LASER") {
                             lasers.push({ 
-                                x: ent.x, y: ent.y, 
+                                x: ent.x, y: ent.y, z: pz,
                                 vx: Math.cos(aimAngle) * 23.0, 
                                 vy: Math.sin(aimAngle) * 23.0, 
+                                vz: bulletVz,
                                 ownerId: ent.id, color: config.playerSkin, baseDmg: 15, size: 3, life: 65, 
                                 isShotgun: false 
                             });
@@ -813,10 +860,11 @@
                             for (let p = -2; p <= 2; p++) {
                                 let spreadAngle = aimAngle + (p * 0.095); 
                                 lasers.push({
-                                    x: ent.x, y: ent.y,
+                                    x: ent.x, y: ent.y, z: pz,
                                     startX: ent.x, startY: ent.y,
                                     vx: Math.cos(spreadAngle) * 21.0, 
                                     vy: Math.sin(spreadAngle) * 21.0,
+                                    vz: bulletVz + (Math.random() - 0.5) * 0.6,
                                     ownerId: ent.id, color: "#ffaa00", baseDmg: 32, size: 2.2, life: 25, 
                                     isShotgun: true
                                 });
@@ -832,7 +880,14 @@
                         ent.vx = (Math.random() - 0.5) * ent.speed * 1.8; ent.vy = (Math.random() - 0.5) * ent.speed * 1.8;
                         ent.changeDirTimer = 0;
                     }
-                    ent.x += ent.vx; ent.y += ent.vy;
+
+                    let hNow = getTerrainHeight(ent.x, ent.y);
+                    let hNext = getTerrainHeight(ent.x + ent.vx, ent.y + ent.vy);
+                    let slope = hNext - hNow;
+                    let slopeModifier = 1.0;
+                    if (slope > 0) slopeModifier = Math.max(0.5, 1.0 - slope * 0.08);
+                    
+                    ent.x += ent.vx * slopeModifier; ent.y += ent.vy * slopeModifier;
                     if (Math.abs(ent.vx) > 0.1 || Math.abs(ent.vy) > 0.1) ent.angle = Math.atan2(ent.vy, ent.vx);
 
                     if (ent.x < 25) { ent.x = 25; ent.vx *= -1; } if (ent.x > mapSize - 25) { ent.x = mapSize - 25; ent.vx *= -1; }
@@ -852,7 +907,17 @@
                     if (nearestTarget && ent.fireCooldown <= 0 && rDist < 350) {
                         let tDx = nearestTarget.x - ent.x, tDy = nearestTarget.y - ent.y, tDist = Math.sqrt(tDx*tDx + tDy*tDy);
                         if (tDist < 0.1) tDist = 0.1;
-                        lasers.push({ x: ent.x, y: ent.y, vx: (tDx / tDist) * 18.0, vy: (tDy / tDist) * 18.0, ownerId: ent.id, color: ent.color, baseDmg: 12, size: 3, life: 70, isShotgun: false });
+                        
+                        let bz = getTerrainHeight(ent.x, ent.y) + 3.5;
+                        let targetZ = getTerrainHeight(nearestTarget.x, nearestTarget.y) + 3.5;
+                        let travelTime = tDist / 18.0;
+                        let botVz = (targetZ - bz) / travelTime;
+
+                        lasers.push({ 
+                            x: ent.x, y: ent.y, z: bz, 
+                            vx: (tDx / tDist) * 18.0, vy: (tDy / tDist) * 18.0, vz: botVz, 
+                            ownerId: ent.id, color: ent.color, baseDmg: 12, size: 3, life: 70, isShotgun: false 
+                        });
                         ent.fireCooldown = 45 + Math.random() * 25;
                     }
                 }
@@ -860,7 +925,7 @@
                 if (ent.fireCooldown > 0) ent.fireCooldown--;
 
                 if (ent.hp <= 0) {
-                    createExplosion(ent.x, ent.y, 2, ent.color);
+                    createExplosion(ent.x, ent.y, getTerrainHeight(ent.x, ent.y) + 2, ent.color);
                     if (ent.isPlayer) {
                         document.getElementById("placement-text").innerText = `Placement: #${entities.length} / 50`;
                         changeState("GAMEOVER");
@@ -872,22 +937,33 @@
             if (entities.length === 1 && entities[0].isPlayer) changeState("VICTORY");
 
             for (let i = lasers.length - 1; i >= 0; i--) {
-                let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.life--; 
+                let l = lasers[i]; l.x += l.vx; l.y += l.vy; l.z += l.vz; l.life--; 
 
                 if (l.life <= 0 || isNaN(l.x) || isNaN(l.y) || l.x < 0 || l.x > mapSize || l.y < 0 || l.y > mapSize) { 
                     lasers.splice(i, 1); continue; 
                 }
 
+                // Terrain Impact Check (Using rolling hillsides as cover)
+                let currentGroundZ = getTerrainHeight(l.x, l.y);
+                if (l.z <= currentGroundZ) {
+                    createExplosion(l.x, l.y, l.z, "rgba(0,255,200,0.4)");
+                    lasers.splice(i, 1);
+                    continue;
+                }
+
                 let hitRegistered = false;
                 for (let k = structures.length - 1; k >= 0; k--) {
                     let s = structures[k];
-                    if (checkStructureCollision(l.x, l.y, s)) {
+                    let sz = getTerrainHeight(s.x, s.y);
+                    let half = s.size / 2;
+                    // Strict 3D Boundary Box check against environmental block placements
+                    if (l.x > s.x - half && l.x < s.x + half && l.y > s.y - half && l.y < s.y + half && l.z >= sz && l.z <= sz + 18) {
                         let calculatedDmg = l.baseDmg;
                         if (l.isShotgun) {
                             let dist = getDistance(l.startX, l.startY, s.x, s.y);
                             calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
                         }
-                        s.hp -= calculatedDmg; createExplosion(l.x, l.y, 3, s.borderColor);
+                        s.hp -= calculatedDmg; createExplosion(l.x, l.y, l.z, s.borderColor);
                         lasers.splice(i, 1); hitRegistered = true; break;
                     }
                 }
@@ -895,14 +971,19 @@
 
                 for (let j = 0; j < entities.length; j++) {
                     let ent = entities[j];
-                    if (ent.id !== l.ownerId && getDistance(l.x, l.y, ent.x, ent.y) < ent.radius + 3) {
-                        let calculatedDmg = l.baseDmg;
-                        if (l.isShotgun) {
-                            let dist = getDistance(l.startX, l.startY, ent.x, ent.y);
-                            calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
+                    if (ent.id !== l.ownerId) {
+                        let dist2D = getDistance(l.x, l.y, ent.x, ent.y);
+                        let entZ = getTerrainHeight(ent.x, ent.y);
+                        // Cylinder bounding volume checking 3D hit registration
+                        if (dist2D < ent.radius + 3 && l.z >= entZ && l.z <= entZ + 7) {
+                            let calculatedDmg = l.baseDmg;
+                            if (l.isShotgun) {
+                                let dist = getDistance(l.startX, l.startY, ent.x, ent.y);
+                                calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
+                            }
+                            ent.hp -= calculatedDmg; createExplosion(l.x, l.y, l.z, l.color);
+                            lasers.splice(i, 1); break;
                         }
-                        ent.hp -= calculatedDmg; createExplosion(l.x, l.y, 3, l.color);
-                        lasers.splice(i, 1); break;
                     }
                 }
             }
@@ -910,7 +991,8 @@
             for(let i=structures.length-1; i>=0; i--) { if(structures[i].hp <= 0) structures.splice(i,1); }
             for(let i=particles.length-1; i>=0; i--) { 
                 let p = particles[i]; p.x += p.vx; p.y += p.vy; p.z += p.vz; p.vz -= 0.15; 
-                if (p.z < 0) { p.z = 0; p.vz = -p.vz * 0.5; p.vx *= 0.7; p.vy *= 0.7; }
+                let floorZ = getTerrainHeight(p.x, p.y);
+                if (p.z < floorZ) { p.z = floorZ; p.vz = -p.vz * 0.5; p.vx *= 0.7; p.vy *= 0.7; }
                 p.alpha -= 0.02; if(p.alpha <= 0) particles.splice(i,1); 
             }
         }
@@ -922,29 +1004,55 @@
             let player = entities.find(e => e.isPlayer);
             if (!player) return;
 
+            // Render 3D Topographical Grid Mesh Network (Connected wireframe mesh fields)
             let gridSpacing = 60;
-            let startGridX = Math.floor((player.x - 450) / gridSpacing) * gridSpacing;
-            let endGridX = Math.floor((player.x + 450) / gridSpacing) * gridSpacing;
-            let startGridY = Math.floor((player.y - 450) / gridSpacing) * gridSpacing;
-            let endGridY = Math.floor((player.y + 450) / gridSpacing) * gridSpacing;
+            let viewDist = 600;
+            let startGridX = Math.floor((player.x - viewDist) / gridSpacing) * gridSpacing;
+            let endGridX = Math.ceil((player.x + viewDist) / gridSpacing) * gridSpacing;
+            let startGridY = Math.floor((player.y - viewDist) / gridSpacing) * gridSpacing;
+            let endGridY = Math.ceil((player.y + viewDist) / gridSpacing) * gridSpacing;
 
-            ctx.fillStyle = "rgba(0, 255, 200, 0.18)";
-            for (let gx = Math.max(0, startGridX); gx <= Math.min(mapSize, endGridX); gx += gridSpacing) {
-                for (let gy = Math.max(0, startGridY); gy <= Math.min(mapSize, endGridY); gy += gridSpacing) {
-                    if (get3DProjection(gx, gy, 0, tempGridProj)) {
-                        ctx.beginPath(); ctx.arc(tempGridProj.x, tempGridProj.y, Math.max(1, 1.8 * tempGridProj.scale), 0, Math.PI * 2); ctx.fill();
+            for (let gx = Math.max(0, startGridX); gx < Math.min(mapSize, endGridX); gx += gridSpacing) {
+                for (let gy = Math.max(0, startGridY); gy < Math.min(mapSize, endGridY); gy += gridSpacing) {
+                    let pR = {x:0, y:0, scale:0, depth:0};
+                    let pD = {x:0, y:0, scale:0, depth:0};
+                    
+                    let zCurr = getTerrainHeight(gx, gy);
+                    let zRight = getTerrainHeight(gx + gridSpacing, gy);
+                    let zDown = getTerrainHeight(gx, gy + gridSpacing);
+                    
+                    let projCurr = get3DProjection(gx, gy, zCurr, tempGridProj);
+                    if (!projCurr) continue;
+                    
+                    // Procedural landscape shifting: shift hue from dark cyan to bright valley emerald
+                    let hue = 165 + (zCurr * 0.35);
+                    ctx.strokeStyle = `hsla(${hue}, 85%, 45%, ${Math.min(0.3, 140 / projCurr.depth)})`;
+                    ctx.lineWidth = 0.85;
+
+                    let projRight = get3DProjection(gx + gridSpacing, gy, zRight, pR);
+                    if (projRight) {
+                        ctx.beginPath(); ctx.moveTo(tempGridProj.x, tempGridProj.y); ctx.lineTo(pR.x, pR.y); ctx.stroke();
+                    }
+                    
+                    let projDown = get3DProjection(gx, gy + gridSpacing, zDown, pD);
+                    if (projDown) {
+                        ctx.beginPath(); ctx.moveTo(tempGridProj.x, tempGridProj.y); ctx.lineTo(pD.x, pD.y); ctx.stroke();
                     }
                 }
             }
 
+            // Storm Circle Sector Projection (Calculates ground height dynamically)
             let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2; let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
                 let sx1 = storm.x + Math.cos(r1) * storm.radius; let sy1 = storm.y + Math.sin(r1) * storm.radius;
                 let sx2 = storm.x + Math.cos(r2) * storm.radius; let sy2 = storm.y + Math.sin(r2) * storm.radius;
 
-                if (get3DProjection(sx1, sy1, 0, stormProjB1) && get3DProjection(sx1, sy1, 45, stormProjT1) &&
-                    get3DProjection(sx2, sy2, 0, stormProjB2) && get3DProjection(sx2, sy2, 45, stormProjT2)) {
+                let sz1 = getTerrainHeight(sx1, sy1);
+                let sz2 = getTerrainHeight(sx2, sy2);
+
+                if (get3DProjection(sx1, sy1, sz1, stormProjB1) && get3DProjection(sx1, sy1, sz1 + 150, stormProjT1) &&
+                    get3DProjection(sx2, sy2, sz2, stormProjB2) && get3DProjection(sx2, sy2, sz2 + 150, stormProjT2)) {
                     ctx.fillStyle = "rgba(255, 0, 85, 0.05)"; ctx.strokeStyle = "rgba(255, 0, 85, 0.25)"; ctx.lineWidth = 1;
                     ctx.beginPath(); ctx.moveTo(stormProjB1.x, stormProjB1.y); ctx.lineTo(stormProjT1.x, stormProjT1.y); ctx.lineTo(stormProjT2.x, stormProjT2.y); ctx.lineTo(stormProjB2.x, stormProjB2.y);
                     ctx.closePath(); ctx.fill(); ctx.stroke();
@@ -952,12 +1060,16 @@
             }
 
             renderPoolIndex = 0; activeRenderQueue.length = 0;
-            structures.forEach(s => { if (get3DProjection(s.x, s.y, 0, itemProj)) activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale)); });
-            lasers.forEach(l => { if (get3DProjection(l.x, l.y, 3.5, itemProj)) activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale)); });
+            structures.forEach(s => { 
+                let sz = getTerrainHeight(s.x, s.y);
+                if (get3DProjection(s.x, s.y, sz, itemProj)) activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale)); 
+            });
+            lasers.forEach(l => { if (get3DProjection(l.x, l.y, l.z, itemProj)) activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale)); });
             particles.forEach(p => { if (get3DProjection(p.x, p.y, p.z, itemProj)) activeRenderQueue.push(getPooledItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale)); });
             entities.forEach(ent => {
                 if (ent.isPlayer && viewMode === "1P") return; 
-                if (get3DProjection(ent.x, ent.y, 0, itemProj)) activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
+                let ez = getTerrainHeight(ent.x, ent.y);
+                if (get3DProjection(ent.x, ent.y, ez, itemProj)) activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
             });
 
             activeRenderQueue.sort((a, b) => b.depth - a.depth);
@@ -981,7 +1093,7 @@
                 ctx.strokeStyle = "#ff0055"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 130, 0, Math.PI * 2); ctx.stroke();
                 ctx.strokeStyle = "rgba(255, 0, 85, 0.4)"; ctx.lineWidth = 1; ctx.beginPath();
                 ctx.moveTo(cx - 130, cy); ctx.lineTo(cx - 15, cy); ctx.moveTo(cx + 15, cy); ctx.lineTo(cx + 130, cy);
-                ctx.moveTo(cx, cy - 130); ctx.lineTo(cx, cy - 15); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx, cy + 130); ctx.stroke();
+                ctx.moveTo(cx, cy - 130); ctx.lineTo(cx, cy - 15); ctx.moveTo(cx, cy + 15); ctx.lineTo(cx, cy + 130); stroke();
                 ctx.fillStyle = "#ff0055"; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill();
             } else {
                 ctx.strokeStyle = config.playerSkin; ctx.lineWidth = 2; ctx.beginPath();
@@ -1012,7 +1124,6 @@
                     ctx.fillStyle = "#00ffcc"; ctx.beginPath(); ctx.arc(px, py, 16, 0, Math.PI * 2); ctx.fill();
                 }
 
-                // Layout HUD Rendering for HUD Cluster
                 ctx.fillStyle = "rgba(0, 255, 205, 0.12)"; ctx.beginPath(); ctx.arc(mobileBuildBtn.x, mobileBuildBtn.y, mobileBuildBtn.radius, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = "#00ffff"; ctx.font = "bold 11px 'Courier New'"; ctx.textAlign = "center";
@@ -1037,8 +1148,9 @@
 
             let valid = true;
             for (let i = 0; i < 4; i++) {
-                if (get3DProjection(cx[i], cy[i], 0, itemProj)) { boxB[i].x = itemProj.x; boxB[i].y = itemProj.y; } else { valid = false; break; }
-                if (get3DProjection(cx[i], cy[i], h, itemProj)) { boxT[i].x = itemProj.x; boxT[i].y = itemProj.y; } else { valid = false; break; }
+                let cornerZ = getTerrainHeight(cx[i], cy[i]);
+                if (get3DProjection(cx[i], cy[i], cornerZ, itemProj)) { boxB[i].x = itemProj.x; boxB[i].y = itemProj.y; } else { valid = false; break; }
+                if (get3DProjection(cx[i], cy[i], cornerZ + h, itemProj)) { boxT[i].x = itemProj.x; boxT[i].y = itemProj.y; } else { valid = false; break; }
             }
             if (!valid) return;
 
@@ -1051,11 +1163,12 @@
 
         function draw3DShip(s) {
             let r = s.radius; let a = s.angle;
+            let sz = getTerrainHeight(s.x, s.y);
             
-            if (get3DProjection(s.x + Math.cos(a)*r, s.y + Math.sin(a)*r, 1.5, shipProjF) &&
-                get3DProjection(s.x + Math.cos(a + 2.4)*r, s.y + Math.sin(a + 2.4)*r, 0, shipProjL) &&
-                get3DProjection(s.x + Math.cos(a - 2.4)*r, s.y + Math.sin(a - 2.4)*r, 0, shipProjR) &&
-                get3DProjection(s.x, s.y, 5, shipProjTip)) {
+            if (get3DProjection(s.x + Math.cos(a)*r, s.y + Math.sin(a)*r, sz + 1.5, shipProjF) &&
+                get3DProjection(s.x + Math.cos(a + 2.4)*r, s.y + Math.sin(a + 2.4)*r, sz + 0, shipProjL) &&
+                get3DProjection(s.x + Math.cos(a - 2.4)*r, s.y + Math.sin(a - 2.4)*r, sz + 0, shipProjR) &&
+                get3DProjection(s.x, s.y, sz + 5, shipProjTip)) {
                 
                 ctx.strokeStyle = s.color; ctx.lineWidth = 1.5;
                 ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
@@ -1070,10 +1183,9 @@
             }
         }
 
-        // High refresh rate accumulator system
         let lastTime = performance.now();
         let accumulator = 0;
-        const deltaTimeStep = 1000 / 60; // Locked to clean 60Hz processing velocity
+        const deltaTimeStep = 1000 / 60; 
 
         function gameLoop(currentTime) {
             if (!currentTime) currentTime = performance.now();
@@ -1081,7 +1193,6 @@
             accumulator += currentTime - lastTime;
             lastTime = currentTime;
 
-            // Cap the accumulator frame stack to protect against background lag spikes
             if (accumulator > 250) accumulator = 250;
 
             while (accumulator >= deltaTimeStep) {
