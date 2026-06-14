@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>fartnite</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <style>
         body, html {
             background-color: #020205;
@@ -63,6 +64,65 @@
 
         button.secondary { border-color: #ff0055; color: #ff0055; }
         button.secondary:hover { background: #ff0055; color: white; box-shadow: 0 0 20px rgba(255, 0, 85, 0.6); }
+
+        #multiplayer-panel {
+            background: rgba(10, 10, 25, 0.6);
+            border: 1px dashed #00ffcc;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 6px;
+            max-width: 400px;
+            width: 85%;
+        }
+        
+        .code-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .room-code-display {
+            font-family: monospace;
+            font-size: 18px;
+            color: #ffff00;
+            font-weight: bold;
+            background: #000;
+            padding: 4px 10px;
+            border: 1px solid #ffff00;
+            letter-spacing: 1px;
+        }
+
+        .mini-btn {
+            background: #ff0055;
+            border: none;
+            color: white;
+            font-size: 11px;
+            padding: 6px 10px;
+            margin: 0;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: none;
+        }
+        .mini-btn:hover {
+            background: #ffffff;
+            color: #ff0055;
+            box-shadow: none;
+        }
+
+        .mp-input {
+            background: #000;
+            border: 1px solid #ff0055;
+            color: #fff;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 16px;
+            text-align: center;
+            width: 70%;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
 
         #settings-menu {
             background: rgba(10, 10, 25, 0.95);
@@ -194,9 +254,23 @@
 
     <div id="start-screen" class="overlay">
         <h1>SPACE BATTLE ROYALE 3D</h1>
-        <p>Left Click to shoot ultra-fast bullets. Hold Right Click to zoom in with your targeting scope! Use rolling hills and valleys as physical cover.</p>
+        <p>Left Click to shoot ultra-fast bullets. Hold Right Click to zoom! Use rolling hills as physical cover.</p>
         <button onclick="changeState('PLAYING')">DROP INTO MATCH</button>
         <button class="secondary" onclick="openSettings()">SETTINGS MENU</button>
+
+        <div id="multiplayer-panel">
+            <h3 style="margin: 0 0 5px 0; color: #00ffcc; font-size:15px;">P2P MULTIPLAYER ENGINE</h3>
+            
+            <div class="code-container">
+                <span style="font-size: 13px; color: #aaa;">Your Code:</span>
+                <span id="local-room-code" class="room-code-display">WAITING...</span>
+                <button id="copy-btn" class="mini-btn" onclick="copyRoomCode()">COPY</button>
+            </div>
+
+            <input type="text" id="join-peer-id" class="mp-input" placeholder="Enter Match Join Code"><br>
+            <button id="connect-btn" onclick="connectToRival()" style="font-size: 13px; padding: 6px 15px; margin: 2px;">CONNECT TO RIVAL</button>
+            <div id="connection-status" style="font-size: 12px; color: #ff0055; margin-top: 5px;">Status: Standalone Mode</div>
+        </div>
     </div>
 
     <div id="settings-overlay" class="overlay" style="display: none;">
@@ -287,6 +361,14 @@
         let particles = [];
         let structures = []; 
 
+        // WebRTC Infrastructure Variables
+        let activePeer = null;
+        let peerConnection = null;
+        let localRoomCode = "";
+
+        // Public persistent free key-value broker space to swap codes for Peer IDs securely
+        const brokerApiUrl = "https://kv-data.com/api/v1/fartnite_p2p_broker";
+
         let config = {
             controlScheme: "keyboard", 
             mobileOverlay: false,       
@@ -315,6 +397,8 @@
         const storm = { x: 0, y: 0, radius: 0, minRadius: 150, shrinkSpeed: 1.45 };
 
         let mouseX = 0, mouseY = 0;
+        let pointerLockEnabled = true;
+        let pointerDeltaX = 0;
         
         // Mobile Controls Structs
         const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 50 };
@@ -345,17 +429,184 @@
         const renderPool = [];
         let renderPoolIndex = 0;
 
+        // Generate clean 6-digit alphanumeric joining codes
+        function makeShortRoomCode() {
+            const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Omitted confusing characters like 1, I, O, 0
+            let code = '';
+            for (let i = 0; i < 6; i++) {
+                code += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return code;
+        }
+
+        // --- WebRTC Node Signaling Orchestration ---
+        function initializeNetworkEngine() {
+            activePeer = new Peer();
+            
+            activePeer.on('open', async (id) => {
+                localRoomCode = makeShortRoomCode();
+                document.getElementById("local-room-code").innerText = localRoomCode;
+                
+                // Publish our room code translation pair to the temporary broker registry
+                try {
+                    await fetch(`${brokerApiUrl}/${localRoomCode}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ peerId: id })
+                    });
+                } catch(err) {
+                    console.error("Signal room registration error:", err);
+                }
+            });
+
+            activePeer.on('connection', (conn) => {
+                peerConnection = conn;
+                configureNetworkChannel();
+            });
+        }
+
+        function copyRoomCode() {
+            if (!localRoomCode || localRoomCode === "WAITING...") return;
+            navigator.clipboard.writeText(localRoomCode);
+            const copyBtn = document.getElementById("copy-btn");
+            copyBtn.innerText = "COPIED!";
+            copyBtn.style.backgroundColor = "#00ffcc";
+            copyBtn.style.color = "#000";
+            setTimeout(() => {
+                copyBtn.innerText = "COPY";
+                copyBtn.style.backgroundColor = "#ff0055";
+                copyBtn.style.color = "#fff";
+            }, 1800);
+        }
+
+        async function connectToRival() {
+            const codeToFind = document.getElementById("join-peer-id").value.trim().toUpperCase();
+            if(!codeToFind || codeToFind.length !== 6) return alert("Please specify a valid 6-digit code!");
+            
+            const connectBtn = document.getElementById("connect-btn");
+            const statusTxt = document.getElementById("connection-status");
+            
+            statusTxt.innerText = "Resolving code mapping...";
+            connectBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${brokerApiUrl}/${codeToFind}`);
+                if (!response.ok) throw new Error("Room match not found");
+                
+                const remoteData = await response.json();
+                if (!remoteData || !remoteData.peerId) throw new Error("Malformed match response");
+
+                statusTxt.innerText = "Connecting DataChannel...";
+                peerConnection = activePeer.connect(remoteData.peerId);
+                configureNetworkChannel();
+            } catch (err) {
+                alert("Could not connect. Double check code or make sure your friend has the game menu open!");
+                statusTxt.innerText = "Status: Standalone Mode";
+                connectBtn.disabled = false;
+            }
+        }
+
+        function configureNetworkChannel() {
+            peerConnection.on('open', () => {
+                document.getElementById("connection-status").innerText = "CONNECTED TO RIVAL";
+                document.getElementById("connection-status").style.color = "#00ffcc";
+                document.getElementById("connect-btn").disabled = false;
+            });
+
+            peerConnection.on('data', (data) => {
+                processNetworkEvent(data);
+            });
+
+            peerConnection.on('close', () => {
+                document.getElementById("connection-status").innerText = "Rival Disconnected!";
+                document.getElementById("connection-status").style.color = "#ff0055";
+                entities = entities.filter(e => e.id !== "rival_peer");
+                peerConnection = null;
+            });
+        }
+
+        function broadcastNetworkPayload(payload) {
+            if (peerConnection && peerConnection.open) {
+                peerConnection.send(payload);
+            }
+        }
+
+        function processNetworkEvent(data) {
+            if (data.type === "transform") {
+                let rival = entities.find(e => e.id === "rival_peer");
+                if (!rival) {
+                    rival = {
+                        id: "rival_peer", isPlayer: false, isRival: true,
+                        x: data.x, y: data.y, angle: data.angle,
+                        radius: 14, speed: 0, hp: data.hp, maxHp: 100, color: data.color,
+                        fireCooldown: 0, selectedSlot: data.selectedSlot,
+                        inventory: [
+                            { name: "LASER", type: "weapon", ammo: Infinity },
+                            { name: "SHOTGUN", type: "weapon", ammo: 24 }
+                        ]
+                    };
+                    entities.push(rival);
+                } else {
+                    rival.x = data.x;
+                    rival.y = data.y;
+                    rival.angle = data.angle;
+                    rival.hp = data.hp;
+                    rival.color = data.color;
+                    rival.selectedSlot = data.selectedSlot;
+                }
+            }
+            else if (data.type === "fire") {
+                let rival = entities.find(e => e.id === "rival_peer");
+                if (!rival) return;
+                
+                if (data.weapon === "LASER") {
+                    lasers.push({ 
+                        x: data.x, y: data.y, z: data.z,
+                        vx: Math.cos(data.aimAngle) * 23.0, 
+                        vy: Math.sin(data.aimAngle) * 23.0, 
+                        vz: data.bulletVz,
+                        ownerId: "rival_peer", color: rival.color, baseDmg: 15, size: 3, life: 65, 
+                        isShotgun: false 
+                    });
+                } else if (data.weapon === "SHOTGUN") {
+                    for (let p = -2; p <= 2; p++) {
+                        let spreadAngle = data.aimAngle + (p * 0.095); 
+                        lasers.push({
+                            x: data.x, y: data.y, z: data.z,
+                            startX: data.x, startY: data.y,
+                            vx: Math.cos(spreadAngle) * 21.0, 
+                            vy: Math.sin(spreadAngle) * 21.0,
+                            vz: data.bulletVz + (Math.random() - 0.5) * 0.6,
+                            ownerId: "rival_peer", color: "#ffaa00", baseDmg: 32, size: 2.2, life: 25, 
+                            isShotgun: true
+                        });
+                    }
+                }
+            }
+            else if (data.type === "build") {
+                structures.push({ x: data.x, y: data.y, size: 34, hp: 120, maxHp: 120, color: "rgba(255, 0, 85, 0.15)", borderColor: data.color });
+                createExplosion(data.x, data.y, getTerrainHeight(data.x, data.y), data.color);
+            }
+            else if (data.type === "utility") {
+                let rival = entities.find(e => e.id === "rival_peer");
+                if(!rival) return;
+                let rz = getTerrainHeight(rival.x, rival.y);
+                if (data.name === "SHIELD") createExplosion(rival.x, rival.y, rz + 2, "#00ffcc");
+                if (data.name === "BOOST") createExplosion(rival.x, rival.y, rz + 2, "#ffff00");
+                if (data.name === "EMP") createExplosion(rival.x, rival.y, rz + 2, "#ff00ff");
+            }
+        }
+
         // Procedural 3D Terrain Function (Layered Topographical Waves)
         function getTerrainHeight(x, y) {
             if (x < 0 || x > mapSize || y < 0 || y > mapSize) return 0;
-            // Layered sine and cosine math mimicking rolling valleys and sudden mountain ridges
             let h = Math.sin(x * 0.002) * Math.cos(y * 0.002) * 110; 
             h += Math.cos(x * 0.0051) * Math.sin(y * 0.0049) * 40;   
             h += Math.sin(x * 0.015) * Math.cos(y * 0.015) * 10;     
             return h;
         }
 
-        function getPooledItem(type, depth, raw, projX, projY, projScale) {
+        function getProfileItem(type, depth, raw, projX, projY, projScale) {
             let item;
             if (renderPoolIndex < renderPool.length) {
                 item = renderPool[renderPoolIndex];
@@ -395,7 +646,25 @@
             document.getElementById("skin-hex-text").innerText = savedSkin.toUpperCase();
         }
 
-        window.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+        window.addEventListener("mousemove", (e) => {
+            if (document.pointerLockElement === canvas) {
+                pointerDeltaX += e.movementX;
+                mouseX = canvas.width/2 + pointerDeltaX;
+                mouseY = canvas.height/2;
+            } else {
+                mouseX = e.clientX; mouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener("click", () => {
+            if (gameState === "PLAYING" && pointerLockEnabled && document.pointerLockElement !== canvas) {
+                canvas.requestPointerLock();
+            }
+        });
+
+        document.addEventListener("pointerlockchange", () => {
+            if (document.pointerLockElement !== canvas) pointerDeltaX = 0;
+        });
         window.addEventListener("contextmenu", (e) => e.preventDefault());
 
         window.addEventListener("mousedown", (e) => { 
@@ -507,6 +776,8 @@
             }
 
             if (e.code === "Escape") {
+                if (document.pointerLockElement === canvas) document.exitPointerLock();
+
                 if (gameState === "PLAYING") openSettings();
                 else if (document.getElementById("settings-overlay").style.display === "flex") closeSettings();
             }
@@ -570,6 +841,7 @@
                     }
                 });
             }
+            broadcastNetworkPayload({ type: "utility", name: itemName });
         }
 
         function cleanKeyLabel(codeStr) {
@@ -637,6 +909,8 @@
         }
 
         function initBattleRoyale() {
+            let existingRival = entities.find(e => e.id === "rival_peer");
+
             entities = []; lasers = []; particles = []; structures = [];
             storm.x = mapSize / 2;
             storm.y = mapSize / 2;
@@ -644,7 +918,8 @@
 
             let pObj = {
                 id: "player", isPlayer: true,
-                x: mapSize / 2, y: mapSize / 2, angle: -Math.PI / 2,
+                x: mapSize / 2 + (peerConnection ? (existingRival ? 200 : -200) : 0), 
+                y: mapSize / 2, angle: -Math.PI / 2,
                 radius: 14, baseSpeed: 4.8, speed: 4.8, speedTimer: 0, hp: 100, maxHp: 100,
                 color: config.playerSkin, 
                 fireCooldown: 0,
@@ -661,7 +936,14 @@
             entities.push(pObj);
             updateInventoryUI(pObj);
 
-            for (let i = 0; i < 49; i++) {
+            // Re-inject connected peer into active entity array if valid
+            if (existingRival) {
+                entities.push(existingRival);
+            }
+
+            // Spawn contextual bots
+            let dynamicBotCount = peerConnection ? 25 : 49;
+            for (let i = 0; i < dynamicBotCount; i++) {
                 let angle = Math.random() * Math.PI * 2;
                 let maxDist = storm.radius * 0.75;
                 let dist = Math.random() * maxDist; 
@@ -694,6 +976,7 @@
                     structures.push({ x: creator.x, y: creator.y, size: 34, hp: 120, maxHp: 120, color: "rgba(0, 255, 200, 0.15)", borderColor: config.playerSkin });
                     creator.builds--;
                     createExplosion(creator.x, creator.y, cz, config.playerSkin);
+                    broadcastNetworkPayload({ type: "build", x: creator.x, y: creator.y, color: config.playerSkin });
                 }
             } else {
                 structures.push({ x: creator.x, y: creator.y, size: 28, hp: 80, maxHp: 80, color: "rgba(255, 100, 0, 0.15)", borderColor: creator.color });
@@ -723,8 +1006,6 @@
 
             let camX, camY, camZ, camAngle;
             let horizonPitchOffset = 0; 
-
-            // Track camera offset aligned directly onto procedural ground elevation
             let playerZ = getTerrainHeight(player.x, player.y);
 
             if (viewMode === "1P") {
@@ -757,6 +1038,15 @@
             if (player && player.builds < player.maxBuilds) {
                 player.buildRegenTimer++;
                 if (player.buildRegenTimer >= 150) { player.builds++; player.buildRegenTimer = 0; }
+            }
+
+            // Sync Local transform vectors with Remote Player over dataChannel
+            if (player) {
+                broadcastNetworkPayload({
+                    type: "transform",
+                    x: player.x, y: player.y, angle: player.angle,
+                    hp: player.hp, color: config.playerSkin, selectedSlot: player.selectedSlot
+                });
             }
 
             for (let i = entities.length - 1; i >= 0; i--) {
@@ -806,7 +1096,6 @@
                         }
                     }
 
-                    // Topography Hill Velocity Drag Mechanics (Uphill slows down, Downhill speeds up)
                     if (moveDx !== 0 || moveDy !== 0) {
                         let hNow = getTerrainHeight(ent.x, ent.y);
                         let hNext = getTerrainHeight(ent.x + moveDx, ent.y + moveDy);
@@ -827,10 +1116,9 @@
                         let pz = getTerrainHeight(ent.x, ent.y) + 3.5;
                         let bulletVz = 0;
 
-                        // Smart vertical aim targeting: Automatically matches height projection of enemies inside crosshairs
                         let bestTarget = null; let narrowAngle = 0.35; let scanDistance = 450;
                         entities.forEach(other => {
-                            if (!other.isPlayer) {
+                            if (other.id !== "player") {
                                 let d = getDistance(ent.x, ent.y, other.x, other.y);
                                 if (d < scanDistance) {
                                     let absAngle = Math.atan2(other.y - ent.y, other.x - ent.x);
@@ -873,8 +1161,13 @@
                             ent.fireCooldown = 38; 
                             updateInventoryUI(ent);
                         }
+                        
+                        broadcastNetworkPayload({
+                            type: "fire", weapon: currentWeapon.name,
+                            x: ent.x, y: ent.y, z: pz, aimAngle: aimAngle, bulletVz: bulletVz
+                        });
                     }
-                } else {
+                } else if (!ent.isRival) {
                     ent.changeDirTimer++;
                     if (ent.changeDirTimer > 60) {
                         ent.vx = (Math.random() - 0.5) * ent.speed * 1.8; ent.vy = (Math.random() - 0.5) * ent.speed * 1.8;
@@ -943,7 +1236,6 @@
                     lasers.splice(i, 1); continue; 
                 }
 
-                // Terrain Impact Check (Using rolling hillsides as cover)
                 let currentGroundZ = getTerrainHeight(l.x, l.y);
                 if (l.z <= currentGroundZ) {
                     createExplosion(l.x, l.y, l.z, "rgba(0,255,200,0.4)");
@@ -956,7 +1248,6 @@
                     let s = structures[k];
                     let sz = getTerrainHeight(s.x, s.y);
                     let half = s.size / 2;
-                    // Strict 3D Boundary Box check against environmental block placements
                     if (l.x > s.x - half && l.x < s.x + half && l.y > s.y - half && l.y < s.y + half && l.z >= sz && l.z <= sz + 18) {
                         let calculatedDmg = l.baseDmg;
                         if (l.isShotgun) {
@@ -974,14 +1265,16 @@
                     if (ent.id !== l.ownerId) {
                         let dist2D = getDistance(l.x, l.y, ent.x, ent.y);
                         let entZ = getTerrainHeight(ent.x, ent.y);
-                        // Cylinder bounding volume checking 3D hit registration
                         if (dist2D < ent.radius + 3 && l.z >= entZ && l.z <= entZ + 7) {
                             let calculatedDmg = l.baseDmg;
                             if (l.isShotgun) {
                                 let dist = getDistance(l.startX, l.startY, ent.x, ent.y);
                                 calculatedDmg = dist < 70 ? 32 : Math.max(6, 32 - ((dist - 70) / 12));
                             }
-                            ent.hp -= calculatedDmg; createExplosion(l.x, l.y, l.z, l.color);
+                            
+                            if (ent.isPlayer) ent.hp -= calculatedDmg;
+                            
+                            createExplosion(l.x, l.y, l.z, l.color);
                             lasers.splice(i, 1); break;
                         }
                     }
@@ -1004,7 +1297,6 @@
             let player = entities.find(e => e.isPlayer);
             if (!player) return;
 
-            // Render 3D Topographical Grid Mesh Network (Connected wireframe mesh fields)
             let gridSpacing = 60;
             let viewDist = 600;
             let startGridX = Math.floor((player.x - viewDist) / gridSpacing) * gridSpacing;
@@ -1024,7 +1316,6 @@
                     let projCurr = get3DProjection(gx, gy, zCurr, tempGridProj);
                     if (!projCurr) continue;
                     
-                    // Procedural landscape shifting: shift hue from dark cyan to bright valley emerald
                     let hue = 165 + (zCurr * 0.35);
                     ctx.strokeStyle = `hsla(${hue}, 85%, 45%, ${Math.min(0.3, 140 / projCurr.depth)})`;
                     ctx.lineWidth = 0.85;
@@ -1041,7 +1332,6 @@
                 }
             }
 
-            // Storm Circle Sector Projection (Calculates ground height dynamically)
             let stormSegments = 64; 
             for (let i = 0; i < stormSegments; i++) {
                 let r1 = (i / stormSegments) * Math.PI * 2; let r2 = ((i + 1) / stormSegments) * Math.PI * 2;
@@ -1062,14 +1352,14 @@
             renderPoolIndex = 0; activeRenderQueue.length = 0;
             structures.forEach(s => { 
                 let sz = getTerrainHeight(s.x, s.y);
-                if (get3DProjection(s.x, s.y, sz, itemProj)) activeRenderQueue.push(getPooledItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale)); 
+                if (get3DProjection(s.x, s.y, sz, itemProj)) activeRenderQueue.push(getProfileItem("structure", itemProj.depth, s, itemProj.x, itemProj.y, itemProj.scale)); 
             });
-            lasers.forEach(l => { if (get3DProjection(l.x, l.y, l.z, itemProj)) activeRenderQueue.push(getPooledItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale)); });
-            particles.forEach(p => { if (get3DProjection(p.x, p.y, p.z, itemProj)) activeRenderQueue.push(getPooledItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale)); });
+            lasers.forEach(l => { if (get3DProjection(l.x, l.y, l.z, itemProj)) activeRenderQueue.push(getProfileItem("laser", itemProj.depth, l, itemProj.x, itemProj.y, itemProj.scale)); });
+            particles.forEach(p => { if (get3DProjection(p.x, p.y, p.z, itemProj)) activeRenderQueue.push(getProfileItem("particle", itemProj.depth, p, itemProj.x, itemProj.y, itemProj.scale)); });
             entities.forEach(ent => {
                 if (ent.isPlayer && viewMode === "1P") return; 
                 let ez = getTerrainHeight(ent.x, ent.y);
-                if (get3DProjection(ent.x, ent.y, ez, itemProj)) activeRenderQueue.push(getPooledItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
+                if (get3DProjection(ent.x, ent.y, ez, itemProj)) activeRenderQueue.push(getProfileItem("entity", itemProj.depth, ent, itemProj.x, itemProj.y, itemProj.scale));
             });
 
             activeRenderQueue.sort((a, b) => b.depth - a.depth);
@@ -1171,14 +1461,14 @@
                 get3DProjection(s.x, s.y, sz + 5, shipProjTip)) {
                 
                 ctx.strokeStyle = s.color; ctx.lineWidth = 1.5;
-                ctx.fillStyle = s.isPlayer ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
+                ctx.fillStyle = (s.isPlayer || s.isRival) ? "rgba(255,255,255,0.08)" : "rgba(255,50,50,0.1)";
 
                 ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.lineTo(shipProjR.x, shipProjR.y); ctx.closePath(); ctx.fill(); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(shipProjF.x, shipProjF.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.lineTo(shipProjL.x, shipProjL.y); ctx.moveTo(shipProjR.x, shipProjR.y); ctx.lineTo(shipProjTip.x, shipProjTip.y); ctx.stroke();
 
                 let barW = 24 * shipProjTip.scale;
                 ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW, 3);
-                ctx.fillStyle = s.isPlayer ? config.playerSkin : "#ff3333";
+                ctx.fillStyle = s.isPlayer ? config.playerSkin : (s.isRival ? s.color : "#ff3333");
                 ctx.fillRect(shipProjTip.x - barW/2, shipProjTip.y - 12, barW * Math.max(0, s.hp / s.maxHp), 3);
             }
         }
@@ -1203,6 +1493,9 @@
             draw();
             requestAnimationFrame(gameLoop);
         }
+
+        // Initialize networking on boot
+        initializeNetworkEngine();
         requestAnimationFrame(gameLoop);
     </script>
 </body>
