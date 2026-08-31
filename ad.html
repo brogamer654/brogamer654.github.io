@@ -1,284 +1,728 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cat and Dog</title>
-    <style>
-        /* Reset and Base Styles */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f9f9f9;
-        }
-        .container {
-            width: 85%;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+  <title>3D FPS Potato Shooter - Full Update</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+  <!-- GLTFLoader for custom 3D models -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background-color: #87ceeb; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      user-select: none;
+    }
+    
+    /* Pause / Shop Screen */
+    #blocker {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      z-index: 10;
+    }
+    #instructions {
+      text-align: center;
+      cursor: pointer;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      border: 2px solid #2ecc71;
+    }
+    
+    /* Shop UI */
+    #shop {
+      background: #2c3e50;
+      padding: 20px;
+      border-radius: 10px;
+      border: 2px solid #f39c12;
+      text-align: center;
+      width: 450px;
+    }
+    .shop-btn {
+      background-color: #e67e22;
+      color: white;
+      border: none;
+      padding: 10px;
+      margin: 5px;
+      font-size: 15px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .shop-btn:hover { background-color: #d35400; }
+    .shop-btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+    
+    /* Crosshair */
+    .crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background-color: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 5;
+      pointer-events: none;
+    }
+    
+    /* Top Left HUD */
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px #000;
+      z-index: 5;
+      pointer-events: none;
+    }
+    
+    /* Right Side Weapon Text */
+    #weapon-hud {
+      position: absolute;
+      bottom: 100px;
+      right: 20px;
+      color: #f39c12;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px #000;
+      z-index: 5;
+      text-align: right;
+    }
 
-        /* Header / Navigation */
-        header {
-            background: #ffffff;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-        }
-        .logo {
-            font-size: 24px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .logo span {
-            color: #e67e22;
-        }
-        nav ul {
-            display: flex;
-            list-style: none;
-        }
-        nav ul li {
-            margin-left: 20px;
-        }
-        nav ul li a {
-            text-decoration: none;
-            color: #555;
-            font-weight: 600;
-            transition: color 0.3s;
-        }
-        nav ul li a:hover {
-            color: #e67e22;
-        }
+    /* 5-Slot Inventory Hotbar */
+    #inventory-bar {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 5;
+    }
+    .slot {
+      width: 65px;
+      height: 65px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 3px solid #7f8c8d;
+      border-radius: 8px;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+      text-align: center;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+    }
+    .slot.active {
+      border-color: #f1c40f; 
+      background: rgba(241, 196, 15, 0.2);
+      transform: scale(1.1); 
+    }
+    .slot-num {
+      position: absolute;
+      top: 2px;
+      left: 5px;
+      font-size: 10px;
+      color: #bdc3c7;
+    }
 
-        /* Hero Section */
-        .hero {
-            padding: 80px 0;
-            background: linear-gradient(135deg, #fdfbf7 0%, #eee8d5 100%);
-            display: flex;
-            align-items: center;
-        }
-        .hero-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 50px;
-            align-items: center;
-        }
-        .hero-text h1 {
-            font-size: 48px;
-            color: #2c3e50;
-            margin-bottom: 20px;
-            line-height: 1.2;
-        }
-        .hero-text p {
-            font-size: 18px;
-            color: #666;
-            margin-bottom: 30px;
-        }
-        .cta-btn {
-            display: inline-block;
-            background-color: #e67e22;
-            color: white;
-            padding: 15px 35px;
-            text-decoration: none;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 5px;
-            transition: background 0.3s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .cta-btn:hover {
-            background-color: #d35400;
-        }
-        .hero-image {
-            display: flex;
-            justify-content: center;
-        }
-        .book-mockup {
-            width: 300px;
-            height: 450px;
-            background-color: #34495e;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            border-radius: 5px 15px 15px 5px;
-            box-shadow: 15px 15px 30px rgba(0,0,0,0.2);
-            border-left: 10px solid #2c3e50;
-            padding: 20px;
-            text-align: center;
-        }
+    /* Full Screen Inventory Overlay */
+    #inventory-screen {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(44, 62, 80, 0.9);
+      display: none; /* Hidden by default */
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      z-index: 20;
+    }
+    
+    #inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 20px;
+      border-radius: 10px;
+      border: 2px solid #3498db;
+    }
+    
+    .inv-box {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px dashed #7f8c8d;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      text-align: center;
+    }
 
-        /* About / Synopsis Section */
-        .about {
-            padding: 80px 0;
-            background: #fff;
-        }
-        .section-title {
-            text-align: center;
-            font-size: 32px;
-            color: #2c3e50;
-            margin-bottom: 40px;
-        }
-        .about-content {
-            max-width: 800px;
-            margin: 0 auto;
-            text-align: center;
-            font-size: 18px;
-            color: #555;
-        }
-
-        /* Testimonials Section */
-        .testimonials {
-            padding: 80px 0;
-            background: #f0f2f5;
-        }
-        .testimonial-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 30px;
-        }
-        .testimonial-card {
-            background: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-        }
-        .testimonial-text {
-            font-style: italic;
-            color: #555;
-            margin-bottom: 15px;
-        }
-        .testimonial-author {
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        /* Footer */
-        footer {
-            background: #2c3e50;
-            color: white;
-            text-align: center;
-            padding: 40px 0;
-        }
-        footer p {
-            margin-bottom: 10px;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .hero-grid {
-                grid-template-columns: 1fr;
-                text-align: center;
-            }
-            .hero-text h1 {
-                font-size: 36px;
-            }
-            nav {
-                flex-direction: column;
-                gap: 15px;
-            }
-            nav ul {
-                padding-left: 0;
-            }
-        }
-    </style>
+    .close-btn {
+      margin-top: 20px;
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .close-btn:hover { background-color: #c0392b; }
+  </style>
 </head>
 <body>
 
-    <!-- Header & Navigation -->
-    <header>
-        <div class="container">
-            <nav>
-                <div class="logo">Cat<span>&</span>Dog</div>
-                <ul>
-                    <li><a href="#home">Home</a></li>
-                    <li><a href="#about">About the Book</a></li>
-                    <li><a href="#reviews">Reviews</a></li>
-                </ul>
-            </nav>
-        </div>
-    </header>
+  <div id="hud">
+    Points: <span id="score">0</span> | Health: <span id="health">100</span><br>
+    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to open Shop | Press TAB for Inventory</span>
+  </div>
+  
+  <div id="weapon-hud"><span id="current-weapon-name">Standard Spud</span></div>
 
-    <!-- Hero Section -->
-    <section id="home" class="hero">
-        <div class="container">
-            <div class="hero-grid">
-                <div class="hero-text">
-                    <h1>An Unlikely Friendship. An Unforgettable Adventure.</h1>
-                    <p>Discover the heartwarming tale of two sworn enemies who learn that what makes them different is exactly what makes them a perfect team.</p>
-                    <a href="#buy" class="cta-btn">Order Your Copy Now</a>
-                </div>
-                <div class="hero-image">
-                    <!-- Temporary CSS Mockup Box for the Book Cover -->
-                    <div class="book-mockup">
-                        <h2 style="font-size: 36px; margin-bottom: 10px;">CAT</h2>
-                        <p style="font-size: 20px; color: #e67e22; font-weight: bold;">and</p>
-                        <h2 style="font-size: 36px; margin-top: 10px;">DOG</h2>
-                        <p style="margin-top: 50px; font-size: 14px; opacity: 0.8;">A Novel by Author Name</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
+  <div id="inventory-bar">
+    <div class="slot active" id="slot-0"><span class="slot-num">1</span><span id="slot-text-0">Std</span></div>
+    <div class="slot" id="slot-1"><span class="slot-num">2</span><span id="slot-text-1">-</span></div>
+    <div class="slot" id="slot-2"><span class="slot-num">3</span><span id="slot-text-2">-</span></div>
+    <div class="slot" id="slot-3"><span class="slot-num">4</span><span id="slot-text-3">-</span></div>
+    <div class="slot" id="slot-4"><span class="slot-num">5</span><span id="slot-text-4">-</span></div>
+  </div>
 
-    <!-- About Section -->
-    <section id="about" class="about">
-        <div class="container">
-            <h2 class="section-title">About the Book</h2>
-            <div class="about-content">
-                <p style="margin-bottom: 20px;">
-                    a cat and dog are frends
-                </p>
-                <p>
-                    But the dog stole the cats toy
-                </p>
-            </div>
-        </div>
-    </section>
+  <!-- Player Inventory Screen -->
+  <div id="inventory-screen">
+    <h1 style="color: #3498db;">🎒 Player Backpack 🎒</h1>
+    <p>Press TAB or the button below to return to the game.</p>
+    
+    <div id="inventory-grid">
+      <!-- 10 Backpack Slots (First 5 act as your hotbar currently) -->
+      <div class="inv-box" id="box-0">-</div>
+      <div class="inv-box" id="box-1">-</div>
+      <div class="inv-box" id="box-2">-</div>
+      <div class="inv-box" id="box-3">-</div>
+      <div class="inv-box" id="box-4">-</div>
+      <div class="inv-box" id="box-5">-</div>
+      <div class="inv-box" id="box-6">-</div>
+      <div class="inv-box" id="box-7">-</div>
+      <div class="inv-box" id="box-8">-</div>
+      <div class="inv-box" id="box-9">-</div>
+    </div>
+    
+    <button class="close-btn" id="close-inventory">Close Backpack</button>
+  </div>
 
-    <!-- Reviews Section -->
-    <section id="reviews" class="testimonials">
-        <div class="container">
-            <h2 class="section-title">What Readers Are Saying</h2>
-            <div class="testimonial-grid">
-                <div class="testimonial-card">
-                    <p class="testimonial-text">"A delightful read from start to finish. My kids and I couldn't put it down!"</p>
-                    <p class="testimonial-author">mr man</p>
-                </div>
-                <div class="testimonial-card">
-                    <p class="testimonial-text">"A beautifully written story about empathy, differences, and teamwork. Highly recommended."</p>
-                    <p class="testimonial-author">duke</p>
-                </div>
-                <div class="testimonial-card">
-                    <p class="testimonial-text">"Charming characters and a fast-paced plot. It made me hug my own pets a little tighter."</p>
-                    <p class="testimonial-author">dude</p>
-                </div>
-            </div>
-        </div>
-    </section>
+  <div id="blocker">
+    <div id="instructions">
+      <h1 style="font-size: 35px; margin: 0; color: #2ecc71;">Click to Play</h1>
+      <p>Move: <strong>W A S D</strong> | Jump: <strong>Space</strong> | Shoot: <strong>Click</strong> | Switch Weapon: <strong>1-5</strong> | Inventory: <strong>TAB</strong></p>
+    </div>
+    
+    <div id="shop">
+      <h2 style="margin-top: 0; color: #f39c12;">🛒 Spud Shop 🛒</h2>
+      <p>Available Points: <strong id="shop-points">0</strong></p>
+      <button class="shop-btn" id="btn-rapid">Buy Rapid-Fire Launcher (50 pts)</button>
+      <button class="shop-btn" id="btn-shotgun">Buy Spud Shotgun (100 pts)</button>
+      <button class="shop-btn" id="btn-sniper">Buy Spud Sniper (150 pts)</button>
+      <button class="shop-btn" id="btn-cannon">Buy Spud Cannon (200 pts)</button>
+      <button class="shop-btn" id="btn-mega" style="background-color: #8e44ad;">Buy Mega Spud (300 pts)</button>
+      <button class="shop-btn" id="btn-grenade" style="background-color: #c0392b;">Buy Spud-Nade Launcher (400 pts)</button>
+    </div>
+  </div>
 
-    <!-- Footer -->
-    <footer id="buy">
-        <div class="container">
-            <h2 style="margin-bottom: 20px;">Get Your Copy Today</h2>
-            <p style="margin-bottom: 30px;">Available in Hardcover, Paperback, and E-Book.</p>
-            <a href="#" class="cta-btn" style="background-color: #2ecc71;">Buy on Amazon</a>
-            <p style="margin-top: 50px; font-size: 14px; opacity: 0.7;">&copy;(c) 2026 All rights reserved.</p>
-        </div>
-    </footer>
+  <div class="crosshair"></div>
 
+  <script>
+    // 1. Scene, Camera, Rendering
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x556b2f);
+    scene.fog = new THREE.Fog(0x556b2f, 10, 80);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.y = 2;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(20, 40, 20);
+    scene.add(dirLight);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(500, 500),
+      new THREE.MeshLambertMaterial({ color: 0x2d4d1e })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    for(let i = 0; i < 120; i++) {
+       const tree = new THREE.Mesh(
+         new THREE.CylinderGeometry(0.5, 0.5, 5),
+         new THREE.MeshLambertMaterial({color: 0x4a2e12})
+       );
+       tree.position.set((Math.random() - 0.5) * 200, 2.5, (Math.random() - 0.5) * 200);
+       scene.add(tree);
+    }
+
+    const controls = new THREE.PointerLockControls(camera, document.body);
+    const blocker = document.getElementById('blocker');
+    const instructions = document.getElementById('instructions');
+
+    instructions.addEventListener('click', () => controls.lock());
+    controls.addEventListener('lock', () => {
+      blocker.style.display = 'none';
+      document.getElementById('inventory-screen').style.display = 'none';
+    });
+    controls.addEventListener('unlock', () => {
+      // Only show main menu if inventory isn't open
+      if(document.getElementById('inventory-screen').style.display !== 'flex') {
+        blocker.style.display = 'flex';
+        document.getElementById('shop-points').innerText = score; 
+      }
+    });
+    scene.add(controls.getObject());
+
+    // Basic Cylinder Gun
+    const gun = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 0.8),
+      new THREE.MeshLambertMaterial({ color: 0x333333 })
+    );
+    gun.rotation.x = Math.PI / 2;
+    gun.position.set(0.3, -0.25, -0.6);
+    camera.add(gun);
+
+    // Load custom Grenade Launcher GLB
+    let customLauncher = null;
+    const loader = new THREE.GLTFLoader();
+    
+    loader.load('https://brogamer654.github.io/scene.glb', function(gltf) {
+      customLauncher = gltf.scene;
+      // Adjust these if the model is too big/small or facing the wrong way
+      customLauncher.scale.set(0.1, 0.1, 0.1); 
+      customLauncher.position.set(0.3, -0.25, -0.6);
+      
+      customLauncher.visible = false; // Hide until equipped
+      camera.add(customLauncher);
+    }, undefined, function (error) {
+      console.error('Error loading the 3D model:', error);
+    });
+
+    let score = 0;
+    let health = 100;
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
+    let velocity = new THREE.Vector3();
+    let direction = new THREE.Vector3();
+    let clock = new THREE.Clock();
+
+    // 4. Weapon Database & Inventory
+    const weaponsDB = {
+      standard: { id: "standard", name: "Standard Spud", cooldown: 30, pellets: 1, spread: 0, speed: 3.0, size: 0.12, short: "Std" },
+      rapid:    { id: "rapid",    name: "Rapid-Fire",  cooldown: 8,  pellets: 1, spread: 0.02, speed: 3.5, size: 0.10, short: "Rapid" },
+      shotgun:  { id: "shotgun",  name: "Spud Shotgun",cooldown: 50, pellets: 5, spread: 0.15, speed: 2.5, size: 0.08, short: "Shot" },
+      sniper:   { id: "sniper",   name: "Spud Sniper", cooldown: 60, pellets: 1, spread: 0,    speed: 8.0, size: 0.15, short: "Snipe" },
+      cannon:   { id: "cannon",   name: "Spud Cannon", cooldown: 80, pellets: 1, spread: 0,    speed: 1.5, size: 0.40, short: "Cannon"},
+      mega:     { id: "mega",     name: "Mega Spud",   cooldown: 100, pellets: 1, spread: 0, speed: 4.0, size: 1.2, short: "MEGA" },
+      grenade:  { id: "grenade",  name: "Spud-Nade",   cooldown: 90, pellets: 1, spread: 0, speed: 2.5, size: 0.25, short: "Nade" }
+    };
+    
+    // We can support up to 10 slots now, but 5 are active hotbar slots
+    const inventory = [weaponsDB.standard, null, null, null, null, null, null, null, null, null];
+    let activeSlotIndex = 0;
+    
+    function getActiveWeapon() {
+      return inventory[activeSlotIndex];
+    }
+
+    function updateInventoryUI() {
+      // Update Hotbar
+      for (let i = 0; i < 5; i++) {
+        const slotEl = document.getElementById(`slot-${i}`);
+        const textEl = document.getElementById(`slot-text-${i}`);
+        slotEl.className = i === activeSlotIndex ? 'slot active' : 'slot';
+        textEl.innerText = inventory[i] ? inventory[i].short : "-";
+      }
+      
+      const currentWeapon = getActiveWeapon();
+      const currentWeaponName = currentWeapon ? currentWeapon.name : "Empty Hands";
+      document.getElementById('current-weapon-name').innerText = currentWeaponName;
+      document.getElementById('score').innerText = score;
+      document.getElementById('shop-points').innerText = score;
+
+      // Swap the 3D models based on active weapon
+      if (currentWeapon && currentWeapon.id === "grenade") {
+        gun.visible = false; 
+        if (customLauncher) customLauncher.visible = true; 
+      } else {
+        gun.visible = true; 
+        if (customLauncher) customLauncher.visible = false;
+      }
+    }
+
+    function syncBackpackUI() {
+      // Sync all 10 slots for the popup inventory
+      for (let i = 0; i < 10; i++) {
+        const boxEl = document.getElementById(`box-${i}`);
+        if (inventory[i]) {
+          boxEl.innerText = inventory[i].name;
+          boxEl.style.border = "2px solid #2ecc71";
+          boxEl.style.background = "rgba(46, 204, 113, 0.2)";
+        } else {
+          boxEl.innerText = "Empty";
+          boxEl.style.border = "2px dashed #7f8c8d";
+          boxEl.style.background = "rgba(255, 255, 255, 0.1)";
+        }
+      }
+    }
+
+    function buyItem(itemObj, cost, btnId) {
+      if (score >= cost) {
+        const emptyIndex = inventory.indexOf(null); 
+        if (emptyIndex !== -1) {
+          score -= cost;
+          inventory[emptyIndex] = itemObj;
+          const btn = document.getElementById(btnId);
+          btn.innerText = "BOUGHT";
+          btn.disabled = true;
+          updateInventoryUI();
+        } else {
+          alert("Your backpack is completely full!");
+        }
+      }
+    }
+
+    document.getElementById('btn-rapid').addEventListener('click', () => buyItem(weaponsDB.rapid, 50, 'btn-rapid'));
+    document.getElementById('btn-shotgun').addEventListener('click', () => buyItem(weaponsDB.shotgun, 100, 'btn-shotgun'));
+    document.getElementById('btn-sniper').addEventListener('click', () => buyItem(weaponsDB.sniper, 150, 'btn-sniper'));
+    document.getElementById('btn-cannon').addEventListener('click', () => buyItem(weaponsDB.cannon, 200, 'btn-cannon'));
+    document.getElementById('btn-mega').addEventListener('click', () => buyItem(weaponsDB.mega, 300, 'btn-mega'));
+    document.getElementById('btn-grenade').addEventListener('click', () => buyItem(weaponsDB.grenade, 400, 'btn-grenade'));
+
+    document.getElementById('close-inventory').addEventListener('click', () => {
+      document.getElementById('inventory-screen').style.display = 'none';
+      controls.lock();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      switch (event.code) {
+        case 'KeyW': moveForward = true; break;
+        case 'KeyA': moveLeft = true; break;
+        case 'KeyS': moveBackward = true; break;
+        case 'KeyD': moveRight = true; break;
+        case 'Space': if (canJump) velocity.y += 12; canJump = false; break;
+        case 'Digit1': activeSlotIndex = 0; updateInventoryUI(); break;
+        case 'Digit2': activeSlotIndex = 1; updateInventoryUI(); break;
+        case 'Digit3': activeSlotIndex = 2; updateInventoryUI(); break;
+        case 'Digit4': activeSlotIndex = 3; updateInventoryUI(); break;
+        case 'Digit5': activeSlotIndex = 4; updateInventoryUI(); break;
+        
+        // Open Inventory with 'Tab'
+        case 'Tab': 
+          event.preventDefault(); // This stops the browser from highlighting buttons when you press Tab!
+          if (controls.isLocked) {
+            controls.unlock(); 
+            document.getElementById('blocker').style.display = 'none'; 
+            document.getElementById('inventory-screen').style.display = 'flex'; 
+            syncBackpackUI(); 
+          } else if (document.getElementById('inventory-screen').style.display === 'flex') {
+            document.getElementById('inventory-screen').style.display = 'none';
+            controls.lock(); 
+          }
+          break;
+      }
+    });
+
+    document.addEventListener('keyup', (event) => {
+      switch (event.code) {
+        case 'KeyW': moveForward = false; break;
+        case 'KeyA': moveLeft = false; break;
+        case 'KeyS': moveBackward = false; break;
+        case 'KeyD': moveRight = false; break;
+      }
+    });
+
+    // 5. Shooting Mechanics
+    let weaponTimer = 0;
+    let isShooting = false;
+    const potatoes = [];
+    const healthDrops = [];
+    const explosions = [];
+    
+    document.addEventListener('mousedown', () => isShooting = true);
+    document.addEventListener('mouseup', () => isShooting = false);
+    
+    function fireWeapon() {
+      const weapon = getActiveWeapon();
+      if (!weapon || weaponTimer > 0) return; 
+
+      for (let i = 0; i < weapon.pellets; i++) {
+        const potato = new THREE.Mesh(
+          new THREE.SphereGeometry(weapon.size, 8, 8), 
+          new THREE.MeshLambertMaterial({ color: 0xb58342 })
+        );
+        
+        const gunTip = new THREE.Vector3(0.3, -0.25, -0.8);
+        gunTip.applyMatrix4(camera.matrixWorld);
+        potato.position.copy(gunTip);
+
+        const aimDirection = new THREE.Vector3();
+        camera.getWorldDirection(aimDirection);
+        
+        aimDirection.x += (Math.random() - 0.5) * weapon.spread;
+        aimDirection.y += (Math.random() - 0.5) * weapon.spread;
+        aimDirection.z += (Math.random() - 0.5) * weapon.spread;
+        
+        if (weapon.id === "grenade") {
+          aimDirection.y += 0.2; // Aim upwards
+          potato.material.color.setHex(0x333333); 
+          potato.userData.isGrenade = true; 
+        }
+
+        aimDirection.normalize(); 
+        potato.userData.velocity = aimDirection.multiplyScalar(weapon.speed);
+        potato.userData.life = 100;
+        potato.userData.damage = weapon.id === "mega" ? 15 : (weapon.id === "cannon" ? 5 : (weapon.id === "sniper" ? 3 : 1));
+
+        scene.add(potato);
+        potatoes.push(potato);
+      }
+      
+      weaponTimer = weapon.cooldown;
+    }
+
+    // 6. Zombie Spawner
+    const zombies = [];
+    function createZombie() {
+      const zombieGroup = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.6), new THREE.MeshLambertMaterial({ color: 0x2e5a27 }));
+      body.position.y = 1;
+      zombieGroup.add(body);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshLambertMaterial({ color: 0x3d7a34 }));
+      head.position.y = 2.4;
+      zombieGroup.add(head);
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const eye1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
+      eye1.position.set(-0.2, 2.5, 0.4);
+      const eye2 = eye1.clone();
+      eye2.position.x = 0.2;
+      zombieGroup.add(eye1);
+      zombieGroup.add(eye2);
+
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 30 + Math.random() * 20;
+      const playerPos = controls.getObject().position;
+      zombieGroup.position.set(playerPos.x + Math.sin(angle) * radius, 0, playerPos.z + Math.cos(angle) * radius);
+      
+      const speedBoost = Math.min(score / 100, 2.5); 
+      zombieGroup.userData = { speed: 2.0 + Math.random() * 1.5 + speedBoost, hitCooldown: 0, hp: 2 + Math.floor(score/100) }; 
+      scene.add(zombieGroup);
+      zombies.push(zombieGroup);
+    }
+
+    for (let i = 0; i < 5; i++) createZombie();
+    setInterval(() => {
+      if (controls.isLocked && zombies.length < 35 && health > 0) createZombie();
+    }, 1500);
+
+    // 7. Main Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+
+      if (controls.isLocked && health > 0) {
+        
+        if (isShooting) fireWeapon();
+        if (weaponTimer > 0) weaponTimer--;
+
+        velocity.x -= velocity.x * 10.0 * delta;
+        velocity.z -= velocity.z * 10.0 * delta;
+        velocity.y -= 30.0 * delta;
+
+        direction.z = Number(moveForward) - Number(moveBackward);
+        direction.x = Number(moveRight) - Number(moveLeft);
+        direction.normalize();
+
+        if (moveForward || moveBackward) velocity.z -= direction.z * 90.0 * delta;
+        if (moveLeft || moveRight) velocity.x -= direction.x * 90.0 * delta;
+
+        controls.moveRight(-velocity.x * delta);
+        controls.moveForward(-velocity.z * delta);
+        controls.getObject().position.y += (velocity.y * delta);
+
+        if (controls.getObject().position.y < 2) {
+          velocity.y = 0;
+          controls.getObject().position.y = 2;
+          canJump = true;
+        }
+
+        const playerPos = controls.getObject().position;
+
+        // Visual Explosions
+        for (let i = explosions.length - 1; i >= 0; i--) {
+          const exp = explosions[i];
+          exp.life -= 1;
+          exp.mesh.scale.addScalar(0.4); 
+          exp.mesh.material.opacity -= 0.05; 
+          if (exp.life <= 0) {
+            scene.remove(exp.mesh);
+            explosions.splice(i, 1);
+          }
+        }
+
+        // Health Pickups
+        for (let i = healthDrops.length - 1; i >= 0; i--) {
+          const drop = healthDrops[i];
+          drop.rotation.y += 3 * delta;
+          drop.rotation.x += 1 * delta;
+          
+          if (drop.position.distanceTo(playerPos) < 2) {
+            health = Math.min(100, health + 25);
+            document.getElementById('health').innerText = health;
+            scene.remove(drop);
+            healthDrops.splice(i, 1);
+          }
+        }
+
+        // Zombie AI
+        for (let i = zombies.length - 1; i >= 0; i--) {
+          const zombie = zombies[i];
+          zombie.lookAt(playerPos.x, zombie.position.y, playerPos.z);
+          zombie.translateZ(zombie.userData.speed * delta);
+
+          if (zombie.position.distanceTo(playerPos) < 1.5 && zombie.userData.hitCooldown <= 0) {
+            health -= 10;
+            document.getElementById('health').innerText = Math.max(0, health);
+            zombie.userData.hitCooldown = 60; 
+            
+            if (health <= 0) {
+              alert("Game Over! Final Score: " + score);
+              location.reload();
+            }
+          }
+          if (zombie.userData.hitCooldown > 0) zombie.userData.hitCooldown--;
+        }
+
+        // Potatoes Physics & Collision
+        for (let i = potatoes.length - 1; i >= 0; i--) {
+          const p = potatoes[i];
+          
+          if (p.userData.isGrenade) {
+            p.userData.velocity.y -= 8.0 * delta; // Gravity
+          }
+
+          p.position.add(p.userData.velocity);
+          p.userData.life--;
+
+          let hit = false;
+          
+          if (p.userData.isGrenade && p.position.y <= p.geometry.parameters.radius) {
+            hit = true;
+          }
+
+          if (!hit) {
+            for (let j = zombies.length - 1; j >= 0; j--) {
+              const z = zombies[j];
+              if (p.position.distanceTo(z.position.clone().add(new THREE.Vector3(0, 1.2, 0))) < 1.5) {
+                
+                if (!p.userData.isGrenade) {
+                  z.userData.hp -= p.userData.damage; 
+                  if (z.userData.hp <= 0) {
+                    scene.remove(z);
+                    zombies.splice(j, 1);
+                    score += 10;
+                    document.getElementById('score').innerText = score;
+
+                    if (Math.random() < 0.2) {
+                      const medkit = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.8, 0.8, 0.8),
+                        new THREE.MeshLambertMaterial({ color: 0xff3333 })
+                      );
+                      medkit.position.copy(z.position);
+                      medkit.position.y = 0.4;
+                      scene.add(medkit);
+                      healthDrops.push(medkit);
+                    }
+                  }
+                }
+                hit = true;
+                break; 
+              }
+            }
+          }
+
+          if (hit || p.userData.life <= 0) {
+            
+            // Grenade AoE Logic
+            if (p.userData.isGrenade && hit) {
+              const boom = new THREE.Mesh(
+                new THREE.SphereGeometry(3, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.8 })
+              );
+              boom.position.copy(p.position);
+              scene.add(boom);
+              explosions.push({ mesh: boom, life: 15 });
+
+              for (let j = zombies.length - 1; j >= 0; j--) {
+                const z = zombies[j];
+                if (boom.position.distanceTo(z.position) < 4.5) { 
+                  z.userData.hp -= 20; 
+                  
+                  if (z.userData.hp <= 0) {
+                    scene.remove(z);
+                    zombies.splice(j, 1);
+                    score += 10;
+                    document.getElementById('score').innerText = score;
+
+                    if (Math.random() < 0.2) {
+                      const medkit = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.8, 0.8, 0.8),
+                        new THREE.MeshLambertMaterial({ color: 0xff3333 })
+                      );
+                      medkit.position.copy(z.position);
+                      medkit.position.y = 0.4;
+                      scene.add(medkit);
+                      healthDrops.push(medkit);
+                    }
+                  }
+                }
+              }
+            }
+
+            scene.remove(p);
+            potatoes.splice(i, 1);
+          }
+        }
+      }
+      renderer.render(scene, camera);
+    }
+
+    animate();
+    updateInventoryUI();
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+  </script>
 </body>
 </html>
