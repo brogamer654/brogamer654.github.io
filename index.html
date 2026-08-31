@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3D FPS Potato Shooter - Full Update</title>
+  <title>3D FPS Potato Shooter - Solid Building Update</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
-  <!-- GLTFLoader for custom 3D models -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
     body { 
@@ -15,7 +14,6 @@
       user-select: none;
     }
     
-    /* Pause / Shop Screen */
     #blocker {
       position: absolute;
       width: 100%;
@@ -38,7 +36,6 @@
       border: 2px solid #2ecc71;
     }
     
-    /* Shop UI */
     #shop {
       background: #2c3e50;
       padding: 20px;
@@ -62,7 +59,6 @@
     .shop-btn:hover { background-color: #d35400; }
     .shop-btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
     
-    /* Crosshair */
     .crosshair {
       position: absolute;
       top: 50%;
@@ -76,7 +72,6 @@
       pointer-events: none;
     }
     
-    /* Top Left HUD */
     #hud {
       position: absolute;
       top: 20px;
@@ -88,8 +83,19 @@
       z-index: 5;
       pointer-events: none;
     }
+
+    #build-hud {
+      position: absolute;
+      top: 90px;
+      left: 20px;
+      color: #3498db;
+      font-size: 20px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px #000;
+      z-index: 5;
+      pointer-events: none;
+    }
     
-    /* Right Side Weapon Text */
     #weapon-hud {
       position: absolute;
       bottom: 100px;
@@ -102,7 +108,6 @@
       text-align: right;
     }
 
-    /* 5-Slot Inventory Hotbar */
     #inventory-bar {
       position: absolute;
       bottom: 20px;
@@ -141,13 +146,12 @@
       color: #bdc3c7;
     }
 
-    /* Full Screen Inventory Overlay */
     #inventory-screen {
       position: absolute;
       width: 100%;
       height: 100%;
       background-color: rgba(44, 62, 80, 0.9);
-      display: none; /* Hidden by default */
+      display: none;
       flex-direction: column;
       align-items: center;
       justify-content: center;
@@ -196,8 +200,10 @@
 
   <div id="hud">
     Points: <span id="score">0</span> | Health: <span id="health">100</span><br>
-    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to open Shop | Press TAB for Inventory</span>
+    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to Shop | TAB for Inventory | Q to Build</span>
   </div>
+  
+  <div id="build-hud">Build Mode: OFF</div>
   
   <div id="weapon-hud"><span id="current-weapon-name">Standard Spud</span></div>
 
@@ -209,13 +215,11 @@
     <div class="slot" id="slot-4"><span class="slot-num">5</span><span id="slot-text-4">-</span></div>
   </div>
 
-  <!-- Player Inventory Screen -->
   <div id="inventory-screen">
     <h1 style="color: #3498db;">🎒 Player Backpack 🎒</h1>
     <p>Press TAB or the button below to return to the game.</p>
     
     <div id="inventory-grid">
-      <!-- 10 Backpack Slots (First 5 act as your hotbar currently) -->
       <div class="inv-box" id="box-0">-</div>
       <div class="inv-box" id="box-1">-</div>
       <div class="inv-box" id="box-2">-</div>
@@ -234,7 +238,7 @@
   <div id="blocker">
     <div id="instructions">
       <h1 style="font-size: 35px; margin: 0; color: #2ecc71;">Click to Play</h1>
-      <p>Move: <strong>W A S D</strong> | Jump: <strong>Space</strong> | Shoot: <strong>Click</strong> | Switch Weapon: <strong>1-5</strong> | Inventory: <strong>TAB</strong></p>
+      <p>Move: <strong>W A S D</strong> | Jump: <strong>Space</strong> | Shoot: <strong>Click</strong><br>Weapons: <strong>1-5</strong> | Inventory: <strong>TAB</strong><br>Build Mode: <strong>Q</strong> | Swap Wall/Ramp: <strong>E</strong></p>
     </div>
     
     <div id="shop">
@@ -252,7 +256,7 @@
   <div class="crosshair"></div>
 
   <script>
-    // 1. Scene, Camera, Rendering
+    // 1. Scene Setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x556b2f);
     scene.fog = new THREE.Fog(0x556b2f, 10, 80);
@@ -294,7 +298,6 @@
       document.getElementById('inventory-screen').style.display = 'none';
     });
     controls.addEventListener('unlock', () => {
-      // Only show main menu if inventory isn't open
       if(document.getElementById('inventory-screen').style.display !== 'flex') {
         blocker.style.display = 'flex';
         document.getElementById('shop-points').innerText = score; 
@@ -302,7 +305,7 @@
     });
     scene.add(controls.getObject());
 
-    // Basic Cylinder Gun
+    // Weapons 
     const gun = new THREE.Mesh(
       new THREE.CylinderGeometry(0.08, 0.08, 0.8),
       new THREE.MeshLambertMaterial({ color: 0x333333 })
@@ -311,30 +314,40 @@
     gun.position.set(0.3, -0.25, -0.6);
     camera.add(gun);
 
-    // Load custom Grenade Launcher GLB
     let customLauncher = null;
     const loader = new THREE.GLTFLoader();
-    
     loader.load('https://brogamer654.github.io/scene.glb', function(gltf) {
       customLauncher = gltf.scene;
-      // Adjust these if the model is too big/small or facing the wrong way
       customLauncher.scale.set(0.1, 0.1, 0.1); 
       customLauncher.position.set(0.3, -0.25, -0.6);
-      
-      customLauncher.visible = false; // Hide until equipped
+      customLauncher.visible = false; 
       camera.add(customLauncher);
-    }, undefined, function (error) {
-      console.error('Error loading the 3D model:', error);
     });
 
-    let score = 0;
+    // FORTNITE BUILDING MECHANICS
+    let isBuildMode = false;
+    let buildType = 'wall'; 
+    const structures = []; 
+    
+    const wallGeo = new THREE.BoxGeometry(4, 4, 0.5); 
+    const rampGeo = new THREE.BoxGeometry(4, 0.5, 5.65); 
+
+    const previewMat = new THREE.MeshLambertMaterial({ color: 0x00aaff, transparent: true, opacity: 0.5 });
+    const previewMesh = new THREE.Mesh(wallGeo, previewMat);
+    previewMesh.rotation.order = 'YXZ'; 
+    scene.add(previewMesh);
+    previewMesh.visible = false;
+    
+    // Now completely solid and non-transparent
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b }); 
+
+    let score = 200; // Extra points for testing builds!
     let health = 100;
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
     let velocity = new THREE.Vector3();
     let direction = new THREE.Vector3();
     let clock = new THREE.Clock();
 
-    // 4. Weapon Database & Inventory
     const weaponsDB = {
       standard: { id: "standard", name: "Standard Spud", cooldown: 30, pellets: 1, spread: 0, speed: 3.0, size: 0.12, short: "Std" },
       rapid:    { id: "rapid",    name: "Rapid-Fire",  cooldown: 8,  pellets: 1, spread: 0.02, speed: 3.5, size: 0.10, short: "Rapid" },
@@ -345,7 +358,6 @@
       grenade:  { id: "grenade",  name: "Spud-Nade",   cooldown: 90, pellets: 1, spread: 0, speed: 2.5, size: 0.25, short: "Nade" }
     };
     
-    // We can support up to 10 slots now, but 5 are active hotbar slots
     const inventory = [weaponsDB.standard, null, null, null, null, null, null, null, null, null];
     let activeSlotIndex = 0;
     
@@ -354,32 +366,27 @@
     }
 
     function updateInventoryUI() {
-      // Update Hotbar
       for (let i = 0; i < 5; i++) {
-        const slotEl = document.getElementById(`slot-${i}`);
-        const textEl = document.getElementById(`slot-text-${i}`);
-        slotEl.className = i === activeSlotIndex ? 'slot active' : 'slot';
-        textEl.innerText = inventory[i] ? inventory[i].short : "-";
+        document.getElementById(`slot-${i}`).className = i === activeSlotIndex ? 'slot active' : 'slot';
+        document.getElementById(`slot-text-${i}`).innerText = inventory[i] ? inventory[i].short : "-";
       }
-      
-      const currentWeapon = getActiveWeapon();
-      const currentWeaponName = currentWeapon ? currentWeapon.name : "Empty Hands";
-      document.getElementById('current-weapon-name').innerText = currentWeaponName;
+      const cur = getActiveWeapon();
+      document.getElementById('current-weapon-name').innerText = cur ? cur.name : "Empty";
       document.getElementById('score').innerText = score;
       document.getElementById('shop-points').innerText = score;
 
-      // Swap the 3D models based on active weapon
-      if (currentWeapon && currentWeapon.id === "grenade") {
-        gun.visible = false; 
-        if (customLauncher) customLauncher.visible = true; 
-      } else {
-        gun.visible = true; 
-        if (customLauncher) customLauncher.visible = false;
+      if(!isBuildMode) {
+        if (cur && cur.id === "grenade") {
+          gun.visible = false; 
+          if (customLauncher) customLauncher.visible = true; 
+        } else {
+          gun.visible = true; 
+          if (customLauncher) customLauncher.visible = false;
+        }
       }
     }
 
     function syncBackpackUI() {
-      // Sync all 10 slots for the popup inventory
       for (let i = 0; i < 10; i++) {
         const boxEl = document.getElementById(`box-${i}`);
         if (inventory[i]) {
@@ -405,23 +412,12 @@
           btn.disabled = true;
           updateInventoryUI();
         } else {
-          alert("Your backpack is completely full!");
+          alert("Backpack full!");
         }
       }
     }
 
-    document.getElementById('btn-rapid').addEventListener('click', () => buyItem(weaponsDB.rapid, 50, 'btn-rapid'));
-    document.getElementById('btn-shotgun').addEventListener('click', () => buyItem(weaponsDB.shotgun, 100, 'btn-shotgun'));
-    document.getElementById('btn-sniper').addEventListener('click', () => buyItem(weaponsDB.sniper, 150, 'btn-sniper'));
-    document.getElementById('btn-cannon').addEventListener('click', () => buyItem(weaponsDB.cannon, 200, 'btn-cannon'));
-    document.getElementById('btn-mega').addEventListener('click', () => buyItem(weaponsDB.mega, 300, 'btn-mega'));
-    document.getElementById('btn-grenade').addEventListener('click', () => buyItem(weaponsDB.grenade, 400, 'btn-grenade'));
-
-    document.getElementById('close-inventory').addEventListener('click', () => {
-      document.getElementById('inventory-screen').style.display = 'none';
-      controls.lock();
-    });
-
+    // Input Handling
     document.addEventListener('keydown', (event) => {
       switch (event.code) {
         case 'KeyW': moveForward = true; break;
@@ -435,9 +431,29 @@
         case 'Digit4': activeSlotIndex = 3; updateInventoryUI(); break;
         case 'Digit5': activeSlotIndex = 4; updateInventoryUI(); break;
         
-        // Open Inventory with 'Tab'
+        case 'KeyQ':
+          isBuildMode = !isBuildMode;
+          previewMesh.visible = isBuildMode;
+          
+          if(isBuildMode) {
+            document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | E to Swap | 10 Pts`;
+            gun.visible = false;
+            if(customLauncher) customLauncher.visible = false;
+          } else {
+            document.getElementById('build-hud').innerText = "Build Mode: OFF";
+            updateInventoryUI(); 
+          }
+          break;
+
+        case 'KeyE':
+          if (isBuildMode) {
+            buildType = buildType === 'wall' ? 'ramp' : 'wall';
+            document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | E to Swap | 10 Pts`;
+          }
+          break;
+
         case 'Tab': 
-          event.preventDefault(); // This stops the browser from highlighting buttons when you press Tab!
+          event.preventDefault(); 
           if (controls.isLocked) {
             controls.unlock(); 
             document.getElementById('blocker').style.display = 'none'; 
@@ -460,19 +476,34 @@
       }
     });
 
-    // 5. Shooting Mechanics
     let weaponTimer = 0;
     let isShooting = false;
     const potatoes = [];
     const healthDrops = [];
     const explosions = [];
     
-    document.addEventListener('mousedown', () => isShooting = true);
+    document.addEventListener('mousedown', () => {
+      if(isBuildMode && controls.isLocked) {
+        if (score >= 10) {
+          score -= 10;
+          document.getElementById('score').innerText = score;
+          
+          const newStruct = new THREE.Mesh(previewMesh.geometry, wallMat);
+          newStruct.position.copy(previewMesh.position);
+          newStruct.rotation.copy(previewMesh.rotation);
+          newStruct.userData = { hp: 100 }; 
+          scene.add(newStruct);
+          structures.push(newStruct);
+        }
+      } else {
+        isShooting = true;
+      }
+    });
     document.addEventListener('mouseup', () => isShooting = false);
     
     function fireWeapon() {
       const weapon = getActiveWeapon();
-      if (!weapon || weaponTimer > 0) return; 
+      if (!weapon || weaponTimer > 0 || isBuildMode) return; 
 
       for (let i = 0; i < weapon.pellets; i++) {
         const potato = new THREE.Mesh(
@@ -492,7 +523,7 @@
         aimDirection.z += (Math.random() - 0.5) * weapon.spread;
         
         if (weapon.id === "grenade") {
-          aimDirection.y += 0.2; // Aim upwards
+          aimDirection.y += 0.2; 
           potato.material.color.setHex(0x333333); 
           potato.userData.isGrenade = true; 
         }
@@ -505,11 +536,9 @@
         scene.add(potato);
         potatoes.push(potato);
       }
-      
       weaponTimer = weapon.cooldown;
     }
 
-    // 6. Zombie Spawner
     const zombies = [];
     function createZombie() {
       const zombieGroup = new THREE.Group();
@@ -519,14 +548,7 @@
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshLambertMaterial({ color: 0x3d7a34 }));
       head.position.y = 2.4;
       zombieGroup.add(head);
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const eye1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
-      eye1.position.set(-0.2, 2.5, 0.4);
-      const eye2 = eye1.clone();
-      eye2.position.x = 0.2;
-      zombieGroup.add(eye1);
-      zombieGroup.add(eye2);
-
+      
       const angle = Math.random() * Math.PI * 2;
       const radius = 30 + Math.random() * 20;
       const playerPos = controls.getObject().position;
@@ -543,19 +565,42 @@
       if (controls.isLocked && zombies.length < 35 && health > 0) createZombie();
     }, 1500);
 
-    // 7. Main Loop
+    // Main Loop
     function animate() {
       requestAnimationFrame(animate);
       const delta = clock.getDelta();
 
       if (controls.isLocked && health > 0) {
         
+        // Build Preview Snapping & Rotation
+        if(isBuildMode) {
+          const lookDir = new THREE.Vector3();
+          camera.getWorldDirection(lookDir);
+          
+          const targetPos = camera.position.clone().add(lookDir.multiplyScalar(5));
+          previewMesh.position.x = Math.round(targetPos.x / 4) * 4;
+          previewMesh.position.z = Math.round(targetPos.z / 4) * 4;
+          
+          // Snap height to increments of 4 (so you can build up)
+          previewMesh.position.y = Math.round(targetPos.y / 4) * 4; 
+          if(previewMesh.position.y < 2) previewMesh.position.y = 2; // Keep it above floor
+
+          const snappedAngle = Math.round(Math.atan2(lookDir.x, lookDir.z) / (Math.PI / 2)) * (Math.PI / 2);
+
+          if (buildType === 'wall') {
+            previewMesh.geometry = wallGeo;
+            previewMesh.rotation.set(0, snappedAngle, 0); 
+          } else {
+            previewMesh.geometry = rampGeo;
+            previewMesh.rotation.set(-Math.PI / 4, snappedAngle, 0);
+          }
+        }
+
         if (isShooting) fireWeapon();
         if (weaponTimer > 0) weaponTimer--;
 
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
-        velocity.y -= 30.0 * delta;
 
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
@@ -564,15 +609,73 @@
         if (moveForward || moveBackward) velocity.z -= direction.z * 90.0 * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * 90.0 * delta;
 
+        // --- NEW: CUSTOM PHYSICS & COLLISION ---
+        
+        // 1. Horizontal Movement & Wall Collision
+        const oldPos = controls.getObject().position.clone();
+        
         controls.moveRight(-velocity.x * delta);
         controls.moveForward(-velocity.z * delta);
-        controls.getObject().position.y += (velocity.y * delta);
-
-        if (controls.getObject().position.y < 2) {
-          velocity.y = 0;
-          controls.getObject().position.y = 2;
-          canJump = true;
+        
+        const newPos = controls.getObject().position.clone();
+        const worldMove = newPos.clone().sub(oldPos);
+        
+        // Temporarily revert to check if the path is clear
+        controls.getObject().position.copy(oldPos); 
+        
+        if (worldMove.lengthSq() > 0) {
+            const moveDir = worldMove.clone().normalize();
+            const waistPos = controls.getObject().position.clone();
+            waistPos.y -= 1.0; // Check laser from waist height
+            
+            const horizRay = new THREE.Raycaster(waistPos, moveDir, 0, 1.2); 
+            const hHits = horizRay.intersectObjects(structures);
+            let blocked = false;
+            
+            if (hHits.length > 0) {
+                // If it hits a steep face (like a wall or the flat side of a ramp)
+                const hitNormal = hHits[0].face.normal.clone().transformDirection(hHits[0].object.matrixWorld);
+                if (Math.abs(hitNormal.y) < 0.6) { 
+                    blocked = true;
+                }
+            }
+            
+            if (!blocked) {
+                // Safe to move horizontally
+                controls.getObject().position.add(worldMove); 
+            } else {
+                // Blocked! Stop momentum
+                velocity.x = 0;
+                velocity.z = 0; 
+            }
         }
+
+        // 2. Vertical Movement, Gravity & Ramp Climbing
+        velocity.y -= 30.0 * delta; // Gravity
+        let proposedY = controls.getObject().position.y + velocity.y * delta;
+        
+        // Shoot a laser straight down from your head
+        const rayOrigin = controls.getObject().position.clone();
+        const downRay = new THREE.Raycaster(rayOrigin, new THREE.Vector3(0, -1, 0), 0, 20);
+        const downHits = downRay.intersectObjects([ground, ...structures]);
+        
+        let hitY = 0; // Default ground level
+        if (downHits.length > 0) {
+            hitY = downHits[0].point.y; // Find the exact height of the surface below us
+        }
+        
+        // If our feet go below the surface, pop back on top!
+        if (proposedY - 2 <= hitY) {
+            velocity.y = Math.max(0, velocity.y); 
+            proposedY = hitY + 2; 
+            canJump = true;
+        } else {
+            canJump = false; // We are in the air
+        }
+        
+        controls.getObject().position.y = proposedY;
+        
+        // --- END CUSTOM PHYSICS ---
 
         const playerPos = controls.getObject().position;
 
@@ -588,27 +691,31 @@
           }
         }
 
-        // Health Pickups
-        for (let i = healthDrops.length - 1; i >= 0; i--) {
-          const drop = healthDrops[i];
-          drop.rotation.y += 3 * delta;
-          drop.rotation.x += 1 * delta;
-          
-          if (drop.position.distanceTo(playerPos) < 2) {
-            health = Math.min(100, health + 25);
-            document.getElementById('health').innerText = health;
-            scene.remove(drop);
-            healthDrops.splice(i, 1);
-          }
-        }
-
-        // Zombie AI
+        // Zombie Logic
         for (let i = zombies.length - 1; i >= 0; i--) {
           const zombie = zombies[i];
           zombie.lookAt(playerPos.x, zombie.position.y, playerPos.z);
-          zombie.translateZ(zombie.userData.speed * delta);
+          
+          let blockedByStruct = false;
+          for(let w = structures.length - 1; w >= 0; w--) {
+            const struct = structures[w];
+            if(zombie.position.distanceTo(struct.position) < 2.5) {
+              blockedByStruct = true;
+              struct.userData.hp -= 1; 
+              
+              if(struct.userData.hp <= 0) {
+                scene.remove(struct);
+                structures.splice(w, 1);
+              }
+              break;
+            }
+          }
 
-          if (zombie.position.distanceTo(playerPos) < 1.5 && zombie.userData.hitCooldown <= 0) {
+          if (!blockedByStruct) {
+            zombie.translateZ(zombie.userData.speed * delta);
+          }
+
+          if (zombie.position.distanceTo(playerPos) < 1.5 && zombie.userData.hitCooldown <= 0 && !blockedByStruct) {
             health -= 10;
             document.getElementById('health').innerText = Math.max(0, health);
             zombie.userData.hitCooldown = 60; 
@@ -621,28 +728,36 @@
           if (zombie.userData.hitCooldown > 0) zombie.userData.hitCooldown--;
         }
 
-        // Potatoes Physics & Collision
+        // Potatoes Collision
         for (let i = potatoes.length - 1; i >= 0; i--) {
           const p = potatoes[i];
-          
-          if (p.userData.isGrenade) {
-            p.userData.velocity.y -= 8.0 * delta; // Gravity
-          }
-
+          if (p.userData.isGrenade) p.userData.velocity.y -= 8.0 * delta; 
           p.position.add(p.userData.velocity);
           p.userData.life--;
 
           let hit = false;
-          
-          if (p.userData.isGrenade && p.position.y <= p.geometry.parameters.radius) {
-            hit = true;
+          if (p.userData.isGrenade && p.position.y <= p.geometry.parameters.radius) hit = true;
+
+          // Potatoes hitting structures
+          if(!hit) {
+            for(let w = structures.length - 1; w >= 0; w--) {
+              const struct = structures[w];
+              if(p.position.distanceTo(struct.position) < 2.5) {
+                hit = true;
+                struct.userData.hp -= (p.userData.damage * 5); 
+                if(struct.userData.hp <= 0) {
+                  scene.remove(struct);
+                  structures.splice(w, 1);
+                }
+                break;
+              }
+            }
           }
 
           if (!hit) {
             for (let j = zombies.length - 1; j >= 0; j--) {
               const z = zombies[j];
               if (p.position.distanceTo(z.position.clone().add(new THREE.Vector3(0, 1.2, 0))) < 1.5) {
-                
                 if (!p.userData.isGrenade) {
                   z.userData.hp -= p.userData.damage; 
                   if (z.userData.hp <= 0) {
@@ -650,17 +765,6 @@
                     zombies.splice(j, 1);
                     score += 10;
                     document.getElementById('score').innerText = score;
-
-                    if (Math.random() < 0.2) {
-                      const medkit = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.8, 0.8, 0.8),
-                        new THREE.MeshLambertMaterial({ color: 0xff3333 })
-                      );
-                      medkit.position.copy(z.position);
-                      medkit.position.y = 0.4;
-                      scene.add(medkit);
-                      healthDrops.push(medkit);
-                    }
                   }
                 }
                 hit = true;
@@ -670,8 +774,6 @@
           }
 
           if (hit || p.userData.life <= 0) {
-            
-            // Grenade AoE Logic
             if (p.userData.isGrenade && hit) {
               const boom = new THREE.Mesh(
                 new THREE.SphereGeometry(3, 16, 16),
@@ -685,28 +787,25 @@
                 const z = zombies[j];
                 if (boom.position.distanceTo(z.position) < 4.5) { 
                   z.userData.hp -= 20; 
-                  
                   if (z.userData.hp <= 0) {
                     scene.remove(z);
                     zombies.splice(j, 1);
                     score += 10;
                     document.getElementById('score').innerText = score;
-
-                    if (Math.random() < 0.2) {
-                      const medkit = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.8, 0.8, 0.8),
-                        new THREE.MeshLambertMaterial({ color: 0xff3333 })
-                      );
-                      medkit.position.copy(z.position);
-                      medkit.position.y = 0.4;
-                      scene.add(medkit);
-                      healthDrops.push(medkit);
-                    }
+                  }
+                }
+              }
+              for (let w = structures.length - 1; w >= 0; w--) {
+                const struct = structures[w];
+                if(boom.position.distanceTo(struct.position) < 4.5) {
+                  struct.userData.hp -= 40;
+                  if(struct.userData.hp <= 0) {
+                    scene.remove(struct);
+                    structures.splice(w, 1);
                   }
                 }
               }
             }
-
             scene.remove(p);
             potatoes.splice(i, 1);
           }
@@ -715,8 +814,20 @@
       renderer.render(scene, camera);
     }
 
-    animate();
+    document.getElementById('btn-rapid').addEventListener('click', () => buyItem(weaponsDB.rapid, 50, 'btn-rapid'));
+    document.getElementById('btn-shotgun').addEventListener('click', () => buyItem(weaponsDB.shotgun, 100, 'btn-shotgun'));
+    document.getElementById('btn-sniper').addEventListener('click', () => buyItem(weaponsDB.sniper, 150, 'btn-sniper'));
+    document.getElementById('btn-cannon').addEventListener('click', () => buyItem(weaponsDB.cannon, 200, 'btn-cannon'));
+    document.getElementById('btn-mega').addEventListener('click', () => buyItem(weaponsDB.mega, 300, 'btn-mega'));
+    document.getElementById('btn-grenade').addEventListener('click', () => buyItem(weaponsDB.grenade, 400, 'btn-grenade'));
+    document.getElementById('close-inventory').addEventListener('click', () => {
+      document.getElementById('inventory-screen').style.display = 'none';
+      controls.lock();
+    });
+    
+    document.getElementById('score').innerText = score;
     updateInventoryUI();
+    animate();
 
     window.addEventListener('resize', () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
