@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3D FPS Potato Shooter - Solid Building Update</title>
+  <title>3D FPS Potato Shooter - Custom Gun Update</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -316,11 +316,20 @@
 
     let customLauncher = null;
     const loader = new THREE.GLTFLoader();
-    loader.load('https://brogamer654.github.io/scene.glb', function(gltf) {
+    
+    // UPDATED URL TO USE "scene modelling.glb" WITH %20 FOR THE SPACE
+    loader.load('https://brogamer654.github.io/scene%20modelling.glb', function(gltf) {
       customLauncher = gltf.scene;
       customLauncher.scale.set(0.1, 0.1, 0.1); 
       customLauncher.position.set(0.3, -0.25, -0.6);
-      customLauncher.visible = false; 
+      
+      const cur = getActiveWeapon();
+      if (!isBuildMode && cur && (cur.id === "standard" || cur.id === "grenade")) {
+        customLauncher.visible = true;
+        gun.visible = false;
+      } else {
+        customLauncher.visible = false; 
+      }
       camera.add(customLauncher);
     });
 
@@ -338,10 +347,9 @@
     scene.add(previewMesh);
     previewMesh.visible = false;
     
-    // Now completely solid and non-transparent
     const wallMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b }); 
 
-    let score = 200; // Extra points for testing builds!
+    let score = 200; 
     let health = 100;
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
     let velocity = new THREE.Vector3();
@@ -376,7 +384,7 @@
       document.getElementById('shop-points').innerText = score;
 
       if(!isBuildMode) {
-        if (cur && cur.id === "grenade") {
+        if (cur && (cur.id === "standard" || cur.id === "grenade")) {
           gun.visible = false; 
           if (customLauncher) customLauncher.visible = true; 
         } else {
@@ -581,9 +589,8 @@
           previewMesh.position.x = Math.round(targetPos.x / 4) * 4;
           previewMesh.position.z = Math.round(targetPos.z / 4) * 4;
           
-          // Snap height to increments of 4 (so you can build up)
           previewMesh.position.y = Math.round(targetPos.y / 4) * 4; 
-          if(previewMesh.position.y < 2) previewMesh.position.y = 2; // Keep it above floor
+          if(previewMesh.position.y < 2) previewMesh.position.y = 2; 
 
           const snappedAngle = Math.round(Math.atan2(lookDir.x, lookDir.z) / (Math.PI / 2)) * (Math.PI / 2);
 
@@ -609,9 +616,6 @@
         if (moveForward || moveBackward) velocity.z -= direction.z * 90.0 * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * 90.0 * delta;
 
-        // --- NEW: CUSTOM PHYSICS & COLLISION ---
-        
-        // 1. Horizontal Movement & Wall Collision
         const oldPos = controls.getObject().position.clone();
         
         controls.moveRight(-velocity.x * delta);
@@ -620,20 +624,18 @@
         const newPos = controls.getObject().position.clone();
         const worldMove = newPos.clone().sub(oldPos);
         
-        // Temporarily revert to check if the path is clear
         controls.getObject().position.copy(oldPos); 
         
         if (worldMove.lengthSq() > 0) {
             const moveDir = worldMove.clone().normalize();
             const waistPos = controls.getObject().position.clone();
-            waistPos.y -= 1.0; // Check laser from waist height
+            waistPos.y -= 1.0; 
             
             const horizRay = new THREE.Raycaster(waistPos, moveDir, 0, 1.2); 
             const hHits = horizRay.intersectObjects(structures);
             let blocked = false;
             
             if (hHits.length > 0) {
-                // If it hits a steep face (like a wall or the flat side of a ramp)
                 const hitNormal = hHits[0].face.normal.clone().transformDirection(hHits[0].object.matrixWorld);
                 if (Math.abs(hitNormal.y) < 0.6) { 
                     blocked = true;
@@ -641,41 +643,34 @@
             }
             
             if (!blocked) {
-                // Safe to move horizontally
                 controls.getObject().position.add(worldMove); 
             } else {
-                // Blocked! Stop momentum
                 velocity.x = 0;
                 velocity.z = 0; 
             }
         }
 
-        // 2. Vertical Movement, Gravity & Ramp Climbing
-        velocity.y -= 30.0 * delta; // Gravity
+        velocity.y -= 30.0 * delta; 
         let proposedY = controls.getObject().position.y + velocity.y * delta;
         
-        // Shoot a laser straight down from your head
         const rayOrigin = controls.getObject().position.clone();
         const downRay = new THREE.Raycaster(rayOrigin, new THREE.Vector3(0, -1, 0), 0, 20);
         const downHits = downRay.intersectObjects([ground, ...structures]);
         
-        let hitY = 0; // Default ground level
+        let hitY = 0; 
         if (downHits.length > 0) {
-            hitY = downHits[0].point.y; // Find the exact height of the surface below us
+            hitY = downHits[0].point.y; 
         }
         
-        // If our feet go below the surface, pop back on top!
         if (proposedY - 2 <= hitY) {
             velocity.y = Math.max(0, velocity.y); 
             proposedY = hitY + 2; 
             canJump = true;
         } else {
-            canJump = false; // We are in the air
+            canJump = false; 
         }
         
         controls.getObject().position.y = proposedY;
-        
-        // --- END CUSTOM PHYSICS ---
 
         const playerPos = controls.getObject().position;
 
@@ -738,7 +733,6 @@
           let hit = false;
           if (p.userData.isGrenade && p.position.y <= p.geometry.parameters.radius) hit = true;
 
-          // Potatoes hitting structures
           if(!hit) {
             for(let w = structures.length - 1; w >= 0; w--) {
               const struct = structures[w];
