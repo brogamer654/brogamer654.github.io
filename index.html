@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3D FPS Potato Shooter - Custom Gun Update</title>
+  <title>3D FPS Potato Shooter</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
@@ -43,6 +43,7 @@
       border: 2px solid #f39c12;
       text-align: center;
       width: 450px;
+      position: relative;
     }
     .shop-btn {
       background-color: #e67e22;
@@ -58,6 +59,20 @@
     }
     .shop-btn:hover { background-color: #d35400; }
     .shop-btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+
+    #open-settings-btn {
+      margin-top: 15px;
+      background-color: #34495e;
+      color: white;
+      border: 2px solid #bdc3c7;
+      padding: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+    }
+    #open-settings-btn:hover { background-color: #2c3e50; }
     
     .crosshair {
       position: absolute;
@@ -146,11 +161,12 @@
       color: #bdc3c7;
     }
 
-    #inventory-screen {
+    /* INVENTORY & SETTINGS SCREENS */
+    .menu-screen {
       position: absolute;
       width: 100%;
       height: 100%;
-      background-color: rgba(44, 62, 80, 0.9);
+      background-color: rgba(44, 62, 80, 0.95);
       display: none;
       flex-direction: column;
       align-items: center;
@@ -194,13 +210,48 @@
       cursor: pointer;
     }
     .close-btn:hover { background-color: #c0392b; }
+
+    #settings-container {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 30px;
+      border-radius: 10px;
+      border: 2px solid #9b59b6;
+      width: 450px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .keybind-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #7f8c8d;
+    }
+
+    .key-btn {
+      background: #34495e;
+      color: #f1c40f;
+      border: 2px solid #f1c40f;
+      padding: 5px 15px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      min-width: 80px;
+      text-align: center;
+    }
+    .key-btn:hover { background: #2c3e50; }
+    .key-btn.assigning { background: #e74c3c; color: white; border-color: #e74c3c; }
+
+    #zombie-slider { width: 100%; cursor: pointer; }
   </style>
 </head>
 <body>
 
   <div id="hud">
     Points: <span id="score">0</span> | Health: <span id="health">100</span><br>
-    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to Shop | TAB for Inventory | Q to Build</span>
+    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to Pause/Shop</span>
   </div>
   
   <div id="build-hud">Build Mode: OFF</div>
@@ -208,16 +259,17 @@
   <div id="weapon-hud"><span id="current-weapon-name">Standard Spud</span></div>
 
   <div id="inventory-bar">
-    <div class="slot active" id="slot-0"><span class="slot-num">1</span><span id="slot-text-0">Std</span></div>
-    <div class="slot" id="slot-1"><span class="slot-num">2</span><span id="slot-text-1">-</span></div>
-    <div class="slot" id="slot-2"><span class="slot-num">3</span><span id="slot-text-2">-</span></div>
-    <div class="slot" id="slot-3"><span class="slot-num">4</span><span id="slot-text-3">-</span></div>
-    <div class="slot" id="slot-4"><span class="slot-num">5</span><span id="slot-text-4">-</span></div>
+    <div class="slot active" id="slot-0"><span class="slot-num" id="ui-key-slot0">1</span><span id="slot-text-0">Std</span></div>
+    <div class="slot" id="slot-1"><span class="slot-num" id="ui-key-slot1">2</span><span id="slot-text-1">-</span></div>
+    <div class="slot" id="slot-2"><span class="slot-num" id="ui-key-slot2">3</span><span id="slot-text-2">-</span></div>
+    <div class="slot" id="slot-3"><span class="slot-num" id="ui-key-slot3">4</span><span id="slot-text-3">-</span></div>
+    <div class="slot" id="slot-4"><span class="slot-num" id="ui-key-slot4">5</span><span id="slot-text-4">-</span></div>
   </div>
 
-  <div id="inventory-screen">
+  <!-- INVENTORY SCREEN -->
+  <div id="inventory-screen" class="menu-screen">
     <h1 style="color: #3498db;">🎒 Player Backpack 🎒</h1>
-    <p>Press TAB or the button below to return to the game.</p>
+    <p>Press your Inventory key or the button below to return to the game.</p>
     
     <div id="inventory-grid">
       <div class="inv-box" id="box-0">-</div>
@@ -231,14 +283,33 @@
       <div class="inv-box" id="box-8">-</div>
       <div class="inv-box" id="box-9">-</div>
     </div>
-    
     <button class="close-btn" id="close-inventory">Close Backpack</button>
   </div>
 
+  <!-- SETTINGS SCREEN -->
+  <div id="settings-screen" class="menu-screen">
+    <h1 style="color: #9b59b6; margin-top: 0;">⚙️ Game Settings ⚙️</h1>
+    
+    <div id="settings-container">
+      <h3>Difficulty</h3>
+      <label>Max Zombies Spawning: <strong id="zombie-val" style="color: #e74c3c;">35</strong></label>
+      <input type="range" id="zombie-slider" min="5" max="100" value="35">
+      <hr style="border-color: #7f8c8d; margin: 20px 0;">
+      
+      <h3>Keybinds (Click to change)</h3>
+      <div id="keybinds-list">
+        <!-- Generated by JavaScript -->
+      </div>
+    </div>
+
+    <button class="close-btn" id="close-settings">Save & Close</button>
+  </div>
+
+  <!-- PAUSE / SHOP BLOCKER -->
   <div id="blocker">
     <div id="instructions">
-      <h1 style="font-size: 35px; margin: 0; color: #2ecc71;">Click to Play</h1>
-      <p>Move: <strong>W A S D</strong> | Jump: <strong>Space</strong> | Shoot: <strong>Click</strong><br>Weapons: <strong>1-5</strong> | Inventory: <strong>TAB</strong><br>Build Mode: <strong>Q</strong> | Swap Wall/Ramp: <strong>E</strong></p>
+      <h1 style="font-size: 35px; margin: 0; color: #2ecc71;">Click Here to Play</h1>
+      <p>Look around to aim. Check settings for controls!</p>
     </div>
     
     <div id="shop">
@@ -250,13 +321,95 @@
       <button class="shop-btn" id="btn-cannon">Buy Spud Cannon (200 pts)</button>
       <button class="shop-btn" id="btn-mega" style="background-color: #8e44ad;">Buy Mega Spud (300 pts)</button>
       <button class="shop-btn" id="btn-grenade" style="background-color: #c0392b;">Buy Spud-Nade Launcher (400 pts)</button>
+      
+      <button id="open-settings-btn">⚙️ Open Settings</button>
     </div>
   </div>
 
   <div class="crosshair"></div>
 
   <script>
-    // 1. Scene Setup
+    // --- SETTINGS & KEYBINDS SYSTEM ---
+    let maxZombies = 35;
+    
+    const keybinds = {
+      forward: 'KeyW',
+      backward: 'KeyS',
+      left: 'KeyA',
+      right: 'KeyD',
+      jump: 'Space',
+      build: 'KeyQ',
+      swapBuild: 'KeyE',
+      inventory: 'Tab',
+      slot0: 'Digit1',
+      slot1: 'Digit2',
+      slot2: 'Digit3',
+      slot3: 'Digit4',
+      slot4: 'Digit5'
+    };
+
+    const keybindNames = {
+      forward: 'Move Forward', backward: 'Move Backward', left: 'Move Left', right: 'Move Right',
+      jump: 'Jump', build: 'Toggle Build Mode', swapBuild: 'Swap Wall/Ramp', inventory: 'Open Backpack',
+      slot0: 'Weapon Slot 1', slot1: 'Weapon Slot 2', slot2: 'Weapon Slot 3', slot3: 'Weapon Slot 4', slot4: 'Weapon Slot 5'
+    };
+
+    let assigningAction = null;
+
+    // Make key codes look pretty (e.g. "KeyW" -> "W", "Digit1" -> "1")
+    function formatKey(code) {
+      if (code.startsWith('Key')) return code.replace('Key', '');
+      if (code.startsWith('Digit')) return code.replace('Digit', '');
+      return code;
+    }
+
+    function generateKeybindUI() {
+      const container = document.getElementById('keybinds-list');
+      container.innerHTML = '';
+      for (const action in keybinds) {
+        const row = document.createElement('div');
+        row.className = 'keybind-row';
+        row.innerHTML = `
+          <span>${keybindNames[action]}</span>
+          <button class="key-btn" id="bindbtn-${action}">${formatKey(keybinds[action])}</button>
+        `;
+        container.appendChild(row);
+
+        row.querySelector('button').addEventListener('click', (e) => {
+          // Reset previous assigning button if any
+          if (assigningAction) document.getElementById(`bindbtn-${assigningAction}`).classList.remove('assigning');
+          
+          assigningAction = action;
+          e.target.classList.add('assigning');
+          e.target.innerText = "Press Key...";
+        });
+      }
+      
+      // Update UI numbers on slots
+      for(let i=0; i<5; i++) {
+        document.getElementById(`ui-key-slot${i}`).innerText = formatKey(keybinds[`slot${i}`]);
+      }
+    }
+
+    document.getElementById('zombie-slider').addEventListener('input', (e) => {
+      maxZombies = parseInt(e.target.value);
+      document.getElementById('zombie-val').innerText = maxZombies;
+    });
+
+    document.getElementById('open-settings-btn').addEventListener('click', () => {
+      document.getElementById('blocker').style.display = 'none';
+      document.getElementById('settings-screen').style.display = 'flex';
+      generateKeybindUI();
+    });
+
+    document.getElementById('close-settings').addEventListener('click', () => {
+      document.getElementById('settings-screen').style.display = 'none';
+      document.getElementById('blocker').style.display = 'flex';
+      assigningAction = null;
+    });
+
+
+    // --- 1. SCENE SETUP ---
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x556b2f);
     scene.fog = new THREE.Fog(0x556b2f, 10, 80);
@@ -296,16 +449,19 @@
     controls.addEventListener('lock', () => {
       blocker.style.display = 'none';
       document.getElementById('inventory-screen').style.display = 'none';
+      document.getElementById('settings-screen').style.display = 'none';
     });
     controls.addEventListener('unlock', () => {
-      if(document.getElementById('inventory-screen').style.display !== 'flex') {
+      const isInvOpen = document.getElementById('inventory-screen').style.display === 'flex';
+      const isSetOpen = document.getElementById('settings-screen').style.display === 'flex';
+      if(!isInvOpen && !isSetOpen) {
         blocker.style.display = 'flex';
         document.getElementById('shop-points').innerText = score; 
       }
     });
     scene.add(controls.getObject());
 
-    // Weapons 
+    // --- WEAPON MODELS SETUP ---
     const gun = new THREE.Mesh(
       new THREE.CylinderGeometry(0.08, 0.08, 0.8),
       new THREE.MeshLambertMaterial({ color: 0x333333 })
@@ -315,9 +471,9 @@
     camera.add(gun);
 
     let customLauncher = null;
+    let customShotgun = null;
     const loader = new THREE.GLTFLoader();
     
-    // UPDATED URL TO USE "scene modelling.glb" WITH %20 FOR THE SPACE
     loader.load('https://brogamer654.github.io/scene%20modelling.glb', function(gltf) {
       customLauncher = gltf.scene;
       customLauncher.scale.set(0.1, 0.1, 0.1); 
@@ -325,28 +481,34 @@
       
       const cur = getActiveWeapon();
       if (!isBuildMode && cur && (cur.id === "standard" || cur.id === "grenade")) {
-        customLauncher.visible = true;
-        gun.visible = false;
-      } else {
-        customLauncher.visible = false; 
-      }
+        customLauncher.visible = true; gun.visible = false;
+      } else { customLauncher.visible = false; }
       camera.add(customLauncher);
     });
 
-    // FORTNITE BUILDING MECHANICS
+    loader.load('https://brogamer654.github.io/model.glb', function(gltf) {
+      customShotgun = gltf.scene;
+      customShotgun.scale.set(0.1, 0.1, 0.1); 
+      customShotgun.position.set(0.3, -0.25, -0.6);
+      
+      const cur = getActiveWeapon();
+      if (!isBuildMode && cur && cur.id === "shotgun") {
+        customShotgun.visible = true; gun.visible = false;
+      } else { customShotgun.visible = false; }
+      camera.add(customShotgun);
+    });
+
+    // --- FORTNITE BUILDING MECHANICS ---
     let isBuildMode = false;
     let buildType = 'wall'; 
     const structures = []; 
-    
     const wallGeo = new THREE.BoxGeometry(4, 4, 0.5); 
     const rampGeo = new THREE.BoxGeometry(4, 0.5, 5.65); 
-
     const previewMat = new THREE.MeshLambertMaterial({ color: 0x00aaff, transparent: true, opacity: 0.5 });
     const previewMesh = new THREE.Mesh(wallGeo, previewMat);
     previewMesh.rotation.order = 'YXZ'; 
     scene.add(previewMesh);
     previewMesh.visible = false;
-    
     const wallMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b }); 
 
     let score = 200; 
@@ -369,9 +531,7 @@
     const inventory = [weaponsDB.standard, null, null, null, null, null, null, null, null, null];
     let activeSlotIndex = 0;
     
-    function getActiveWeapon() {
-      return inventory[activeSlotIndex];
-    }
+    function getActiveWeapon() { return inventory[activeSlotIndex]; }
 
     function updateInventoryUI() {
       for (let i = 0; i < 5; i++) {
@@ -387,9 +547,15 @@
         if (cur && (cur.id === "standard" || cur.id === "grenade")) {
           gun.visible = false; 
           if (customLauncher) customLauncher.visible = true; 
+          if (customShotgun) customShotgun.visible = false;
+        } else if (cur && cur.id === "shotgun") {
+          gun.visible = false;
+          if (customLauncher) customLauncher.visible = false;
+          if (customShotgun) customShotgun.visible = true;
         } else {
           gun.visible = true; 
           if (customLauncher) customLauncher.visible = false;
+          if (customShotgun) customShotgun.visible = false;
         }
       }
     }
@@ -419,49 +585,63 @@
           btn.innerText = "BOUGHT";
           btn.disabled = true;
           updateInventoryUI();
-        } else {
-          alert("Backpack full!");
-        }
+        } else { alert("Backpack full!"); }
       }
     }
 
-    // Input Handling
+    // --- INPUT HANDLING WITH KEYBINDS ---
     document.addEventListener('keydown', (event) => {
+      // 1. If we are currently changing a setting, absorb the keypress
+      if (assigningAction) {
+        event.preventDefault();
+        keybinds[assigningAction] = event.code;
+        generateKeybindUI(); // Refresh UI to show new key
+        assigningAction = null;
+        return;
+      }
+
+      // 2. Prevent default browser actions for keys we use (like Tab or Space)
+      if (Object.values(keybinds).includes(event.code)) {
+        if (event.code === 'Tab' || event.code === 'Space') {
+           event.preventDefault();
+        }
+      }
+
+      // 3. Match pressed key to an action
       switch (event.code) {
-        case 'KeyW': moveForward = true; break;
-        case 'KeyA': moveLeft = true; break;
-        case 'KeyS': moveBackward = true; break;
-        case 'KeyD': moveRight = true; break;
-        case 'Space': if (canJump) velocity.y += 12; canJump = false; break;
-        case 'Digit1': activeSlotIndex = 0; updateInventoryUI(); break;
-        case 'Digit2': activeSlotIndex = 1; updateInventoryUI(); break;
-        case 'Digit3': activeSlotIndex = 2; updateInventoryUI(); break;
-        case 'Digit4': activeSlotIndex = 3; updateInventoryUI(); break;
-        case 'Digit5': activeSlotIndex = 4; updateInventoryUI(); break;
+        case keybinds.forward: moveForward = true; break;
+        case keybinds.left: moveLeft = true; break;
+        case keybinds.backward: moveBackward = true; break;
+        case keybinds.right: moveRight = true; break;
+        case keybinds.jump: if (canJump) velocity.y += 12; canJump = false; break;
+        case keybinds.slot0: activeSlotIndex = 0; updateInventoryUI(); break;
+        case keybinds.slot1: activeSlotIndex = 1; updateInventoryUI(); break;
+        case keybinds.slot2: activeSlotIndex = 2; updateInventoryUI(); break;
+        case keybinds.slot3: activeSlotIndex = 3; updateInventoryUI(); break;
+        case keybinds.slot4: activeSlotIndex = 4; updateInventoryUI(); break;
         
-        case 'KeyQ':
+        case keybinds.build:
           isBuildMode = !isBuildMode;
           previewMesh.visible = isBuildMode;
-          
           if(isBuildMode) {
-            document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | E to Swap | 10 Pts`;
+            document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | Swap: ${formatKey(keybinds.swapBuild)} | 10 Pts`;
             gun.visible = false;
             if(customLauncher) customLauncher.visible = false;
+            if(customShotgun) customShotgun.visible = false;
           } else {
             document.getElementById('build-hud').innerText = "Build Mode: OFF";
             updateInventoryUI(); 
           }
           break;
 
-        case 'KeyE':
+        case keybinds.swapBuild:
           if (isBuildMode) {
             buildType = buildType === 'wall' ? 'ramp' : 'wall';
-            document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | E to Swap | 10 Pts`;
+            document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | Swap: ${formatKey(keybinds.swapBuild)} | 10 Pts`;
           }
           break;
 
-        case 'Tab': 
-          event.preventDefault(); 
+        case keybinds.inventory: 
           if (controls.isLocked) {
             controls.unlock(); 
             document.getElementById('blocker').style.display = 'none'; 
@@ -477,17 +657,16 @@
 
     document.addEventListener('keyup', (event) => {
       switch (event.code) {
-        case 'KeyW': moveForward = false; break;
-        case 'KeyA': moveLeft = false; break;
-        case 'KeyS': moveBackward = false; break;
-        case 'KeyD': moveRight = false; break;
+        case keybinds.forward: moveForward = false; break;
+        case keybinds.left: moveLeft = false; break;
+        case keybinds.backward: moveBackward = false; break;
+        case keybinds.right: moveRight = false; break;
       }
     });
 
     let weaponTimer = 0;
     let isShooting = false;
     const potatoes = [];
-    const healthDrops = [];
     const explosions = [];
     
     document.addEventListener('mousedown', () => {
@@ -570,7 +749,8 @@
 
     for (let i = 0; i < 5; i++) createZombie();
     setInterval(() => {
-      if (controls.isLocked && zombies.length < 35 && health > 0) createZombie();
+      // NOW USES CUSTOM MAX ZOMBIES SETTING
+      if (controls.isLocked && zombies.length < maxZombies && health > 0) createZombie();
     }, 1500);
 
     // Main Loop
@@ -580,26 +760,36 @@
 
       if (controls.isLocked && health > 0) {
         
-        // Build Preview Snapping & Rotation
+        // Build Preview Snapping
         if(isBuildMode) {
           const lookDir = new THREE.Vector3();
           camera.getWorldDirection(lookDir);
           
           const targetPos = camera.position.clone().add(lookDir.multiplyScalar(5));
-          previewMesh.position.x = Math.round(targetPos.x / 4) * 4;
-          previewMesh.position.z = Math.round(targetPos.z / 4) * 4;
+          const cellSize = 4;
+          const cellX = Math.floor(targetPos.x / cellSize) * cellSize + (cellSize / 2);
+          const cellZ = Math.floor(targetPos.z / cellSize) * cellSize + (cellSize / 2);
+          let cellY = Math.floor(targetPos.y / cellSize) * cellSize + (cellSize / 2);
+          if (cellY < 2) cellY = 2;
           
-          previewMesh.position.y = Math.round(targetPos.y / 4) * 4; 
-          if(previewMesh.position.y < 2) previewMesh.position.y = 2; 
-
-          const snappedAngle = Math.round(Math.atan2(lookDir.x, lookDir.z) / (Math.PI / 2)) * (Math.PI / 2);
+          const angle = Math.atan2(lookDir.x, lookDir.z);
+          const snappedAngle = Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
 
           if (buildType === 'wall') {
             previewMesh.geometry = wallGeo;
             previewMesh.rotation.set(0, snappedAngle, 0); 
+            previewMesh.position.set(cellX, cellY, cellZ);
+            
+            const dir = Math.round(snappedAngle / (Math.PI / 2));
+            if (dir === 0 || dir === -0) previewMesh.position.z += (cellSize / 2);      
+            else if (dir === 1) previewMesh.position.x += (cellSize / 2);               
+            else if (dir === 2 || dir === -2) previewMesh.position.z -= (cellSize / 2); 
+            else if (dir === -1) previewMesh.position.x -= (cellSize / 2);              
+
           } else {
             previewMesh.geometry = rampGeo;
             previewMesh.rotation.set(-Math.PI / 4, snappedAngle, 0);
+            previewMesh.position.set(cellX, cellY, cellZ);
           }
         }
 
@@ -671,10 +861,8 @@
         }
         
         controls.getObject().position.y = proposedY;
-
         const playerPos = controls.getObject().position;
 
-        // Visual Explosions
         for (let i = explosions.length - 1; i >= 0; i--) {
           const exp = explosions[i];
           exp.life -= 1;
@@ -686,7 +874,6 @@
           }
         }
 
-        // Zombie Logic
         for (let i = zombies.length - 1; i >= 0; i--) {
           const zombie = zombies[i];
           zombie.lookAt(playerPos.x, zombie.position.y, playerPos.z);
@@ -723,7 +910,6 @@
           if (zombie.userData.hitCooldown > 0) zombie.userData.hitCooldown--;
         }
 
-        // Potatoes Collision
         for (let i = potatoes.length - 1; i >= 0; i--) {
           const p = potatoes[i];
           if (p.userData.isGrenade) p.userData.velocity.y -= 8.0 * delta; 
@@ -821,6 +1007,7 @@
     
     document.getElementById('score').innerText = score;
     updateInventoryUI();
+    generateKeybindUI();
     animate();
 
     window.addEventListener('resize', () => {
