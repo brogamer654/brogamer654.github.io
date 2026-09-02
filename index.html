@@ -86,6 +86,16 @@
       z-index: 5;
       pointer-events: none;
     }
+
+    #damage-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(231, 76, 60, 0.3);
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
     
     #hud {
       position: absolute;
@@ -99,12 +109,29 @@
       pointer-events: none;
     }
 
+    .health-bar-container {
+      width: 200px;
+      height: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .health-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: #2ecc71;
+      transition: width 0.2s ease, background-color 0.2s ease;
+    }
+
     #build-hud {
       position: absolute;
-      top: 90px;
+      top: 110px;
       left: 20px;
       color: #3498db;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: bold;
       text-shadow: 2px 2px 4px #000;
       z-index: 5;
@@ -245,13 +272,98 @@
     .key-btn.assigning { background: #e74c3c; color: white; border-color: #e74c3c; }
 
     #zombie-slider { width: 100%; cursor: pointer; }
+
+    /* --- WORLD SAVE SYSTEM --- */
+    #worlds-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+      backdrop-filter: blur(4px);
+    }
+    #worlds-modal.open { display: flex; }
+    .worlds-card {
+      width: min(620px, 92vw);
+      max-height: 82vh;
+      overflow-y: auto;
+      background: #202020;
+      color: #fff;
+      border: 2px solid #7c3aed;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.65);
+    }
+    .worlds-card h2 { margin: 0 0 8px; color: #c4b5fd; }
+    .worlds-card p { color: #cbd5e1; line-height: 1.45; }
+    .create-world-row { display: flex; gap: 8px; margin: 16px 0; }
+    .create-world-row input {
+      flex: 1;
+      min-width: 0;
+      background: #171717;
+      border: 1px solid #555;
+      border-radius: 8px;
+      color: #fff;
+      padding: 11px 12px;
+      font-size: 14px;
+    }
+    .worlds-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .worlds-empty { color: #999; text-align: center; padding: 24px 0; }
+    .world-entry {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .world-entry-info { flex: 1; min-width: 0; }
+    .world-entry-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .world-entry-meta { color: #aaa; font-size: 12px; margin-top: 3px; }
+    .world-entry-actions { display: flex; gap: 6px; }
+    .world-action-btn {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 6px;
+      padding: 7px 9px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .world-action-btn:hover { background: #444; }
+    #save-toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(20,20,20,.96);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      font-size: 14px;
+      font-weight: 700;
+      z-index: 70;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    #save-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
 
+  <div id="damage-overlay"></div>
+
   <div id="hud">
-    Points: <span id="score">0</span> | Health: <span id="health">100</span><br>
-    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to Pause/Shop</span>
+    Points: <span id="score">0</span> | Health: <span id="health">100</span>
+    <div class="health-bar-container">
+      <div id="health-bar" class="health-bar-fill"></div>
+    </div>
+    <span style="font-size: 14px; color: #bdc3c7;">Press ESC to Pause/Shop</span>
   </div>
   
   <div id="build-hud">Build Mode: OFF</div>
@@ -268,7 +380,7 @@
 
   <!-- INVENTORY SCREEN -->
   <div id="inventory-screen" class="menu-screen">
-    <h1 style="color: #3498db;">🎒 Player Backpack 🎒</h1>
+    <h1 style="color: #3498db; margin-top:0;">🎒 Player Backpack 🎒</h1>
     <p>Press your Inventory key or the button below to return to the game.</p>
     
     <div id="inventory-grid">
@@ -302,6 +414,14 @@
       </div>
     </div>
 
+    <div id="settings-save-actions" style="width:450px; max-width:92vw; margin-top:12px;">
+      <div style="display:flex; gap:8px;">
+        <button class="shop-btn" id="worlds-btn" style="background:#7c3aed; flex:1;">🌍 Worlds</button>
+        <button class="shop-btn" id="quick-save-btn" style="background:#007bff; flex:1;">💾 Quick Save</button>
+      </div>
+      <div style="text-align:center; font-size:12px; color:#bdc3c7; margin-top:4px;">Quick Save: F5</div>
+    </div>
+
     <button class="close-btn" id="close-settings">Save & Close</button>
   </div>
 
@@ -328,7 +448,91 @@
 
   <div class="crosshair"></div>
 
+  <div id="worlds-modal" aria-hidden="true">
+    <div class="worlds-card">
+      <h2 style="color:#9b59b6;margin-top:0;">🌍 Select World</h2>
+      <p style="color:#bbb;font-size:13px;">Create, load, rename, or delete worlds. Each world stores your score, health, inventory, position, settings, and builds.</p>
+      <div class="create-world-row">
+        <input id="new-world-name" maxlength="40" placeholder="New world name..." autocomplete="off">
+        <button class="world-action-btn" id="create-world-btn" style="background:#7c3aed;">➕ Create</button>
+      </div>
+      <div class="worlds-list" id="worlds-list"></div>
+      <button class="close-btn" id="close-worlds-btn">Close</button>
+    </div>
+  </div>
+  <div id="save-toast"></div>
+
   <script>
+    // --- SYNTHESIZED WEB AUDIO FX ---
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'shoot') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.1);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'explosion') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(25, now + 0.35);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'zombie_hit') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === 'player_hurt') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(90, now);
+        osc.frequency.linearRampToValueAtTime(40, now + 0.2);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } else if (type === 'buy') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.08);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'build') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.08);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+        osc.start(now);
+        osc.stop(now + 0.09);
+      }
+    }
+
     // --- SETTINGS & KEYBINDS SYSTEM ---
     let maxZombies = 35;
     
@@ -356,7 +560,6 @@
 
     let assigningAction = null;
 
-    // Make key codes look pretty (e.g. "KeyW" -> "W", "Digit1" -> "1")
     function formatKey(code) {
       if (code.startsWith('Key')) return code.replace('Key', '');
       if (code.startsWith('Digit')) return code.replace('Digit', '');
@@ -376,16 +579,13 @@
         container.appendChild(row);
 
         row.querySelector('button').addEventListener('click', (e) => {
-          // Reset previous assigning button if any
           if (assigningAction) document.getElementById(`bindbtn-${assigningAction}`).classList.remove('assigning');
-          
           assigningAction = action;
           e.target.classList.add('assigning');
           e.target.innerText = "Press Key...";
         });
       }
       
-      // Update UI numbers on slots
       for(let i=0; i<5; i++) {
         document.getElementById(`ui-key-slot${i}`).innerText = formatKey(keybinds[`slot${i}`]);
       }
@@ -407,7 +607,6 @@
       document.getElementById('blocker').style.display = 'flex';
       assigningAction = null;
     });
-
 
     // --- 1. SCENE SETUP ---
     const scene = new THREE.Scene();
@@ -445,7 +644,10 @@
     const blocker = document.getElementById('blocker');
     const instructions = document.getElementById('instructions');
 
-    instructions.addEventListener('click', () => controls.lock());
+    instructions.addEventListener('click', () => {
+      initAudio();
+      controls.lock();
+    });
     controls.addEventListener('lock', () => {
       blocker.style.display = 'none';
       document.getElementById('inventory-screen').style.display = 'none';
@@ -454,7 +656,8 @@
     controls.addEventListener('unlock', () => {
       const isInvOpen = document.getElementById('inventory-screen').style.display === 'flex';
       const isSetOpen = document.getElementById('settings-screen').style.display === 'flex';
-      if(!isInvOpen && !isSetOpen) {
+      const isWorldOpen = document.getElementById('worlds-modal').classList.contains('open');
+      if(!isInvOpen && !isSetOpen && !isWorldOpen) {
         blocker.style.display = 'flex';
         document.getElementById('shop-points').innerText = score; 
       }
@@ -498,7 +701,7 @@
       camera.add(customShotgun);
     });
 
-    // --- FORTNITE BUILDING MECHANICS ---
+    // --- BUILDING MECHANICS ---
     let isBuildMode = false;
     let buildType = 'wall'; 
     const structures = []; 
@@ -533,6 +736,26 @@
     
     function getActiveWeapon() { return inventory[activeSlotIndex]; }
 
+    function updateHealthUI() {
+      const hp = Math.max(0, health);
+      document.getElementById('health').innerText = hp;
+      const barFill = document.getElementById('health-bar');
+      barFill.style.width = hp + '%';
+      if (hp > 50) {
+        barFill.style.backgroundColor = '#2ecc71';
+      } else if (hp > 25) {
+        barFill.style.backgroundColor = '#f39c12';
+      } else {
+        barFill.style.backgroundColor = '#e74c3c';
+      }
+    }
+
+    function triggerDamageOverlay() {
+      const overlay = document.getElementById('damage-overlay');
+      overlay.style.opacity = '1';
+      setTimeout(() => { overlay.style.opacity = '0'; }, 200);
+    }
+
     function updateInventoryUI() {
       for (let i = 0; i < 5; i++) {
         document.getElementById(`slot-${i}`).className = i === activeSlotIndex ? 'slot active' : 'slot';
@@ -540,8 +763,10 @@
       }
       const cur = getActiveWeapon();
       document.getElementById('current-weapon-name').innerText = cur ? cur.name : "Empty";
+
       document.getElementById('score').innerText = score;
       document.getElementById('shop-points').innerText = score;
+      updateHealthUI();
 
       if(!isBuildMode) {
         if (cur && (cur.id === "standard" || cur.id === "grenade")) {
@@ -554,7 +779,7 @@
           if (customShotgun) customShotgun.visible = true;
         } else {
           gun.visible = true; 
-          if (customLauncher) customLauncher.visible = false;
+          if (customLauncher) customLauncher.visible = false; 
           if (customShotgun) customShotgun.visible = false;
         }
       }
@@ -581,6 +806,7 @@
         if (emptyIndex !== -1) {
           score -= cost;
           inventory[emptyIndex] = itemObj;
+          playSound('buy');
           const btn = document.getElementById(btnId);
           btn.innerText = "BOUGHT";
           btn.disabled = true;
@@ -589,25 +815,249 @@
       }
     }
 
+    // --- WORLD SAVE SYSTEM ---
+    const WORLDS_KEY = 'potato_fps_worlds_v2';
+    const AUTOSAVE_INTERVAL_MS = 90000;
+    let worlds = [];
+    let activeWorldId = null;
+    let saveToastTimer = null;
+
+    function showSaveToast(message) {
+      const el = document.getElementById('save-toast');
+      if (!el) return;
+      el.innerText = message;
+      el.classList.add('show');
+      clearTimeout(saveToastTimer);
+      saveToastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+    }
+
+    function loadWorlds() {
+      try {
+        const raw = localStorage.getItem(WORLDS_KEY);
+        worlds = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(worlds)) worlds = [];
+      } catch (e) {
+        console.error(e);
+        worlds = [];
+        showSaveToast('⚠️ Could not read saves');
+      }
+    }
+
+    function persistWorlds() {
+      try {
+        localStorage.setItem(WORLDS_KEY, JSON.stringify(worlds));
+        return true;
+      } catch (e) {
+        console.error(e);
+        showSaveToast('⚠️ Save failed — browser storage blocked/full');
+        return false;
+      }
+    }
+
+    function getActiveWorld() {
+      return worlds.find(w => w.id === activeWorldId) || null;
+    }
+
+    function serializeGameState() {
+      return {
+        version: 2,
+        score,
+        health,
+        maxZombies,
+        activeSlotIndex,
+        keybinds: { ...keybinds },
+        position: {
+          x: controls.getObject().position.x,
+          y: controls.getObject().position.y,
+          z: controls.getObject().position.z
+        },
+        inventory: inventory.map(item => item ? item.id : null),
+        buildStructures: structures.map(s => ({
+          type: s.userData.structureType || 'wall',
+          x: s.position.x, y: s.position.y, z: s.position.z,
+          rx: s.rotation.x, ry: s.rotation.y, rz: s.rotation.z,
+          hp: (typeof s.userData.hp === 'number') ? s.userData.hp : 100
+        }))
+      };
+    }
+
+    function clearSavedStructuresFromScene() {
+      for (let i = structures.length - 1; i >= 0; i--) {
+        scene.remove(structures[i]);
+      }
+      structures.length = 0;
+    }
+
+    function applyGameState(data) {
+      if (!data) return;
+      score = Number.isFinite(data.score) ? data.score : 200;
+      health = Number.isFinite(data.health) ? data.health : 100;
+      maxZombies = Number.isFinite(data.maxZombies) ? data.maxZombies : 35;
+      activeSlotIndex = Number.isInteger(data.activeSlotIndex) ? data.activeSlotIndex : 0;
+
+      if (data.keybinds && typeof data.keybinds === 'object') {
+        Object.keys(keybinds).forEach(k => {
+          if (typeof data.keybinds[k] === 'string' && data.keybinds[k]) keybinds[k] = data.keybinds[k];
+        });
+      }
+
+      inventory.fill(null);
+      if (Array.isArray(data.inventory)) {
+        data.inventory.forEach((weaponId, i) => {
+          if (i < inventory.length && weaponId && weaponsDB[weaponId]) inventory[i] = weaponsDB[weaponId];
+        });
+      }
+      if (!inventory.some(Boolean)) inventory[0] = weaponsDB.standard;
+      if (activeSlotIndex < 0 || activeSlotIndex >= inventory.length || !inventory[activeSlotIndex]) activeSlotIndex = 0;
+
+      if (data.position && Number.isFinite(data.position.x) && Number.isFinite(data.position.y) && Number.isFinite(data.position.z)) {
+        controls.getObject().position.set(data.position.x, data.position.y, data.position.z);
+      }
+
+      clearSavedStructuresFromScene();
+      if (Array.isArray(data.buildStructures)) {
+        data.buildStructures.forEach(saved => {
+          const type = saved.type === 'ramp' ? 'ramp' : 'wall';
+          const mesh = new THREE.Mesh(type === 'ramp' ? rampGeo : wallGeo, wallMat);
+          mesh.position.set(saved.x || 0, saved.y || 2, saved.z || 0);
+          mesh.rotation.set(saved.rx || 0, saved.ry || 0, saved.rz || 0);
+          mesh.userData = { hp: Number.isFinite(saved.hp) ? saved.hp : 100, structureType: type };
+          scene.add(mesh);
+          structures.push(mesh);
+        });
+      }
+
+      document.getElementById('zombie-slider').value = maxZombies;
+      document.getElementById('zombie-val').innerText = maxZombies;
+      updateInventoryUI();
+      generateKeybindUI();
+    }
+
+    function ensureActiveWorld() {
+      let world = getActiveWorld();
+      if (world) return world;
+      world = {
+        id: 'world_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        name: 'Survival World',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        data: serializeGameState()
+      };
+      worlds.push(world);
+      activeWorldId = world.id;
+      persistWorlds();
+      return world;
+    }
+
+    function quickSaveActiveWorld(silent = false) {
+      const world = ensureActiveWorld();
+      world.data = serializeGameState();
+      world.updatedAt = Date.now();
+      activeWorldId = world.id;
+      const ok = persistWorlds();
+      if (ok && !silent) showSaveToast('💾 Game saved!');
+      return ok;
+    }
+
+    function loadWorld(worldId) {
+      const world = worlds.find(w => w.id === worldId);
+      if (!world || !world.data) return;
+      activeWorldId = world.id;
+      applyGameState(world.data);
+      closeWorldsModal();
+      document.getElementById('blocker').style.display = 'flex';
+      document.getElementById('shop-points').innerText = score;
+      showSaveToast('✅ Loaded ' + world.name);
+    }
+
+    function deleteWorld(worldId) {
+      const world = worlds.find(w => w.id === worldId);
+      if (!world) return;
+      if (!confirm('Delete world "' + world.name.replace(/"/g, '\\"') + '"? This cannot be undone.')) return;
+      worlds = worlds.filter(w => w.id !== worldId);
+      if (activeWorldId === worldId) activeWorldId = worlds.length ? worlds[0].id : null;
+      persistWorlds();
+      renderWorlds();
+    }
+
+    function renameWorld(worldId) {
+      const world = worlds.find(w => w.id === worldId);
+      if (!world) return;
+      const next = prompt('New world name:', world.name);
+      if (next === null) return;
+      const name = next.trim().slice(0, 40);
+      if (!name) return;
+      world.name = name;
+      world.updatedAt = Date.now();
+      persistWorlds();
+      renderWorlds();
+    }
+
+    function renderWorlds() {
+      const list = document.getElementById('worlds-list');
+      if (!list) return;
+      if (!worlds.length) {
+        list.innerHTML = '<div class="worlds-empty">No worlds yet. Create one above.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      worlds.slice().sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach(world => {
+        const row = document.createElement('div');
+        row.className = 'world-entry';
+        const info = document.createElement('div');
+        info.className = 'world-entry-info';
+        const name = document.createElement('div');
+        name.className = 'world-entry-name';
+        name.innerText = world.name + (world.id === activeWorldId ? '  ✓' : '');
+        const meta = document.createElement('div');
+        meta.className = 'world-entry-meta';
+        meta.innerText = 'Points: ' + (world.data?.score ?? 0) + ' • Updated: ' + new Date(world.updatedAt || world.createdAt).toLocaleString();
+        info.append(name, meta);
+        const actions = document.createElement('div');
+        actions.className = 'world-entry-actions';
+        const load = document.createElement('button');
+        load.className = 'world-action-btn'; load.innerText = '▶ Load'; load.onclick = () => loadWorld(world.id);
+        const rename = document.createElement('button');
+        rename.className = 'world-action-btn'; rename.innerText = '✏️'; rename.title = 'Rename'; rename.onclick = () => renameWorld(world.id);
+        const del = document.createElement('button');
+        del.className = 'world-action-btn'; del.innerText = '🗑️'; del.title = 'Delete'; del.onclick = () => deleteWorld(world.id);
+        actions.append(load, rename, del);
+        row.append(info, actions);
+        list.appendChild(row);
+      });
+    }
+
+    function openWorldsModal() {
+      if (controls.isLocked) controls.unlock();
+      document.getElementById('blocker').style.display = 'none';
+      renderWorlds();
+      const modal = document.getElementById('worlds-modal');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeWorldsModal() {
+      const modal = document.getElementById('worlds-modal');
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
     // --- INPUT HANDLING WITH KEYBINDS ---
     document.addEventListener('keydown', (event) => {
-      // 1. If we are currently changing a setting, absorb the keypress
       if (assigningAction) {
         event.preventDefault();
         keybinds[assigningAction] = event.code;
-        generateKeybindUI(); // Refresh UI to show new key
+        generateKeybindUI();
         assigningAction = null;
         return;
       }
 
-      // 2. Prevent default browser actions for keys we use (like Tab or Space)
       if (Object.values(keybinds).includes(event.code)) {
         if (event.code === 'Tab' || event.code === 'Space') {
            event.preventDefault();
         }
       }
 
-      // 3. Match pressed key to an action
       switch (event.code) {
         case keybinds.forward: moveForward = true; break;
         case keybinds.left: moveLeft = true; break;
@@ -674,11 +1124,12 @@
         if (score >= 10) {
           score -= 10;
           document.getElementById('score').innerText = score;
+          playSound('build');
           
           const newStruct = new THREE.Mesh(previewMesh.geometry, wallMat);
           newStruct.position.copy(previewMesh.position);
           newStruct.rotation.copy(previewMesh.rotation);
-          newStruct.userData = { hp: 100 }; 
+          newStruct.userData = { hp: 100, structureType: buildType }; 
           scene.add(newStruct);
           structures.push(newStruct);
         }
@@ -691,6 +1142,8 @@
     function fireWeapon() {
       const weapon = getActiveWeapon();
       if (!weapon || weaponTimer > 0 || isBuildMode) return; 
+
+      playSound('shoot');
 
       for (let i = 0; i < weapon.pellets; i++) {
         const potato = new THREE.Mesh(
@@ -749,7 +1202,6 @@
 
     for (let i = 0; i < 5; i++) createZombie();
     setInterval(() => {
-      // NOW USES CUSTOM MAX ZOMBIES SETTING
       if (controls.isLocked && zombies.length < maxZombies && health > 0) createZombie();
     }, 1500);
 
@@ -760,7 +1212,6 @@
 
       if (controls.isLocked && health > 0) {
         
-        // Build Preview Snapping
         if(isBuildMode) {
           const lookDir = new THREE.Vector3();
           camera.getWorldDirection(lookDir);
@@ -899,7 +1350,9 @@
 
           if (zombie.position.distanceTo(playerPos) < 1.5 && zombie.userData.hitCooldown <= 0 && !blockedByStruct) {
             health -= 10;
-            document.getElementById('health').innerText = Math.max(0, health);
+            playSound('player_hurt');
+            triggerDamageOverlay();
+            updateHealthUI();
             zombie.userData.hitCooldown = 60; 
             
             if (health <= 0) {
@@ -940,6 +1393,7 @@
               if (p.position.distanceTo(z.position.clone().add(new THREE.Vector3(0, 1.2, 0))) < 1.5) {
                 if (!p.userData.isGrenade) {
                   z.userData.hp -= p.userData.damage; 
+                  playSound('zombie_hit');
                   if (z.userData.hp <= 0) {
                     scene.remove(z);
                     zombies.splice(j, 1);
@@ -955,6 +1409,7 @@
 
           if (hit || p.userData.life <= 0) {
             if (p.userData.isGrenade && hit) {
+              playSound('explosion');
               const boom = new THREE.Mesh(
                 new THREE.SphereGeometry(3, 16, 16),
                 new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.8 })
@@ -1000,6 +1455,50 @@
     document.getElementById('btn-cannon').addEventListener('click', () => buyItem(weaponsDB.cannon, 200, 'btn-cannon'));
     document.getElementById('btn-mega').addEventListener('click', () => buyItem(weaponsDB.mega, 300, 'btn-mega'));
     document.getElementById('btn-grenade').addEventListener('click', () => buyItem(weaponsDB.grenade, 400, 'btn-grenade'));
+
+    document.getElementById('quick-save-btn').addEventListener('click', () => quickSaveActiveWorld(false));
+    document.getElementById('worlds-btn').addEventListener('click', openWorldsModal);
+    document.getElementById('close-worlds-btn').addEventListener('click', () => {
+      closeWorldsModal();
+      document.getElementById('blocker').style.display = 'flex';
+    });
+    document.getElementById('create-world-btn').addEventListener('click', () => {
+      const input = document.getElementById('new-world-name');
+      const name = input.value.trim().slice(0, 40) || ('World ' + (worlds.length + 1));
+      const world = {
+        id: 'world_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        name,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        data: serializeGameState()
+      };
+      worlds.push(world);
+      activeWorldId = world.id;
+      persistWorlds();
+      input.value = '';
+      renderWorlds();
+      showSaveToast('🌍 Created ' + name);
+    });
+    document.getElementById('new-world-name').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('create-world-btn').click();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'F5') {
+        event.preventDefault();
+        quickSaveActiveWorld(false);
+      }
+      if (event.key === 'Escape' && document.getElementById('worlds-modal').classList.contains('open')) {
+        closeWorldsModal();
+        document.getElementById('blocker').style.display = 'flex';
+      }
+    });
+    window.addEventListener('beforeunload', () => quickSaveActiveWorld(true));
+    setInterval(() => {
+      if (health > 0) quickSaveActiveWorld(true);
+    }, AUTOSAVE_INTERVAL_MS);
+
+    loadWorlds();
+    if (worlds.length > 0) activeWorldId = worlds[0].id;
     document.getElementById('close-inventory').addEventListener('click', () => {
       document.getElementById('inventory-screen').style.display = 'none';
       controls.lock();
