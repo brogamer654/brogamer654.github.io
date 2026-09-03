@@ -1,12 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>3D FPS Potato Shooter - Grenade Update</title>
+  <title>3D FPS Potato Shooter</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
   <style>
-      
     body { 
       margin: 0; 
       overflow: hidden; 
@@ -15,7 +14,6 @@
       user-select: none;
     }
     
-    /* Pause / Shop Screen */
     #blocker {
       position: absolute;
       width: 100%;
@@ -38,7 +36,6 @@
       border: 2px solid #2ecc71;
     }
     
-    /* Shop UI */
     #shop {
       background: #2c3e50;
       padding: 20px;
@@ -46,6 +43,7 @@
       border: 2px solid #f39c12;
       text-align: center;
       width: 450px;
+      position: relative;
     }
     .shop-btn {
       background-color: #e67e22;
@@ -61,8 +59,21 @@
     }
     .shop-btn:hover { background-color: #d35400; }
     .shop-btn:disabled { background-color: #7f8c8d; cursor: not-allowed; }
+
+    #open-settings-btn {
+      margin-top: 15px;
+      background-color: #34495e;
+      color: white;
+      border: 2px solid #bdc3c7;
+      padding: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+    }
+    #open-settings-btn:hover { background-color: #2c3e50; }
     
-    /* Crosshair */
     .crosshair {
       position: absolute;
       top: 50%;
@@ -75,8 +86,17 @@
       z-index: 5;
       pointer-events: none;
     }
+
+    #damage-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(231, 76, 60, 0.3);
+      pointer-events: none;
+      z-index: 4;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
     
-    /* Top Left HUD */
     #hud {
       position: absolute;
       top: 20px;
@@ -88,8 +108,36 @@
       z-index: 5;
       pointer-events: none;
     }
+
+    .health-bar-container {
+      width: 200px;
+      height: 16px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .health-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: #2ecc71;
+      transition: width 0.2s ease, background-color 0.2s ease;
+    }
+
+    #build-hud {
+      position: absolute;
+      top: 110px;
+      left: 20px;
+      color: #3498db;
+      font-size: 18px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px #000;
+      z-index: 5;
+      pointer-events: none;
+    }
     
-    /* Right Side Weapon Text */
     #weapon-hud {
       position: absolute;
       bottom: 100px;
@@ -102,7 +150,19 @@
       text-align: right;
     }
 
-    /* 5-Slot Inventory Hotbar */
+    #car-hud {
+      display: none;
+      position: absolute;
+      bottom: 150px;
+      right: 20px;
+      color: #e74c3c;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px #000;
+      z-index: 5;
+      text-align: right;
+    }
+
     #inventory-bar {
       position: absolute;
       bottom: 20px;
@@ -140,29 +200,244 @@
       font-size: 10px;
       color: #bdc3c7;
     }
+
+    .menu-screen {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(44, 62, 80, 0.95);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      z-index: 20;
+    }
+    
+    #inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 20px;
+      border-radius: 10px;
+      border: 2px solid #3498db;
+    }
+    
+    .inv-box {
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px dashed #7f8c8d;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .close-btn {
+      margin-top: 20px;
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .close-btn:hover { background-color: #c0392b; }
+
+    #settings-container {
+      background: rgba(0, 0, 0, 0.6);
+      padding: 30px;
+      border-radius: 10px;
+      border: 2px solid #9b59b6;
+      width: 450px;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .keybind-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #7f8c8d;
+    }
+
+    .key-btn {
+      background: #34495e;
+      color: #f1c40f;
+      border: 2px solid #f1c40f;
+      padding: 5px 15px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+      min-width: 80px;
+      text-align: center;
+    }
+    .key-btn:hover { background: #2c3e50; }
+    .key-btn.assigning { background: #e74c3c; color: white; border-color: #e74c3c; }
+
+    #zombie-slider { width: 100%; cursor: pointer; }
+
+    #worlds-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.78);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 60;
+      backdrop-filter: blur(4px);
+    }
+    #worlds-modal.open { display: flex; }
+    .worlds-card {
+      width: min(620px, 92vw);
+      max-height: 82vh;
+      overflow-y: auto;
+      background: #202020;
+      color: #fff;
+      border: 2px solid #7c3aed;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.65);
+    }
+    .worlds-card h2 { margin: 0 0 8px; color: #c4b5fd; }
+    .worlds-card p { color: #cbd5e1; line-height: 1.45; }
+    .create-world-row { display: flex; gap: 8px; margin: 16px 0; }
+    .create-world-row input {
+      flex: 1;
+      min-width: 0;
+      background: #171717;
+      border: 1px solid #555;
+      border-radius: 8px;
+      color: #fff;
+      padding: 11px 12px;
+      font-size: 14px;
+    }
+    .worlds-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .worlds-empty { color: #999; text-align: center; padding: 24px 0; }
+    .world-entry {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .world-entry-info { flex: 1; min-width: 0; }
+    .world-entry-name { font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .world-entry-meta { color: #aaa; font-size: 12px; margin-top: 3px; }
+    .world-entry-actions { display: flex; gap: 6px; }
+    .world-action-btn {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 6px;
+      padding: 7px 9px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .world-action-btn:hover { background: #444; }
+    #save-toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(20,20,20,.96);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1px solid #555;
+      font-size: 14px;
+      font-weight: 700;
+      z-index: 70;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    #save-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
 
+  <div id="damage-overlay"></div>
+
   <div id="hud">
-    Points: <span id="score">0</span> | Health: <span id="health">100</span><br>
-    <span style="font-size: 16px; color: #bdc3c7;">Press ESC to open Shop</span>
+    Points: <span id="score">0</span> | Health: <span id="health">100</span>
+    <div class="health-bar-container">
+      <div id="health-bar" class="health-bar-fill"></div>
+    </div>
+    <span style="font-size: 14px; color: #bdc3c7;">Press ESC to Pause/Shop</span>
   </div>
   
+  <div id="build-hud">Build Mode: OFF</div>
+  
   <div id="weapon-hud"><span id="current-weapon-name">Standard Spud</span></div>
+  <div id="car-hud">Fuel: <span id="car-fuel">100</span>%</div>
 
   <div id="inventory-bar">
-    <div class="slot active" id="slot-0"><span class="slot-num">1</span><span id="slot-text-0">Std</span></div>
-    <div class="slot" id="slot-1"><span class="slot-num">2</span><span id="slot-text-1">-</span></div>
-    <div class="slot" id="slot-2"><span class="slot-num">3</span><span id="slot-text-2">-</span></div>
-    <div class="slot" id="slot-3"><span class="slot-num">4</span><span id="slot-text-3">-</span></div>
-    <div class="slot" id="slot-4"><span class="slot-num">5</span><span id="slot-text-4">-</span></div>
+    <div class="slot active" id="slot-0"><span class="slot-num" id="ui-key-slot0">1</span><span id="slot-text-0">Std</span></div>
+    <div class="slot" id="slot-1"><span class="slot-num" id="ui-key-slot1">2</span><span id="slot-text-1">-</span></div>
+    <div class="slot" id="slot-2"><span class="slot-num" id="ui-key-slot2">3</span><span id="slot-text-2">-</span></div>
+    <div class="slot" id="slot-3"><span class="slot-num" id="ui-key-slot3">4</span><span id="slot-text-3">-</span></div>
+    <div class="slot" id="slot-4"><span class="slot-num" id="ui-key-slot4">5</span><span id="slot-text-4">-</span></div>
+  </div>
+
+  <div id="inventory-screen" class="menu-screen">
+    <h1 style="color: #3498db; margin-top:0;">🎒 Player Backpack 🎒</h1>
+    <p>Press your Inventory key or the button below to return to the game.</p>
+    
+    <div id="inventory-grid">
+      <div class="inv-box" id="box-0">-</div>
+      <div class="inv-box" id="box-1">-</div>
+      <div class="inv-box" id="box-2">-</div>
+      <div class="inv-box" id="box-3">-</div>
+      <div class="inv-box" id="box-4">-</div>
+      <div class="inv-box" id="box-5">-</div>
+      <div class="inv-box" id="box-6">-</div>
+      <div class="inv-box" id="box-7">-</div>
+      <div class="inv-box" id="box-8">-</div>
+      <div class="inv-box" id="box-9">-</div>
+    </div>
+    <button class="close-btn" id="close-inventory">Close Backpack</button>
+  </div>
+
+  <div id="settings-screen" class="menu-screen">
+    <h1 style="color: #9b59b6; margin-top: 0;">⚙️ Game Settings ⚙️</h1>
+    
+    <div id="settings-container">
+      <h3>Difficulty</h3>
+      <label>Max Zombies Spawning: <strong id="zombie-val" style="color: #e74c3c;">35</strong></label>
+      <input type="range" id="zombie-slider" min="5" max="100" value="35">
+      <hr style="border-color: #7f8c8d; margin: 20px 0;">
+      
+      <h3>Keybinds (Click to change)</h3>
+      <div id="keybinds-list">
+      </div>
+    </div>
+
+    <div id="settings-save-actions" style="width:450px; max-width:92vw; margin-top:12px;">
+      <div style="display:flex; gap:8px;">
+        <button class="shop-btn" id="worlds-btn" style="background:#7c3aed; flex:1;">🌍 Worlds</button>
+        <button class="shop-btn" id="quick-save-btn" style="background:#007bff; flex:1;">💾 Quick Save</button>
+      </div>
+      <div style="text-align:center; font-size:12px; color:#bdc3c7; margin-top:4px;">Quick Save: F5</div>
+    </div>
+
+    <button class="close-btn" id="close-settings">Save & Close</button>
   </div>
 
   <div id="blocker">
     <div id="instructions">
-      <h1 style="font-size: 35px; margin: 0; color: #2ecc71;">Click to Play</h1>
-      <p>Move: <strong>W A S D</strong> | Jump: <strong>Space</strong> | Shoot: <strong>Click</strong> | Switch Weapon: <strong>1-5</strong></p>
+      <h1 style="font-size: 35px; margin: 0; color: #2ecc71;">Click Here to Play</h1>
+      <p>Look around to aim. Check settings for controls!</p>
     </div>
     
     <div id="shop">
@@ -173,15 +448,178 @@
       <button class="shop-btn" id="btn-sniper">Buy Spud Sniper (150 pts)</button>
       <button class="shop-btn" id="btn-cannon">Buy Spud Cannon (200 pts)</button>
       <button class="shop-btn" id="btn-mega" style="background-color: #8e44ad;">Buy Mega Spud (300 pts)</button>
-      <!-- NEW GRENADE LAUNCHER BUTTON -->
       <button class="shop-btn" id="btn-grenade" style="background-color: #c0392b;">Buy Spud-Nade Launcher (400 pts)</button>
+      
+      <button id="open-settings-btn">⚙️ Open Settings</button>
     </div>
   </div>
 
   <div class="crosshair"></div>
 
+  <div id="worlds-modal" aria-hidden="true">
+    <div class="worlds-card">
+      <h2 style="color:#9b59b6;margin-top:0;">🌍 Select World</h2>
+      <p style="color:#bbb;font-size:13px;">Create, load, rename, or delete worlds. Each world stores your score, health, inventory, position, settings, and builds.</p>
+      <div class="create-world-row">
+        <input id="new-world-name" maxlength="40" placeholder="New world name..." autocomplete="off">
+        <button class="world-action-btn" id="create-world-btn" style="background:#7c3aed;">➕ Create</button>
+      </div>
+      <div class="worlds-list" id="worlds-list"></div>
+      <button class="close-btn" id="close-worlds-btn">Close</button>
+    </div>
+  </div>
+  <div id="save-toast"></div>
+
   <script>
-    // 1. Scene, Camera, Rendering
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'shoot') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.1);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'explosion') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(25, now + 0.35);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'zombie_hit') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.12);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === 'player_hurt') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(90, now);
+        osc.frequency.linearRampToValueAtTime(40, now + 0.2);
+        gain.gain.setValueAtTime(0.5, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } else if (type === 'buy') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.08);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'build') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.08);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+        osc.start(now);
+        osc.stop(now + 0.09);
+      }
+    }
+
+    let maxZombies = 35;
+    
+    const keybinds = {
+      forward: 'KeyW',
+      backward: 'KeyS',
+      left: 'KeyA',
+      right: 'KeyD',
+      jump: 'Space',
+      interact: 'KeyE',
+      build: 'KeyQ',
+      edit: 'KeyG',
+      buildWall: 'KeyZ',
+      buildRamp: 'KeyX',
+      buildFloor: 'KeyC',
+      inventory: 'Tab',
+      slot0: 'Digit1',
+      slot1: 'Digit2',
+      slot2: 'Digit3',
+      slot3: 'Digit4',
+      slot4: 'Digit5'
+    };
+
+    const keybindNames = {
+      forward: 'Move Forward', backward: 'Move Backward', left: 'Move Left', right: 'Move Right',
+      jump: 'Jump', interact: 'Enter/Exit Car', build: 'Toggle Build Mode', edit: 'Edit Build',
+      buildWall: 'Select Wall Build', buildRamp: 'Select Ramp Build', buildFloor: 'Select Floor Build',
+      inventory: 'Open Backpack',
+      slot0: 'Weapon Slot 1', slot1: 'Weapon Slot 2', slot2: 'Weapon Slot 3', slot3: 'Weapon Slot 4', slot4: 'Weapon Slot 5'
+    };
+
+    let assigningAction = null;
+
+    function formatKey(code) {
+      if (code.startsWith('Key')) return code.replace('Key', '');
+      if (code.startsWith('Digit')) return code.replace('Digit', '');
+      return code;
+    }
+
+    function generateKeybindUI() {
+      const container = document.getElementById('keybinds-list');
+      container.innerHTML = '';
+      for (const action in keybinds) {
+        const row = document.createElement('div');
+        row.className = 'keybind-row';
+        row.innerHTML = `
+          <span>${keybindNames[action]}</span>
+          <button class="key-btn" id="bindbtn-${action}">${formatKey(keybinds[action])}</button>
+        `;
+        container.appendChild(row);
+
+        row.querySelector('button').addEventListener('click', (e) => {
+          if (assigningAction) document.getElementById(`bindbtn-${assigningAction}`).classList.remove('assigning');
+          assigningAction = action;
+          e.target.classList.add('assigning');
+          e.target.innerText = "Press Key...";
+        });
+      }
+      
+      for(let i=0; i<5; i++) {
+        document.getElementById(`ui-key-slot${i}`).innerText = formatKey(keybinds[`slot${i}`]);
+      }
+    }
+
+    document.getElementById('zombie-slider').addEventListener('input', (e) => {
+      maxZombies = parseInt(e.target.value);
+      document.getElementById('zombie-val').innerText = maxZombies;
+    });
+
+    document.getElementById('open-settings-btn').addEventListener('click', () => {
+      document.getElementById('blocker').style.display = 'none';
+      document.getElementById('settings-screen').style.display = 'flex';
+      generateKeybindUI();
+    });
+
+    document.getElementById('close-settings').addEventListener('click', () => {
+      document.getElementById('settings-screen').style.display = 'none';
+      document.getElementById('blocker').style.display = 'flex';
+      assigningAction = null;
+    });
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x556b2f);
     scene.fog = new THREE.Fog(0x556b2f, 10, 80);
@@ -202,30 +640,48 @@
       new THREE.MeshLambertMaterial({ color: 0x2d4d1e })
     );
     ground.rotation.x = -Math.PI / 2;
+    ground.visible = false; 
     scene.add(ground);
 
-    for(let i = 0; i < 120; i++) {
-       const tree = new THREE.Mesh(
-         new THREE.CylinderGeometry(0.5, 0.5, 5),
-         new THREE.MeshLambertMaterial({color: 0x4a2e12})
-       );
-       tree.position.set((Math.random() - 0.5) * 200, 2.5, (Math.random() - 0.5) * 200);
-       scene.add(tree);
-    }
+    const mapObjects = [ground]; 
+
+    const mapLoader = new THREE.GLTFLoader();
+    mapLoader.load('https://brogamer654.github.io/map1.glb', function(gltf) {
+        const customMap = gltf.scene;
+        customMap.scale.set(1, 1, 1); 
+        scene.add(customMap);
+        
+        customMap.traverse(function(child) {
+            if (child.isMesh) {
+                mapObjects.push(child);
+            }
+        });
+    });
 
     const controls = new THREE.PointerLockControls(camera, document.body);
     const blocker = document.getElementById('blocker');
     const instructions = document.getElementById('instructions');
 
-    instructions.addEventListener('click', () => controls.lock());
-    controls.addEventListener('lock', () => blocker.style.display = 'none');
+    instructions.addEventListener('click', () => {
+      initAudio();
+      controls.lock();
+    });
+    controls.addEventListener('lock', () => {
+      blocker.style.display = 'none';
+      document.getElementById('inventory-screen').style.display = 'none';
+      document.getElementById('settings-screen').style.display = 'none';
+    });
     controls.addEventListener('unlock', () => {
-      blocker.style.display = 'flex';
-      document.getElementById('shop-points').innerText = score; 
+      const isInvOpen = document.getElementById('inventory-screen').style.display === 'flex';
+      const isSetOpen = document.getElementById('settings-screen').style.display === 'flex';
+      const isWorldOpen = document.getElementById('worlds-modal').classList.contains('open');
+      if(!isInvOpen && !isSetOpen && !isWorldOpen) {
+        blocker.style.display = 'flex';
+        document.getElementById('shop-points').innerText = score; 
+      }
     });
     scene.add(controls.getObject());
 
-    // The standard cylinder gun (for standard, rapid, shotgun, sniper, cannon)
     const gun = new THREE.Mesh(
       new THREE.CylinderGeometry(0.08, 0.08, 0.8),
       new THREE.MeshLambertMaterial({ color: 0x333333 })
@@ -234,34 +690,79 @@
     gun.position.set(0.3, -0.25, -0.6);
     camera.add(gun);
 
-    // NEW: Load your custom Grenade Launcher GLB!
     let customLauncher = null;
+    let customShotgun = null;
     const loader = new THREE.GLTFLoader();
     
-    loader.load('https://brogamer654.github.io/scene.glb', function(gltf) {
+    loader.load('https://brogamer654.github.io/scene%20modelling.glb', function(gltf) {
       customLauncher = gltf.scene;
-      
-      // NOTE: 3D models from the internet are often HUGE or face the wrong way!
-      // You might need to change these numbers to make it fit perfectly in your hands.
       customLauncher.scale.set(0.1, 0.1, 0.1); 
       customLauncher.position.set(0.3, -0.25, -0.6);
       
-      // customLauncher.rotation.y = Math.PI; // Uncomment and tweak this if it points backwards
-      
-      customLauncher.visible = false; // Hide it until we equip it
+      const cur = getActiveWeapon();
+      if (!isBuildMode && cur && (cur.id === "standard" || cur.id === "grenade") && !inCar) {
+        customLauncher.visible = true; gun.visible = false;
+      } else { customLauncher.visible = false; }
       camera.add(customLauncher);
-    }, undefined, function (error) {
-      console.error('Error loading the 3D model:', error);
     });
 
-    let score = 0;
+    loader.load('https://brogamer654.github.io/model.glb', function(gltf) {
+      customShotgun = gltf.scene;
+      customShotgun.scale.set(0.1, 0.1, 0.1); 
+      customShotgun.position.set(0.3, -0.25, -0.6);
+      
+      const cur = getActiveWeapon();
+      if (!isBuildMode && cur && cur.id === "shotgun" && !inCar) {
+        customShotgun.visible = true; gun.visible = false;
+      } else { customShotgun.visible = false; }
+      camera.add(customShotgun);
+    });
+
+    let isBuildMode = false;
+    let buildType = 'wall'; 
+    let editingStructure = null; // New editing variable
+    const structures = []; 
+    const wallGeo = new THREE.BoxGeometry(4, 4, 0.5); 
+    const rampGeo = new THREE.BoxGeometry(4, 0.5, 5.65); 
+    const floorGeo = new THREE.BoxGeometry(4, 0.5, 4);
+    
+    const previewMat = new THREE.MeshLambertMaterial({ color: 0x00aaff, transparent: true, opacity: 0.5 });
+    const previewMesh = new THREE.Mesh(wallGeo, previewMat);
+    previewMesh.rotation.order = 'YXZ'; 
+    scene.add(previewMesh);
+    previewMesh.visible = false;
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b }); 
+
+    const cars = [];
+    let inCar = false;
+    let currentCar = null;
+
+    function spawnCar(x, z) {
+      const carGroup = new THREE.Group();
+      
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(3, 1, 5), new THREE.MeshLambertMaterial({ color: 0xc0392b }));
+      chassis.position.y = 1;
+      carGroup.add(chassis);
+      
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.2, 2.5), new THREE.MeshLambertMaterial({ color: 0x2c3e50 }));
+      cabin.position.set(0, 2.1, -0.5);
+      carGroup.add(cabin);
+      
+      carGroup.position.set(x, 0, z);
+      carGroup.userData = { fuel: 100, speed: 0 };
+      scene.add(carGroup);
+      cars.push(carGroup);
+    }
+    
+    spawnCar(10, 10); 
+
+    let score = 200; 
     let health = 100;
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, canJump = false;
     let velocity = new THREE.Vector3();
     let direction = new THREE.Vector3();
     let clock = new THREE.Clock();
 
-    // 4. Weapon Database & Inventory
     const weaponsDB = {
       standard: { id: "standard", name: "Standard Spud", cooldown: 30, pellets: 1, spread: 0, speed: 3.0, size: 0.12, short: "Std" },
       rapid:    { id: "rapid",    name: "Rapid-Fire",  cooldown: 8,  pellets: 1, spread: 0.02, speed: 3.5, size: 0.10, short: "Rapid" },
@@ -269,37 +770,89 @@
       sniper:   { id: "sniper",   name: "Spud Sniper", cooldown: 60, pellets: 1, spread: 0,    speed: 8.0, size: 0.15, short: "Snipe" },
       cannon:   { id: "cannon",   name: "Spud Cannon", cooldown: 80, pellets: 1, spread: 0,    speed: 1.5, size: 0.40, short: "Cannon"},
       mega:     { id: "mega",     name: "Mega Spud",   cooldown: 100, pellets: 1, spread: 0, speed: 4.0, size: 1.2, short: "MEGA" },
-      grenade:  { id: "grenade",  name: "Spud-Nade",   cooldown: 90, pellets: 1, spread: 0, speed: 2.5, size: 0.25, short: "Nade" } // NEW GRENADE LAUNCHER
+      grenade:  { id: "grenade",  name: "Spud-Nade",   cooldown: 90, pellets: 1, spread: 0, speed: 2.5, size: 0.25, short: "Nade" }
     };
     
-    const inventory = [weaponsDB.standard, null, null, null, null];
+    const inventory = [weaponsDB.standard, null, null, null, null, null, null, null, null, null];
     let activeSlotIndex = 0;
     
-    function getActiveWeapon() {
-      return inventory[activeSlotIndex];
+    function getActiveWeapon() { return inventory[activeSlotIndex]; }
+
+    function updateHealthUI() {
+      const hp = Math.max(0, health);
+      document.getElementById('health').innerText = hp;
+      const barFill = document.getElementById('health-bar');
+      barFill.style.width = hp + '%';
+      if (hp > 50) {
+        barFill.style.backgroundColor = '#2ecc71';
+      } else if (hp > 25) {
+        barFill.style.backgroundColor = '#f39c12';
+      } else {
+        barFill.style.backgroundColor = '#e74c3c';
+      }
+    }
+
+    function updateBuildHUD() {
+      if (editingStructure) {
+        document.getElementById('build-hud').innerText = `EDIT MODE: Click parts to remove, press ${formatKey(keybinds.edit)} to confirm`;
+      } else if (isBuildMode) {
+        document.getElementById('build-hud').innerText = `Build Mode: ON (${buildType.toUpperCase()}) | [${formatKey(keybinds.buildWall)}] Wall | [${formatKey(keybinds.buildRamp)}] Ramp | [${formatKey(keybinds.buildFloor)}] Floor | [${formatKey(keybinds.edit)}] Edit | 10 Pts`;
+      } else {
+        document.getElementById('build-hud').innerText = "Build Mode: OFF";
+      }
+    }
+
+    function triggerDamageOverlay() {
+      const overlay = document.getElementById('damage-overlay');
+      overlay.style.opacity = '1';
+      setTimeout(() => { overlay.style.opacity = '0'; }, 200);
     }
 
     function updateInventoryUI() {
       for (let i = 0; i < 5; i++) {
-        const slotEl = document.getElementById(`slot-${i}`);
-        const textEl = document.getElementById(`slot-text-${i}`);
-        slotEl.className = i === activeSlotIndex ? 'slot active' : 'slot';
-        textEl.innerText = inventory[i] ? inventory[i].short : "-";
+        document.getElementById(`slot-${i}`).className = i === activeSlotIndex ? 'slot active' : 'slot';
+        document.getElementById(`slot-text-${i}`).innerText = inventory[i] ? inventory[i].short : "-";
       }
-      
-      const currentWeapon = getActiveWeapon();
-      const currentWeaponName = currentWeapon ? currentWeapon.name : "Empty Hands";
-      document.getElementById('current-weapon-name').innerText = currentWeaponName;
+      const cur = getActiveWeapon();
+      document.getElementById('current-weapon-name').innerText = cur ? cur.name : "Empty";
+
       document.getElementById('score').innerText = score;
       document.getElementById('shop-points').innerText = score;
+      updateHealthUI();
 
-      // NEW: Swap the 3D models!
-      if (currentWeapon && currentWeapon.id === "grenade") {
-        gun.visible = false; // Hide cylinder
-        if (customLauncher) customLauncher.visible = true; // Show custom GLB
-      } else {
-        gun.visible = true; // Show cylinder
-        if (customLauncher) customLauncher.visible = false; // Hide custom GLB
+      if(inCar) {
+        gun.visible = false;
+        if(customLauncher) customLauncher.visible = false;
+        if(customShotgun) customShotgun.visible = false;
+      } else if(!isBuildMode) {
+        if (cur && (cur.id === "standard" || cur.id === "grenade")) {
+          gun.visible = false; 
+          if (customLauncher) customLauncher.visible = true; 
+          if (customShotgun) customShotgun.visible = false;
+        } else if (cur && cur.id === "shotgun") {
+          gun.visible = false;
+          if (customLauncher) customLauncher.visible = false;
+          if (customShotgun) customShotgun.visible = true;
+        } else {
+          gun.visible = true; 
+          if (customLauncher) customLauncher.visible = false; 
+          if (customShotgun) customShotgun.visible = false;
+        }
+      }
+    }
+
+    function syncBackpackUI() {
+      for (let i = 0; i < 10; i++) {
+        const boxEl = document.getElementById(`box-${i}`);
+        if (inventory[i]) {
+          boxEl.innerText = inventory[i].name;
+          boxEl.style.border = "2px solid #2ecc71";
+          boxEl.style.background = "rgba(46, 204, 113, 0.2)";
+        } else {
+          boxEl.innerText = "Empty";
+          boxEl.style.border = "2px dashed #7f8c8d";
+          boxEl.style.background = "rgba(255, 255, 255, 0.1)";
+        }
       }
     }
 
@@ -309,60 +862,502 @@
         if (emptyIndex !== -1) {
           score -= cost;
           inventory[emptyIndex] = itemObj;
+          playSound('buy');
           const btn = document.getElementById(btnId);
           btn.innerText = "BOUGHT";
           btn.disabled = true;
           updateInventoryUI();
-        } else {
-          alert("Your inventory is full!");
-        }
+        } else { alert("Backpack full!"); }
       }
     }
 
-    document.getElementById('btn-rapid').addEventListener('click', () => buyItem(weaponsDB.rapid, 50, 'btn-rapid'));
-    document.getElementById('btn-shotgun').addEventListener('click', () => buyItem(weaponsDB.shotgun, 100, 'btn-shotgun'));
-    document.getElementById('btn-sniper').addEventListener('click', () => buyItem(weaponsDB.sniper, 150, 'btn-sniper'));
-    document.getElementById('btn-cannon').addEventListener('click', () => buyItem(weaponsDB.cannon, 200, 'btn-cannon'));
-    document.getElementById('btn-mega').addEventListener('click', () => buyItem(weaponsDB.mega, 300, 'btn-mega'));
-    document.getElementById('btn-grenade').addEventListener('click', () => buyItem(weaponsDB.grenade, 400, 'btn-grenade')); // NEW BTN
+    const WORLDS_KEY = 'potato_fps_worlds_v2';
+    const AUTOSAVE_INTERVAL_MS = 90000;
+    let worlds = [];
+    let activeWorldId = null;
+    let saveToastTimer = null;
+
+    function showSaveToast(message) {
+      const el = document.getElementById('save-toast');
+      if (!el) return;
+      el.innerText = message;
+      el.classList.add('show');
+      clearTimeout(saveToastTimer);
+      saveToastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+    }
+
+    function loadWorlds() {
+      try {
+        const raw = localStorage.getItem(WORLDS_KEY);
+        worlds = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(worlds)) worlds = [];
+      } catch (e) {
+        console.error(e);
+        worlds = [];
+        showSaveToast('⚠️ Could not read saves');
+      }
+    }
+
+    function persistWorlds() {
+      try {
+        localStorage.setItem(WORLDS_KEY, JSON.stringify(worlds));
+        return true;
+      } catch (e) {
+        console.error(e);
+        showSaveToast('⚠️ Save failed — browser storage blocked/full');
+        return false;
+      }
+    }
+
+    function getActiveWorld() {
+      return worlds.find(w => w.id === activeWorldId) || null;
+    }
+
+    function serializeGameState() {
+      return {
+        version: 2,
+        score,
+        health,
+        maxZombies,
+        activeSlotIndex,
+        keybinds: { ...keybinds },
+        position: {
+          x: controls.getObject().position.x,
+          y: controls.getObject().position.y,
+          z: controls.getObject().position.z
+        },
+        inventory: inventory.map(item => item ? item.id : null),
+        buildStructures: structures.map(s => {
+          let edits = [];
+          if (s.userData.structureType === 'wall' && s.children) {
+             edits = s.children.map(c => c.userData.edited);
+          }
+          return {
+            type: s.userData.structureType || 'wall',
+            x: s.position.x, y: s.position.y, z: s.position.z,
+            rx: s.rotation.x, ry: s.rotation.y, rz: s.rotation.z,
+            hp: (typeof s.userData.hp === 'number') ? s.userData.hp : 100,
+            edits: edits
+          }
+        })
+      };
+    }
+
+    function clearSavedStructuresFromScene() {
+      for (let i = structures.length - 1; i >= 0; i--) {
+        scene.remove(structures[i]);
+      }
+      structures.length = 0;
+    }
+
+    function applyGameState(data) {
+      if (!data) return;
+      score = Number.isFinite(data.score) ? data.score : 200;
+      health = Number.isFinite(data.health) ? data.health : 100;
+      maxZombies = Number.isFinite(data.maxZombies) ? data.maxZombies : 35;
+      activeSlotIndex = Number.isInteger(data.activeSlotIndex) ? data.activeSlotIndex : 0;
+
+      if (data.keybinds && typeof data.keybinds === 'object') {
+        Object.keys(keybinds).forEach(k => {
+          if (typeof data.keybinds[k] === 'string' && data.keybinds[k]) keybinds[k] = data.keybinds[k];
+        });
+      }
+
+      inventory.fill(null);
+      if (Array.isArray(data.inventory)) {
+        data.inventory.forEach((weaponId, i) => {
+          if (i < inventory.length && weaponId && weaponsDB[weaponId]) inventory[i] = weaponsDB[weaponId];
+        });
+      }
+      if (!inventory.some(Boolean)) inventory[0] = weaponsDB.standard;
+      if (activeSlotIndex < 0 || activeSlotIndex >= inventory.length || !inventory[activeSlotIndex]) activeSlotIndex = 0;
+
+      if (data.position && Number.isFinite(data.position.x) && Number.isFinite(data.position.y) && Number.isFinite(data.position.z)) {
+        controls.getObject().position.set(data.position.x, data.position.y, data.position.z);
+      }
+
+      clearSavedStructuresFromScene();
+      if (Array.isArray(data.buildStructures)) {
+        data.buildStructures.forEach(saved => {
+          let mesh;
+          if (saved.type === 'wall') {
+            mesh = new THREE.Group();
+            for(let x=0; x<3; x++) {
+              for(let y=0; y<3; y++) {
+                const subBlock = new THREE.Mesh(new THREE.BoxGeometry(4/3, 4/3, 0.5), wallMat.clone());
+                subBlock.position.set((x-1)*(4/3), (y-1)*(4/3), 0);
+                subBlock.userData = { isSubBlock: true, edited: false };
+                if (saved.edits && saved.edits.length === 9) {
+                    subBlock.userData.edited = saved.edits[x*3+y];
+                    if (subBlock.userData.edited) subBlock.visible = false;
+                }
+                mesh.add(subBlock);
+              }
+            }
+          } else {
+            let geo = saved.type === 'ramp' ? rampGeo : floorGeo;
+            mesh = new THREE.Mesh(geo, wallMat);
+          }
+          
+          mesh.position.set(saved.x || 0, saved.y || 2, saved.z || 0);
+          mesh.rotation.set(saved.rx || 0, saved.ry || 0, saved.rz || 0);
+          mesh.userData = { hp: Number.isFinite(saved.hp) ? saved.hp : 100, structureType: saved.type || 'wall', isEditable: saved.type === 'wall' };
+          scene.add(mesh);
+          structures.push(mesh);
+        });
+      }
+
+      document.getElementById('zombie-slider').value = maxZombies;
+      document.getElementById('zombie-val').innerText = maxZombies;
+      updateInventoryUI();
+      generateKeybindUI();
+    }
+
+    function ensureActiveWorld() {
+      let world = getActiveWorld();
+      if (world) return world;
+      world = {
+        id: 'world_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        name: 'Survival World',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        data: serializeGameState()
+      };
+      worlds.push(world);
+      activeWorldId = world.id;
+      persistWorlds();
+      return world;
+    }
+
+    function quickSaveActiveWorld(silent = false) {
+      const world = ensureActiveWorld();
+      world.data = serializeGameState();
+      world.updatedAt = Date.now();
+      activeWorldId = world.id;
+      const ok = persistWorlds();
+      if (ok && !silent) showSaveToast('💾 Game saved!');
+      return ok;
+    }
+
+    function loadWorld(worldId) {
+      const world = worlds.find(w => w.id === worldId);
+      if (!world || !world.data) return;
+      activeWorldId = world.id;
+      applyGameState(world.data);
+      closeWorldsModal();
+      document.getElementById('blocker').style.display = 'flex';
+      document.getElementById('shop-points').innerText = score;
+      showSaveToast('✅ Loaded ' + world.name);
+    }
+
+    function deleteWorld(worldId) {
+      const world = worlds.find(w => w.id === worldId);
+      if (!world) return;
+      if (!confirm('Delete world "' + world.name.replace(/"/g, '\\"') + '"? This cannot be undone.')) return;
+      worlds = worlds.filter(w => w.id !== worldId);
+      if (activeWorldId === worldId) activeWorldId = worlds.length ? worlds[0].id : null;
+      persistWorlds();
+      renderWorlds();
+    }
+
+    function renameWorld(worldId) {
+      const world = worlds.find(w => w.id === worldId);
+      if (!world) return;
+      const next = prompt('New world name:', world.name);
+      if (next === null) return;
+      const name = next.trim().slice(0, 40);
+      if (!name) return;
+      world.name = name;
+      world.updatedAt = Date.now();
+      persistWorlds();
+      renderWorlds();
+    }
+
+    function renderWorlds() {
+      const list = document.getElementById('worlds-list');
+      if (!list) return;
+      if (!worlds.length) {
+        list.innerHTML = '<div class="worlds-empty">No worlds yet. Create one above.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      worlds.slice().sort((a,b) => (b.updatedAt || 0) - (a.updatedAt || 0)).forEach(world => {
+        const row = document.createElement('div');
+        row.className = 'world-entry';
+        const info = document.createElement('div');
+        info.className = 'world-entry-info';
+        const name = document.createElement('div');
+        name.className = 'world-entry-name';
+        name.innerText = world.name + (world.id === activeWorldId ? '  ✓' : '');
+        const meta = document.createElement('div');
+        meta.className = 'world-entry-meta';
+        meta.innerText = 'Points: ' + (world.data?.score ?? 0) + ' • Updated: ' + new Date(world.updatedAt || world.createdAt).toLocaleString();
+        info.append(name, meta);
+        const actions = document.createElement('div');
+        actions.className = 'world-entry-actions';
+        const load = document.createElement('button');
+        load.className = 'world-action-btn'; load.innerText = '▶ Load'; load.onclick = () => loadWorld(world.id);
+        const rename = document.createElement('button');
+        rename.className = 'world-action-btn'; rename.innerText = '✏️'; rename.title = 'Rename'; rename.onclick = () => renameWorld(world.id);
+        const del = document.createElement('button');
+        del.className = 'world-action-btn'; del.innerText = '🗑️'; del.title = 'Delete'; del.onclick = () => deleteWorld(world.id);
+        actions.append(load, rename, del);
+        row.append(info, actions);
+        list.appendChild(row);
+      });
+    }
+
+    function openWorldsModal() {
+      if (controls.isLocked) controls.unlock();
+      document.getElementById('blocker').style.display = 'none';
+      renderWorlds();
+      const modal = document.getElementById('worlds-modal');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeWorldsModal() {
+      const modal = document.getElementById('worlds-modal');
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
 
     document.addEventListener('keydown', (event) => {
+      if (assigningAction) {
+        event.preventDefault();
+        keybinds[assigningAction] = event.code;
+        generateKeybindUI();
+        assigningAction = null;
+        updateBuildHUD();
+        return;
+      }
+
+      if (Object.values(keybinds).includes(event.code)) {
+        if (event.code === 'Tab' || event.code === 'Space') {
+           event.preventDefault();
+        }
+      }
+
       switch (event.code) {
-        case 'KeyW': moveForward = true; break;
-        case 'KeyA': moveLeft = true; break;
-        case 'KeyS': moveBackward = true; break;
-        case 'KeyD': moveRight = true; break;
-        case 'Space': if (canJump) velocity.y += 12; canJump = false; break;
-        case 'Digit1': activeSlotIndex = 0; updateInventoryUI(); break;
-        case 'Digit2': activeSlotIndex = 1; updateInventoryUI(); break;
-        case 'Digit3': activeSlotIndex = 2; updateInventoryUI(); break;
-        case 'Digit4': activeSlotIndex = 3; updateInventoryUI(); break;
-        case 'Digit5': activeSlotIndex = 4; updateInventoryUI(); break;
+        case keybinds.forward: moveForward = true; break;
+        case keybinds.left: moveLeft = true; break;
+        case keybinds.backward: moveBackward = true; break;
+        case keybinds.right: moveRight = true; break;
+        case keybinds.jump: if (canJump && !inCar) velocity.y += 12; canJump = false; break;
+        case keybinds.slot0: activeSlotIndex = 0; updateInventoryUI(); break;
+        case keybinds.slot1: activeSlotIndex = 1; updateInventoryUI(); break;
+        case keybinds.slot2: activeSlotIndex = 2; updateInventoryUI(); break;
+        case keybinds.slot3: activeSlotIndex = 3; updateInventoryUI(); break;
+        case keybinds.slot4: activeSlotIndex = 4; updateInventoryUI(); break;
+        
+        case keybinds.interact:
+          if (!inCar) {
+            for (let c of cars) {
+              if (controls.getObject().position.distanceTo(c.position) < 6) {
+                inCar = true;
+                currentCar = c;
+                document.getElementById('car-hud').style.display = 'block';
+                gun.visible = false;
+                if(customLauncher) customLauncher.visible = false;
+                if(customShotgun) customShotgun.visible = false;
+                break;
+              }
+            }
+          } else {
+            inCar = false;
+            currentCar = null;
+            document.getElementById('car-hud').style.display = 'none';
+            updateInventoryUI(); 
+          }
+          break;
+
+        case keybinds.build:
+          if (inCar || editingStructure) break; 
+          isBuildMode = !isBuildMode;
+          previewMesh.visible = isBuildMode;
+          if(isBuildMode) {
+            gun.visible = false;
+            if(customLauncher) customLauncher.visible = false;
+            if(customShotgun) customShotgun.visible = false;
+          } else {
+            updateInventoryUI(); 
+          }
+          updateBuildHUD();
+          break;
+
+        case keybinds.buildWall:
+          if (inCar || editingStructure) break;
+          buildType = 'wall';
+          if (!isBuildMode) {
+            isBuildMode = true;
+            previewMesh.visible = true;
+            gun.visible = false;
+            if(customLauncher) customLauncher.visible = false;
+            if(customShotgun) customShotgun.visible = false;
+          }
+          updateBuildHUD();
+          break;
+
+        case keybinds.buildRamp:
+          if (inCar || editingStructure) break;
+          buildType = 'ramp';
+          if (!isBuildMode) {
+            isBuildMode = true;
+            previewMesh.visible = true;
+            gun.visible = false;
+            if(customLauncher) customLauncher.visible = false;
+            if(customShotgun) customShotgun.visible = false;
+          }
+          updateBuildHUD();
+          break;
+
+        case keybinds.buildFloor:
+          if (inCar || editingStructure) break;
+          buildType = 'floor';
+          if (!isBuildMode) {
+            isBuildMode = true;
+            previewMesh.visible = true;
+            gun.visible = false;
+            if(customLauncher) customLauncher.visible = false;
+            if(customShotgun) customShotgun.visible = false;
+          }
+          updateBuildHUD();
+          break;
+
+        case keybinds.edit:
+          if (inCar || !isBuildMode) break;
+          
+          if (!editingStructure) {
+            const lookDir = new THREE.Vector3();
+            camera.getWorldDirection(lookDir);
+            const ray = new THREE.Raycaster(camera.position, lookDir, 0, 8);
+            const hits = ray.intersectObjects(structures, true); 
+            
+            if (hits.length > 0) {
+              let hitObj = hits[0].object;
+              let parent = hitObj.parent && hitObj.parent.isGroup ? hitObj.parent : hitObj;
+              
+              if (parent.userData && parent.userData.isEditable) {
+                editingStructure = parent;
+                parent.children.forEach(c => {
+                  c.visible = true; 
+                  c.material = previewMat.clone();
+                  if (c.userData.edited) {
+                    c.material.opacity = 0.3;
+                    c.material.color.setHex(0xe74c3c); 
+                  } else {
+                    c.material.opacity = 0.8;
+                    c.material.color.setHex(0x00aaff); 
+                  }
+                });
+                updateBuildHUD();
+              }
+            }
+          } else {
+            // Confirm the edit
+            editingStructure.children.forEach(c => {
+              if (c.userData.edited) {
+                c.visible = false; 
+              } else {
+                c.visible = true;  
+                c.material = wallMat; 
+              }
+            });
+            editingStructure = null;
+            updateBuildHUD(); 
+          }
+          break;
+
+        case keybinds.inventory: 
+          if (controls.isLocked) {
+            controls.unlock(); 
+            document.getElementById('blocker').style.display = 'none'; 
+            document.getElementById('inventory-screen').style.display = 'flex'; 
+            syncBackpackUI(); 
+          } else if (document.getElementById('inventory-screen').style.display === 'flex') {
+            document.getElementById('inventory-screen').style.display = 'none';
+            controls.lock(); 
+          }
+          break;
       }
     });
 
     document.addEventListener('keyup', (event) => {
       switch (event.code) {
-        case 'KeyW': moveForward = false; break;
-        case 'KeyA': moveLeft = false; break;
-        case 'KeyS': moveBackward = false; break;
-        case 'KeyD': moveRight = false; break;
+        case keybinds.forward: moveForward = false; break;
+        case keybinds.left: moveLeft = false; break;
+        case keybinds.backward: moveBackward = false; break;
+        case keybinds.right: moveRight = false; break;
       }
     });
 
-    // 5. Shooting Mechanics
     let weaponTimer = 0;
     let isShooting = false;
     const potatoes = [];
-    const healthDrops = [];
-    const explosions = []; // NEW: Array for explosion visuals
+    const explosions = [];
     
-    document.addEventListener('mousedown', () => isShooting = true);
+    document.addEventListener('mousedown', () => {
+      if (inCar) return; 
+
+      if (editingStructure) {
+        const lookDir = new THREE.Vector3();
+        camera.getWorldDirection(lookDir);
+        const ray = new THREE.Raycaster(camera.position, lookDir, 0, 10);
+        const hits = ray.intersectObjects(editingStructure.children);
+        
+        if (hits.length > 0) {
+          const block = hits[0].object;
+          block.userData.edited = !block.userData.edited;
+          if (block.userData.edited) {
+            block.material.opacity = 0.3; 
+            block.material.color.setHex(0xe74c3c); 
+          } else {
+            block.material.opacity = 0.8; 
+            block.material.color.setHex(0x00aaff);
+          }
+        }
+        return; 
+      }
+
+      if(isBuildMode && controls.isLocked) {
+        if (score >= 10) {
+          score -= 10;
+          document.getElementById('score').innerText = score;
+          playSound('build');
+          
+          let newStruct;
+          if (buildType === 'wall') {
+            newStruct = new THREE.Group();
+            for(let x=0; x<3; x++) {
+              for(let y=0; y<3; y++) {
+                const subBlock = new THREE.Mesh(new THREE.BoxGeometry(4/3, 4/3, 0.5), wallMat.clone());
+                subBlock.position.set((x-1)*(4/3), (y-1)*(4/3), 0);
+                subBlock.userData = { isSubBlock: true, edited: false };
+                newStruct.add(subBlock);
+              }
+            }
+          } else {
+            let geo = buildType === 'ramp' ? rampGeo : floorGeo;
+            newStruct = new THREE.Mesh(geo, wallMat);
+          }
+
+          newStruct.position.copy(previewMesh.position);
+          newStruct.rotation.copy(previewMesh.rotation);
+          newStruct.userData = { hp: 100, structureType: buildType, isEditable: buildType === 'wall' }; 
+          scene.add(newStruct);
+          structures.push(newStruct);
+        }
+      } else {
+        isShooting = true;
+      }
+    });
     document.addEventListener('mouseup', () => isShooting = false);
     
     function fireWeapon() {
       const weapon = getActiveWeapon();
-      if (!weapon || weaponTimer > 0) return; 
+      if (!weapon || weaponTimer > 0 || isBuildMode || inCar) return; 
+
+      playSound('shoot');
 
       for (let i = 0; i < weapon.pellets; i++) {
         const potato = new THREE.Mesh(
@@ -381,10 +1376,9 @@
         aimDirection.y += (Math.random() - 0.5) * weapon.spread;
         aimDirection.z += (Math.random() - 0.5) * weapon.spread;
         
-        // NEW: Grenade specific logic
         if (weapon.id === "grenade") {
-          aimDirection.y += 0.2; // Aim slightly upwards for an arc
-          potato.material.color.setHex(0x333333); // Dark iron-like color
+          aimDirection.y += 0.2; 
+          potato.material.color.setHex(0x333333); 
           potato.userData.isGrenade = true; 
         }
 
@@ -396,11 +1390,9 @@
         scene.add(potato);
         potatoes.push(potato);
       }
-      
       weaponTimer = weapon.cooldown;
     }
 
-    // 6. Zombie Spawner
     const zombies = [];
     function createZombie() {
       const zombieGroup = new THREE.Group();
@@ -410,14 +1402,7 @@
       const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshLambertMaterial({ color: 0x3d7a34 }));
       head.position.y = 2.4;
       zombieGroup.add(head);
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-      const eye1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.1), eyeMat);
-      eye1.position.set(-0.2, 2.5, 0.4);
-      const eye2 = eye1.clone();
-      eye2.position.x = 0.2;
-      zombieGroup.add(eye1);
-      zombieGroup.add(eye2);
-
+      
       const angle = Math.random() * Math.PI * 2;
       const radius = 30 + Math.random() * 20;
       const playerPos = controls.getObject().position;
@@ -431,75 +1416,204 @@
 
     for (let i = 0; i < 5; i++) createZombie();
     setInterval(() => {
-      if (controls.isLocked && zombies.length < 35 && health > 0) createZombie();
+      if (controls.isLocked && zombies.length < maxZombies && health > 0) createZombie();
     }, 1500);
 
-    // 7. Main Loop
     function animate() {
       requestAnimationFrame(animate);
       const delta = clock.getDelta();
 
       if (controls.isLocked && health > 0) {
         
-        if (isShooting) fireWeapon();
-        if (weaponTimer > 0) weaponTimer--;
+        if(isBuildMode) {
+          const lookDir = new THREE.Vector3();
+          camera.getWorldDirection(lookDir);
+          
+          const targetPos = camera.position.clone().add(lookDir.multiplyScalar(5));
+          const cellSize = 4;
+          const cellX = Math.floor(targetPos.x / cellSize) * cellSize + (cellSize / 2);
+          const cellZ = Math.floor(targetPos.z / cellSize) * cellSize + (cellSize / 2);
+          let cellY = Math.floor(targetPos.y / cellSize) * cellSize + (cellSize / 2);
+          if (cellY < 2) cellY = 2;
+          
+          const angle = Math.atan2(lookDir.x, lookDir.z);
+          const snappedAngle = Math.round(angle / (Math.PI / 2)) * (Math.PI / 2);
 
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
-        velocity.y -= 30.0 * delta;
+          if (buildType === 'wall') {
+            previewMesh.geometry = wallGeo;
+            previewMesh.rotation.set(0, snappedAngle, 0); 
+            previewMesh.position.set(cellX, cellY, cellZ);
+            
+            const dir = Math.round(snappedAngle / (Math.PI / 2));
+            if (dir === 0 || dir === -0) previewMesh.position.z += (cellSize / 2);      
+            else if (dir === 1) previewMesh.position.x += (cellSize / 2);               
+            else if (dir === 2 || dir === -2) previewMesh.position.z -= (cellSize / 2); 
+            else if (dir === -1) previewMesh.position.x -= (cellSize / 2);              
 
-        direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize();
-
-        if (moveForward || moveBackward) velocity.z -= direction.z * 90.0 * delta;
-        if (moveLeft || moveRight) velocity.x -= direction.x * 90.0 * delta;
-
-        controls.moveRight(-velocity.x * delta);
-        controls.moveForward(-velocity.z * delta);
-        controls.getObject().position.y += (velocity.y * delta);
-
-        if (controls.getObject().position.y < 2) {
-          velocity.y = 0;
-          controls.getObject().position.y = 2;
-          canJump = true;
+          } else if (buildType === 'ramp') {
+            previewMesh.geometry = rampGeo;
+            previewMesh.rotation.set(-Math.PI / 4, snappedAngle, 0);
+            previewMesh.position.set(cellX, cellY, cellZ);
+          } else if (buildType === 'floor') {
+            previewMesh.geometry = floorGeo;
+            previewMesh.rotation.set(0, 0, 0);
+            previewMesh.position.set(cellX, cellY - (cellSize / 2) + 0.25, cellZ);
+          }
         }
 
+        if (isShooting && !inCar) fireWeapon();
+        if (weaponTimer > 0) weaponTimer--;
+
+        if (inCar && currentCar) {
+            
+            if (moveLeft) currentCar.rotation.y += 2.0 * delta;
+            if (moveRight) currentCar.rotation.y -= 2.0 * delta;
+            if (moveForward) currentCar.userData.speed += 15.0 * delta;
+            if (moveBackward) currentCar.userData.speed -= 15.0 * delta;
+            
+            currentCar.userData.speed *= 0.95; 
+            currentCar.translateZ(-currentCar.userData.speed * delta);
+            
+            controls.getObject().position.copy(currentCar.position);
+            controls.getObject().position.y += 2.5; 
+            velocity.set(0, 0, 0); 
+            
+            if (Math.abs(currentCar.userData.speed) > 0.5) {
+                currentCar.userData.fuel -= 4 * delta;
+                document.getElementById('car-fuel').innerText = Math.max(0, Math.floor(currentCar.userData.fuel));
+            }
+
+            if (currentCar.userData.fuel <= 0) {
+                playSound('explosion');
+                const boom = new THREE.Mesh(
+                    new THREE.SphereGeometry(6, 16, 16),
+                    new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.8 })
+                );
+                boom.position.copy(currentCar.position);
+                scene.add(boom);
+                explosions.push({ mesh: boom, life: 25 });
+                
+                health -= 50; 
+                updateHealthUI();
+                triggerDamageOverlay();
+                
+                scene.remove(currentCar);
+                cars.splice(cars.indexOf(currentCar), 1);
+                inCar = false;
+                currentCar = null;
+                document.getElementById('car-hud').style.display = 'none';
+                updateInventoryUI();
+            }
+        } else {
+            
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            if (moveForward || moveBackward) velocity.z -= direction.z * 90.0 * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * 90.0 * delta;
+
+            const oldPos = controls.getObject().position.clone();
+            
+            controls.moveRight(-velocity.x * delta);
+            controls.moveForward(-velocity.z * delta);
+            
+            const newPos = controls.getObject().position.clone();
+            const worldMove = newPos.clone().sub(oldPos);
+            
+            controls.getObject().position.copy(oldPos); 
+            
+            if (worldMove.lengthSq() > 0) {
+                const moveDir = worldMove.clone().normalize();
+                const waistPos = controls.getObject().position.clone();
+                waistPos.y -= 1.0; 
+                
+                const horizRay = new THREE.Raycaster(waistPos, moveDir, 0, 1.2); 
+                const hHits = horizRay.intersectObjects([...mapObjects, ...structures], true);
+                let blocked = false;
+                
+                if (hHits.length > 0) {
+                    const hitNormal = hHits[0].face.normal.clone().transformDirection(hHits[0].object.matrixWorld);
+                    if (Math.abs(hitNormal.y) < 0.6) { 
+                        blocked = true;
+                    }
+                }
+                
+                if (!blocked) {
+                    controls.getObject().position.add(worldMove); 
+                } else {
+                    velocity.x = 0;
+                    velocity.z = 0; 
+                }
+            }
+
+            velocity.y -= 30.0 * delta; 
+            let proposedY = controls.getObject().position.y + velocity.y * delta;
+            
+            const rayOrigin = controls.getObject().position.clone();
+            const downRay = new THREE.Raycaster(rayOrigin, new THREE.Vector3(0, -1, 0), 0, 20);
+            const downHits = downRay.intersectObjects([...mapObjects, ...structures], true);
+            
+            let hitY = 0; 
+            if (downHits.length > 0) {
+                hitY = downHits[0].point.y; 
+            }
+            
+            if (proposedY - 2 <= hitY) {
+                velocity.y = Math.max(0, velocity.y); 
+                proposedY = hitY + 2; 
+                canJump = true;
+            } else {
+                canJump = false; 
+            }
+            
+            controls.getObject().position.y = proposedY;
+        }
+        
         const playerPos = controls.getObject().position;
 
-        // Animate Visual Explosions
         for (let i = explosions.length - 1; i >= 0; i--) {
           const exp = explosions[i];
           exp.life -= 1;
-          exp.mesh.scale.addScalar(0.4); // Expand quickly
-          exp.mesh.material.opacity -= 0.05; // Fade out
+          exp.mesh.scale.addScalar(0.4); 
+          exp.mesh.material.opacity -= 0.05; 
           if (exp.life <= 0) {
             scene.remove(exp.mesh);
             explosions.splice(i, 1);
           }
         }
 
-        for (let i = healthDrops.length - 1; i >= 0; i--) {
-          const drop = healthDrops[i];
-          drop.rotation.y += 3 * delta;
-          drop.rotation.x += 1 * delta;
-          
-          if (drop.position.distanceTo(playerPos) < 2) {
-            health = Math.min(100, health + 25);
-            document.getElementById('health').innerText = health;
-            scene.remove(drop);
-            healthDrops.splice(i, 1);
-          }
-        }
-
         for (let i = zombies.length - 1; i >= 0; i--) {
           const zombie = zombies[i];
           zombie.lookAt(playerPos.x, zombie.position.y, playerPos.z);
-          zombie.translateZ(zombie.userData.speed * delta);
+          
+          let blockedByStruct = false;
+          for(let w = structures.length - 1; w >= 0; w--) {
+            const struct = structures[w];
+            if(zombie.position.distanceTo(struct.position) < 2.5) {
+              blockedByStruct = true;
+              struct.userData.hp -= 1; 
+              
+              if(struct.userData.hp <= 0) {
+                scene.remove(struct);
+                structures.splice(w, 1);
+              }
+              break;
+            }
+          }
 
-          if (zombie.position.distanceTo(playerPos) < 1.5 && zombie.userData.hitCooldown <= 0) {
+          if (!blockedByStruct) {
+            zombie.translateZ(zombie.userData.speed * delta);
+          }
+
+          if (zombie.position.distanceTo(playerPos) < 1.5 && zombie.userData.hitCooldown <= 0 && !blockedByStruct) {
             health -= 10;
-            document.getElementById('health').innerText = Math.max(0, health);
+            playSound('player_hurt');
+            triggerDamageOverlay();
+            updateHealthUI();
             zombie.userData.hitCooldown = 60; 
             
             if (health <= 0) {
@@ -512,47 +1626,40 @@
 
         for (let i = potatoes.length - 1; i >= 0; i--) {
           const p = potatoes[i];
-          
-          // Apply gravity if it's a grenade
-          if (p.userData.isGrenade) {
-            p.userData.velocity.y -= 8.0 * delta; 
-          }
-
+          if (p.userData.isGrenade) p.userData.velocity.y -= 8.0 * delta; 
           p.position.add(p.userData.velocity);
           p.userData.life--;
 
           let hit = false;
-          
-          // Grenades blow up when they touch the ground
-          if (p.userData.isGrenade && p.position.y <= p.geometry.parameters.radius) {
-            hit = true;
+          if (p.userData.isGrenade && p.position.y <= p.geometry.parameters.radius) hit = true;
+
+          if(!hit) {
+            for(let w = structures.length - 1; w >= 0; w--) {
+              const struct = structures[w];
+              if(p.position.distanceTo(struct.position) < 2.5) {
+                hit = true;
+                struct.userData.hp -= (p.userData.damage * 5); 
+                if(struct.userData.hp <= 0) {
+                  scene.remove(struct);
+                  structures.splice(w, 1);
+                }
+                break;
+              }
+            }
           }
 
-          // Check Zombie Collisions
           if (!hit) {
             for (let j = zombies.length - 1; j >= 0; j--) {
               const z = zombies[j];
               if (p.position.distanceTo(z.position.clone().add(new THREE.Vector3(0, 1.2, 0))) < 1.5) {
-                
-                // Normal weapons deal direct damage
                 if (!p.userData.isGrenade) {
                   z.userData.hp -= p.userData.damage; 
+                  playSound('zombie_hit');
                   if (z.userData.hp <= 0) {
                     scene.remove(z);
                     zombies.splice(j, 1);
                     score += 10;
                     document.getElementById('score').innerText = score;
-
-                    if (Math.random() < 0.2) {
-                      const medkit = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.8, 0.8, 0.8),
-                        new THREE.MeshLambertMaterial({ color: 0xff3333 })
-                      );
-                      medkit.position.copy(z.position);
-                      medkit.position.y = 0.4;
-                      scene.add(medkit);
-                      healthDrops.push(medkit);
-                    }
                   }
                 }
                 hit = true;
@@ -562,10 +1669,8 @@
           }
 
           if (hit || p.userData.life <= 0) {
-            
-            // GRENADE AREA OF EFFECT EXPLOSION
             if (p.userData.isGrenade && hit) {
-              // Create visual blast sphere
+              playSound('explosion');
               const boom = new THREE.Mesh(
                 new THREE.SphereGeometry(3, 16, 16),
                 new THREE.MeshBasicMaterial({ color: 0xff5500, transparent: true, opacity: 0.8 })
@@ -574,33 +1679,29 @@
               scene.add(boom);
               explosions.push({ mesh: boom, life: 15 });
 
-              // Damage all nearby zombies
               for (let j = zombies.length - 1; j >= 0; j--) {
                 const z = zombies[j];
-                if (boom.position.distanceTo(z.position) < 4.5) { // Blast Radius
-                  z.userData.hp -= 20; // Massive Explosion Damage
-                  
+                if (boom.position.distanceTo(z.position) < 4.5) { 
+                  z.userData.hp -= 20; 
                   if (z.userData.hp <= 0) {
                     scene.remove(z);
                     zombies.splice(j, 1);
                     score += 10;
                     document.getElementById('score').innerText = score;
-
-                    if (Math.random() < 0.2) {
-                      const medkit = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.8, 0.8, 0.8),
-                        new THREE.MeshLambertMaterial({ color: 0xff3333 })
-                      );
-                      medkit.position.copy(z.position);
-                      medkit.position.y = 0.4;
-                      scene.add(medkit);
-                      healthDrops.push(medkit);
-                    }
+                  }
+                }
+              }
+              for (let w = structures.length - 1; w >= 0; w--) {
+                const struct = structures[w];
+                if(boom.position.distanceTo(struct.position) < 4.5) {
+                  struct.userData.hp -= 40;
+                  if(struct.userData.hp <= 0) {
+                    scene.remove(struct);
+                    structures.splice(w, 1);
                   }
                 }
               }
             }
-
             scene.remove(p);
             potatoes.splice(i, 1);
           }
@@ -609,8 +1710,65 @@
       renderer.render(scene, camera);
     }
 
-    animate();
+    document.getElementById('btn-rapid').addEventListener('click', () => buyItem(weaponsDB.rapid, 50, 'btn-rapid'));
+    document.getElementById('btn-shotgun').addEventListener('click', () => buyItem(weaponsDB.shotgun, 100, 'btn-shotgun'));
+    document.getElementById('btn-sniper').addEventListener('click', () => buyItem(weaponsDB.sniper, 150, 'btn-sniper'));
+    document.getElementById('btn-cannon').addEventListener('click', () => buyItem(weaponsDB.cannon, 200, 'btn-cannon'));
+    document.getElementById('btn-mega').addEventListener('click', () => buyItem(weaponsDB.mega, 300, 'btn-mega'));
+    document.getElementById('btn-grenade').addEventListener('click', () => buyItem(weaponsDB.grenade, 400, 'btn-grenade'));
+
+    document.getElementById('quick-save-btn').addEventListener('click', () => quickSaveActiveWorld(false));
+    document.getElementById('worlds-btn').addEventListener('click', openWorldsModal);
+    document.getElementById('close-worlds-btn').addEventListener('click', () => {
+      closeWorldsModal();
+      document.getElementById('blocker').style.display = 'flex';
+    });
+    document.getElementById('create-world-btn').addEventListener('click', () => {
+      const input = document.getElementById('new-world-name');
+      const name = input.value.trim().slice(0, 40) || ('World ' + (worlds.length + 1));
+      const world = {
+        id: 'world_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        name,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        data: serializeGameState()
+      };
+      worlds.push(world);
+      activeWorldId = world.id;
+      persistWorlds();
+      input.value = '';
+      renderWorlds();
+      showSaveToast('🌍 Created ' + name);
+    });
+    document.getElementById('new-world-name').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('create-world-btn').click();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'F5') {
+        event.preventDefault();
+        quickSaveActiveWorld(false);
+      }
+      if (event.key === 'Escape' && document.getElementById('worlds-modal').classList.contains('open')) {
+        closeWorldsModal();
+        document.getElementById('blocker').style.display = 'flex';
+      }
+    });
+    window.addEventListener('beforeunload', () => quickSaveActiveWorld(true));
+    setInterval(() => {
+      if (health > 0) quickSaveActiveWorld(true);
+    }, AUTOSAVE_INTERVAL_MS);
+
+    loadWorlds();
+    if (worlds.length > 0) activeWorldId = worlds[0].id;
+    document.getElementById('close-inventory').addEventListener('click', () => {
+      document.getElementById('inventory-screen').style.display = 'none';
+      controls.lock();
+    });
+    
+    document.getElementById('score').innerText = score;
     updateInventoryUI();
+    generateKeybindUI();
+    animate();
 
     window.addEventListener('resize', () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
