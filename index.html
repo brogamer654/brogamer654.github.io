@@ -8,7 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Three.js r128 via CDN with automatic fallback -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/three@0.128.0/build/three.min.js';document.head.appendChild(s);"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <!-- Google Font: Rajdhani & JetBrains Mono for sci-fi tactical HUD -->
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -16,6 +15,10 @@
             box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
+        }
+        input {
+            user-select: text;
+            -webkit-user-select: text;
         }
         body, html {
             margin: 0;
@@ -80,15 +83,15 @@
         }
         /* Custom Glassmorphism Panels */
         .hud-panel {
-            background: rgba(10, 15, 28, 0.78);
+            background: rgba(10, 15, 28, 0.84);
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(56, 189, 248, 0.25);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), inset 0 0 12px rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.55), inset 0 0 12px rgba(56, 189, 248, 0.08);
         }
         .hud-panel-danger {
-            background: rgba(28, 10, 14, 0.82);
+            background: rgba(28, 10, 14, 0.86);
             backdrop-filter: blur(8px);
-            border: 1px solid rgba(244, 63, 94, 0.4);
+            border: 1px solid rgba(244, 63, 94, 0.42);
         }
         /* Tactical Button */
         .btn-tactical {
@@ -166,6 +169,11 @@
             border-color: #38bdf8;
             box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
         }
+        .mode-pill.disabled-pill {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="relative">
@@ -186,43 +194,94 @@
     <!-- IN-GAME HUD OVERLAY -->
     <div id="hud" class="fixed inset-0 z-20 pointer-events-none hidden flex flex-col justify-between p-4 sm:p-6">
         
-        <!-- Top Bar: Map Info, Wave/Mode, Ally Status & Hostiles -->
+        <!-- Top Bar: Map Info, Wave/Mode, Ally Status, Kill Feed & Hostiles -->
         <div class="flex justify-between items-start w-full gap-2">
-            <!-- Map, Mode & Squad Indicator -->
-            <div class="hud-panel rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4">
-                <div>
-                    <div id="hud-map-name" class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-400 font-bold truncate max-w-[140px] sm:max-w-[220px]">SECTOR 07: CYBER BUNKER</div>
-                    <div class="text-xl sm:text-3xl font-bold tracking-wider text-white flex items-baseline gap-2">
-                        <span id="hud-mode-title" class="text-sky-400">WAVE 01</span>
+            <!-- Left Column: Squad/Mode Panel + Live Kill Feed -->
+            <div class="flex flex-col gap-2 max-w-[62vw] sm:max-w-md">
+                <div class="hud-panel rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-3 sm:gap-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span id="hud-map-name" class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-400 font-bold truncate max-w-[140px] sm:max-w-[200px]">SECTOR 07: CYBER BUNKER</span>
+                            <span id="hud-net-badge" class="text-[9px] font-mono-tech font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/50 text-amber-300">BETA AI v0.9</span>
+                        </div>
+                        <div class="text-xl sm:text-3xl font-bold tracking-wider text-white flex items-baseline gap-2">
+                            <span id="hud-mode-title" class="text-sky-400">WAVE 01</span>
+                        </div>
+                    </div>
+                    <div class="h-8 w-px bg-slate-700"></div>
+                    <!-- 2v2 Teammate Status Badge -->
+                    <div id="hud-ally-box" class="hidden">
+                        <div class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-300 font-bold">Teammate</div>
+                        <div id="hud-ally-status" class="text-sm sm:text-lg font-mono-tech font-bold text-emerald-400">ALLY: ONLINE</div>
+                    </div>
+                    <div id="hud-ally-divider" class="hidden h-8 w-px bg-slate-700"></div>
+                    <div>
+                        <div id="hud-enemies-label" class="text-[10px] sm:text-xs uppercase tracking-widest text-slate-400 font-bold">Hostiles</div>
+                        <div id="hud-enemies" class="text-lg sm:text-2xl font-mono-tech font-bold text-rose-400">00</div>
                     </div>
                 </div>
-                <div class="h-8 w-px bg-slate-700"></div>
-                <!-- 2v2 AI Teammate Status Badge -->
-                <div id="hud-ally-box" class="hidden">
-                    <div class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-300 font-bold">AI Teammate</div>
-                    <div id="hud-ally-status" class="text-sm sm:text-lg font-mono-tech font-bold text-emerald-400">ALLY: ONLINE</div>
-                </div>
-                <div id="hud-ally-divider" class="hidden h-8 w-px bg-slate-700"></div>
-                <div>
-                    <div id="hud-enemies-label" class="text-[10px] sm:text-xs uppercase tracking-widest text-slate-400 font-bold">Hostiles</div>
-                    <div id="hud-enemies" class="text-lg sm:text-2xl font-mono-tech font-bold text-rose-400">00</div>
-                </div>
+
+                <!-- Live Tactical Kill Feed -->
+                <div id="kill-feed-container" class="flex flex-col gap-1 items-start"></div>
             </div>
 
             <!-- Center Wave / Match Banner Notification -->
-            <div id="wave-banner" class="opacity-0 transform -translate-y-4 transition-all duration-500 hud-panel rounded-xl px-6 py-2 text-center border-sky-400/50 hidden sm:block">
+            <div id="wave-banner" class="opacity-0 transform -translate-y-4 transition-all duration-500 hud-panel rounded-xl px-6 py-2 text-center border-sky-400/50 hidden lg:block">
                 <div class="text-xs tracking-[0.25em] text-sky-400 uppercase font-bold">Tactical Alert</div>
                 <div id="wave-banner-text" class="text-xl sm:text-2xl font-bold tracking-widest text-white">MATCH COMMENCING</div>
             </div>
 
-            <!-- Score & Pause Hint -->
-            <div class="flex items-center gap-2">
-                <button id="btn-hud-pause" class="pointer-events-auto hud-panel rounded-xl px-3 py-2.5 text-xs font-mono-tech font-bold text-slate-300 hover:text-sky-400 hover:border-sky-400 transition cursor-pointer">
-                    [P / ESC] PAUSE
-                </button>
-                <div class="hud-panel rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 text-right">
-                    <div id="hud-score-label" class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-400 font-bold">Combat Score</div>
-                    <div id="hud-score" class="text-xl sm:text-3xl font-mono-tech font-extrabold text-white tracking-tight">000000</div>
+            <!-- Right Column: Scoreboard Hint, Pause & Score -->
+            <div class="flex flex-col items-end gap-2">
+                <div class="flex items-center gap-2">
+                    <button id="btn-hud-scoreboard" class="pointer-events-auto hud-panel rounded-xl px-3 py-2.5 text-xs font-mono-tech font-bold text-sky-300 hover:text-white hover:border-sky-400 transition cursor-pointer">
+                        [TAB] ROSTER
+                    </button>
+                    <button id="btn-hud-pause" class="pointer-events-auto hud-panel rounded-xl px-3 py-2.5 text-xs font-mono-tech font-bold text-slate-300 hover:text-sky-400 hover:border-sky-400 transition cursor-pointer">
+                        [P / ESC] PAUSE
+                    </button>
+                    <div class="hud-panel rounded-xl px-4 sm:px-5 py-2.5 sm:py-3 text-right">
+                        <div id="hud-score-label" class="text-[10px] sm:text-xs uppercase tracking-widest text-sky-400 font-bold">Combat Score</div>
+                        <div id="hud-score" class="text-xl sm:text-3xl font-mono-tech font-extrabold text-white tracking-tight">000000</div>
+                    </div>
+                </div>
+                <!-- Active PvP Room Badge when in Online Room -->
+                <div id="hud-room-pill" class="hidden hud-panel rounded-lg px-3 py-1 text-[11px] font-mono-tech text-emerald-300 border-emerald-500/40 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="hud-room-code-text">CONNECTED TO ROOM: -----</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB TACTICAL SCOREBOARD OVERLAY -->
+        <div id="scoreboard-overlay" class="hidden fixed inset-0 z-30 pointer-events-none flex items-center justify-center p-4">
+            <div class="hud-panel max-w-2xl w-full rounded-2xl p-5 sm:p-6 border-sky-400/60 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-slate-700/80 pb-3 mb-3">
+                    <div>
+                        <div class="text-[10px] font-mono-tech text-sky-400 uppercase tracking-widest font-bold">Live Combat Telemetry</div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-white tracking-wider">TACTICAL MATCH ROSTER</h3>
+                    </div>
+                    <div id="scoreboard-room-info" class="text-xs font-mono-tech text-slate-300 bg-slate-900/90 px-3 py-1 rounded border border-slate-700">
+                        MODE: BATTLE WAVES
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left font-mono-tech text-xs">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-800">
+                                <th class="py-2 px-2">OPERATIVE</th>
+                                <th class="py-2 px-2">FACTION</th>
+                                <th class="py-2 px-2 text-center">HP</th>
+                                <th class="py-2 px-2 text-center">KILLS</th>
+                                <th class="py-2 px-2 text-center">DEATHS</th>
+                                <th class="py-2 px-2 text-right">STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="scoreboard-body" class="divide-y divide-slate-800/60"></tbody>
+                    </table>
+                </div>
+                <div class="mt-3 text-center text-[10px] font-mono-tech text-slate-400">
+                    HOLD [TAB] TO VIEW ROSTER &bull; REAL-TIME SYNC ACTIVE
                 </div>
             </div>
         </div>
@@ -248,18 +307,12 @@
 
             <!-- Sniper Scope Overlay (RMB Hold or E/V) -->
             <div id="sniper-scope" class="hidden fixed inset-0 z-30 pointer-events-none flex items-center justify-center">
-                <!-- Circular Dark Vignette -->
                 <div class="absolute inset-0 bg-slate-950/90 flex items-center justify-center" style="mask-image: radial-gradient(circle 280px at center, transparent 96%, black 100%); -webkit-mask-image: radial-gradient(circle 280px at center, transparent 96%, black 100%);"></div>
-                <!-- Scope Frame Ring -->
                 <div class="w-[560px] h-[560px] rounded-full border-[6px] border-sky-500/60 shadow-[0_0_50px_rgba(56,189,248,0.45),inset_0_0_35px_rgba(56,189,248,0.3)] relative flex items-center justify-center overflow-hidden">
-                    <!-- Blue Horizontal Line Going Right Through Middle -->
                     <div id="scope-h-line" class="absolute w-full h-0.5 bg-blue-500 shadow-[0_0_8px_#3b82f6] transition-colors duration-100"></div>
-                    <!-- Blue Vertical Line Going Right Through Middle -->
                     <div id="scope-v-line" class="absolute w-0.5 h-full bg-blue-500 shadow-[0_0_8px_#3b82f6] transition-colors duration-100"></div>
-                    <!-- Thin Red Center Lock-On Line (Appears when aimed at a hittable enemy in range) -->
                     <div id="scope-center-red-h" class="hidden absolute w-24 h-[1.5px] bg-red-500 shadow-[0_0_10px_#ef4444]"></div>
                     <div id="scope-center-red-v" class="hidden absolute w-[1.5px] h-24 bg-red-500 shadow-[0_0_10px_#ef4444]"></div>
-                    <!-- Range Finder & Zoom Info -->
                     <div id="scope-range-badge" class="absolute bottom-14 text-sky-400 font-mono-tech text-xs tracking-widest bg-slate-950/90 px-3 py-1 rounded border border-sky-500/40">
                         3.5x V-9 OPTIC // SCANNING
                     </div>
@@ -393,7 +446,7 @@
                     </div>
                 </div>
                 <div class="text-[10px] font-mono-tech text-slate-400 tracking-widest bg-slate-950/60 px-2.5 py-0.5 rounded border border-slate-800">
-                    [1-3] OR SCROLL WHEEL TO EQUIP
+                    [1-3] OR SCROLL WHEEL TO EQUIP &bull; [TAB] SCOREBOARD
                 </div>
             </div>
 
@@ -407,14 +460,11 @@
                     <span id="hud-ammo" class="font-mono-tech font-extrabold text-3xl sm:text-4xl text-white">30</span>
                     <span id="hud-ammo-max" class="font-mono-tech text-lg text-slate-500">/ 30</span>
                 </div>
-                <!-- Weapon Accuracy / Efficiency Score -->
                 <div class="mt-1 flex justify-between items-center text-[11px] font-mono-tech text-slate-400">
                     <span>Hits Landed:</span>
                     <span id="hud-gun-score" class="font-bold text-sky-400">0</span>
                 </div>
-                <!-- Visual Ammo Pips (Gun) -->
                 <div id="ammo-pips" class="flex justify-end gap-0.5 mt-2 h-2"></div>
-                <!-- Item Hint (Knife / Bandages) -->
                 <div id="hud-item-desc" class="hidden mt-2 text-xs font-mono-tech text-slate-300">
                     Close-range energy blade (+15% Speed)
                 </div>
@@ -427,72 +477,173 @@
 
     <!-- START SCREEN OVERLAY -->
     <div id="start-screen" class="fixed inset-0 z-30 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
-        <div class="hud-panel max-w-4xl w-full rounded-2xl p-5 sm:p-8 text-center border-sky-500/40 relative my-auto">
-            <div class="inline-block px-3 py-1 rounded-full bg-sky-500/10 border border-sky-400/30 text-sky-400 font-mono-tech text-[11px] tracking-widest mb-2">
-                WEBGL TACTICAL COMBAT SIMULATION
+        <div class="hud-panel max-w-4xl w-full rounded-2xl p-4 sm:p-6 text-center border-sky-500/40 relative my-auto">
+            <div class="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-sky-500/10 border border-sky-400/30 text-sky-400 font-mono-tech text-[11px] tracking-widest mb-1.5">
+                <span>WEBGL TACTICAL COMBAT SIMULATION</span>
+                <span class="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 font-bold">MP + AI BETA v0.9</span>
             </div>
-            <h1 class="text-3xl sm:text-5xl font-extrabold tracking-wider text-white mb-1 uppercase">
+            <h1 class="text-3xl sm:text-4xl font-extrabold tracking-wider text-white mb-1 uppercase">
                 AEGIS <span class="text-sky-400">PROTOCOL</span>
             </h1>
-            <p class="text-slate-300 text-xs sm:text-sm mb-4 max-w-xl mx-auto">
-                Configure game mode, opponent type, and combat theater below before deploying into the arena.
+            <p class="text-slate-300 text-xs mb-3 max-w-2xl mx-auto">
+                Battle our new <span class="text-amber-300 font-bold">Adaptive Beta AI (v0.9)</span> with Phase Dash &amp; Energy Shields, or connect across devices to a <span class="text-emerald-300 font-bold">Real Player PvP Room</span>.
             </p>
 
-            <!-- 1. Game Mode Selector -->
-            <div class="text-left mb-4">
-                <div class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400 mb-2">Select Game Mode</div>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div id="mode-battle" class="mode-pill selected rounded-xl p-3 text-center" onclick="setGameMode('battle')">
-                        <div class="font-bold text-white text-sm">Battle Waves</div>
-                        <div class="text-[10px] text-slate-400">Balanced drone waves</div>
+            <!-- 1. Combatant / Network Mode Selector (AI BETA vs REAL PLAYER PVP) -->
+            <div class="text-left mb-3">
+                <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400">1. Select Battle System</span>
+                    <span id="net-transport-status" class="text-[10px] font-mono-tech text-amber-300 bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded">NETLINK: CONNECTING...</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-2.5">
+                    <!-- Option A: AI Combatants (BETA v0.9) -->
+                    <div id="battle-sys-ai" class="mode-pill selected rounded-xl p-3 flex items-center justify-between" onclick="setOpponentType('ai')">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-white text-sm sm:text-base">BETA AI v0.9 (SOLO / CO-OP)</span>
+                                <span class="text-[10px] font-mono-tech font-extrabold px-2 py-0.5 rounded bg-amber-500/25 border border-amber-400 text-amber-300">BETA v0.9</span>
+                            </div>
+                            <div class="text-[11px] text-slate-300 mt-0.5">Beta neural bots use Phase Dash, Energy Shields &amp; cover flanking</div>
+                        </div>
+                        <span class="w-3.5 h-3.5 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24] flex-shrink-0"></span>
                     </div>
-                    <div id="mode-1v1" class="mode-pill rounded-xl p-3 text-center" onclick="setGameMode('1v1')">
-                        <div class="font-bold text-white text-sm">1v1 Duel</div>
-                        <div class="text-[10px] text-slate-400">Head-to-head combat</div>
+
+                    <!-- Option B: Real Player PvP (Online Room) -->
+                    <div id="battle-sys-pvp" class="mode-pill rounded-xl p-3 flex items-center justify-between" onclick="setOpponentType('pvp')">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-white text-sm sm:text-base">REAL PLAYER PvP (MULTIPLAYER)</span>
+                                <span class="text-[10px] font-mono-tech font-extrabold px-2 py-0.5 rounded bg-emerald-500/25 border border-emerald-400 text-emerald-300">ONLINE ROOM</span>
+                            </div>
+                            <div class="text-[11px] text-slate-300 mt-0.5">Cross-device multiplayer rooms with 5-char codes &amp; 3D Exosuit sync</div>
+                        </div>
+                        <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399] flex-shrink-0"></span>
                     </div>
-                    <div id="mode-2v2" class="mode-pill rounded-xl p-3 text-center" onclick="setGameMode('2v2')">
-                        <div class="font-bold text-white text-sm">2v2 Team Clash</div>
-                        <div class="text-[10px] text-sky-300 font-semibold">You + AI Ally vs 2 AIs</div>
+                </div>
+
+                <!-- Sub-panel A: Beta AI Difficulty / Behavior Selector -->
+                <div id="ai-beta-panel" class="bg-slate-900/80 border border-amber-500/30 rounded-xl p-2.5">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <span class="text-[11px] font-mono-tech font-bold text-amber-300 uppercase">Beta AI Neural Profile</span>
+                        <span class="text-[10px] font-mono-tech text-slate-400">Uses Dash, 10s Shield &amp; Burst Fire</span>
                     </div>
-                    <div id="mode-ffa" class="mode-pill rounded-xl p-3 text-center" onclick="setGameMode('ffa')">
-                        <div class="font-bold text-white text-sm">5-Player FFA</div>
-                        <div class="text-[10px] text-amber-300 font-semibold">All AIs fight each other</div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div id="ai-tier-tactical" class="mode-pill selected rounded-lg p-2 text-center" onclick="setBetaAiTier('tactical')">
+                            <div class="font-bold text-white text-xs sm:text-sm">Tactical Bot (v0.9-T)</div>
+                            <div class="text-[10px] text-slate-400">Standard cover &amp; burst fire</div>
+                        </div>
+                        <div id="ai-tier-adaptive" class="mode-pill rounded-lg p-2 text-center" onclick="setBetaAiTier('adaptive')">
+                            <div class="font-bold text-amber-300 text-xs sm:text-sm">Adaptive Beta AI (v0.9-A)</div>
+                            <div class="text-[10px] text-slate-300">Tactical Dash + Energy Shields</div>
+                        </div>
+                        <div id="ai-tier-veteran" class="mode-pill rounded-lg p-2 text-center" onclick="setBetaAiTier('veteran')">
+                            <div class="font-bold text-rose-300 text-xs sm:text-sm">Veteran Beta AI (v0.9-V)</div>
+                            <div class="text-[10px] text-slate-300">Aggressive flank, Dash &amp; Shield</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-panel B: Real Player PvP Room Lobby -->
+                <div id="pvp-lobby-panel" class="hidden bg-slate-900/95 border-2 border-emerald-500/50 rounded-xl p-3 shadow-[0_0_24px_rgba(16,185,129,0.18)]">
+                    <!-- Unmistakable Connection Status Banner -->
+                    <div id="pvp-connection-banner" class="mb-2.5 px-3 py-2 rounded-lg bg-slate-950/90 border border-amber-500/40 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span id="pvp-status-led" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0"></span>
+                            <span id="pvp-connection-text" class="font-mono-tech text-xs font-extrabold tracking-wider text-amber-300">
+                                STATUS: OFFLINE — CLICK CREATE ROOM OR JOIN ROOM
+                            </span>
+                        </div>
+                        <span id="pvp-player-count-badge" class="text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            1 OPERATIVE
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
+                        <!-- Callsign Input -->
+                        <div class="md:col-span-4">
+                            <label class="block text-[10px] font-mono-tech font-bold text-emerald-300 uppercase mb-1">Operative Callsign</label>
+                            <input id="input-callsign" type="text" maxlength="14" value="OPERATIVE-01" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-lg px-2.5 py-1.5 font-mono-tech text-xs text-white font-bold uppercase outline-none" placeholder="OPERATIVE-01">
+                        </div>
+
+                        <!-- Room Code & Create / Join / Quick Match Controls -->
+                        <div class="md:col-span-8">
+                            <label class="block text-[10px] font-mono-tech font-bold text-sky-300 uppercase mb-1">5-Character Room Code</label>
+                            <div class="flex flex-wrap sm:flex-nowrap gap-1.5">
+                                <input id="input-room-code" type="text" maxlength="5" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')" class="w-28 bg-slate-950 border-2 border-emerald-500/50 focus:border-emerald-400 rounded-lg px-2.5 py-1.5 font-mono-tech text-sm text-center text-emerald-300 font-extrabold uppercase tracking-widest outline-none" placeholder="A7X9K">
+                                <button id="btn-create-room" type="button" onclick="createMultiplayerRoom()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-400 text-white font-mono-tech text-[11px] font-bold uppercase cursor-pointer">
+                                    Create Room
+                                </button>
+                                <button id="btn-join-room" type="button" onclick="joinMultiplayerRoom()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white font-mono-tech text-[11px] font-bold uppercase cursor-pointer">
+                                    Join Room
+                                </button>
+                                <button id="btn-quick-match" type="button" onclick="quickMatchRoom()" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white font-mono-tech text-[11px] font-bold uppercase cursor-pointer">
+                                    Quick Match
+                                </button>
+                                <button id="btn-copy-room" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-mono-tech text-[11px] font-bold cursor-pointer">
+                                    COPY CODE
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Room Operative Roster (Shows Host & Joined Friends in Real Time) -->
+                    <div class="mt-2.5 bg-slate-950/85 border border-slate-800 rounded-lg p-2">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[10px] font-mono-tech font-bold text-sky-400 uppercase">Live Room Operative Roster</span>
+                            <span id="pvp-roster-hint" class="text-[10px] font-mono-tech text-slate-400">Waiting for room link...</span>
+                        </div>
+                        <div id="pvp-lobby-roster" class="flex flex-wrap gap-1.5 text-[11px] font-mono-tech">
+                            <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-400">No active room yet</span>
+                        </div>
+                    </div>
+
+                    <!-- Active Room Status & Quick Matchmaking Open Rooms List -->
+                    <div class="mt-2 pt-2 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div id="pvp-room-status" class="text-[11px] font-mono-tech text-slate-300">
+                            Share your 5-character Room Code with a friend on any device to battle together!
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-wrap" id="open-rooms-list">
+                            <span class="text-[10px] font-mono-tech text-slate-400">ACTIVE OPEN ROOMS:</span>
+                            <span class="text-[10px] font-mono-tech text-slate-500">Scanning global relay...</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 2. Opponent Type Selector -->
-            <div class="text-left mb-4">
-                <div class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400 mb-2">Select Combatant AI Tier</div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div id="opp-ai" class="mode-pill selected rounded-xl p-3 flex items-center justify-between" onclick="setOpponentType('ai')">
-                        <div>
-                            <div class="font-bold text-white text-sm">Tactical AI Bots</div>
-                            <div class="text-[10px] text-slate-400">Cover-respecting gun &amp; knife bots</div>
-                        </div>
-                        <span class="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]"></span>
+            <!-- 2. Game Mode Selector -->
+            <div class="text-left mb-3">
+                <div class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400 mb-1.5">2. Select Game Mode</div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div id="mode-battle" class="mode-pill selected rounded-xl p-2.5 text-center" onclick="setGameMode('battle')">
+                        <div class="font-bold text-white text-sm">Battle Waves</div>
+                        <div class="text-[10px] text-slate-400">Balanced drone waves</div>
                     </div>
-                    <div id="opp-human" class="mode-pill rounded-xl p-3 flex items-center justify-between" onclick="setOpponentType('human')">
-                        <div>
-                            <div class="font-bold text-white text-sm">Elite AI Simulation</div>
-                            <div class="text-[10px] text-slate-400">High-mobility veteran combatants</div>
-                        </div>
-                        <span id="opp-human-indicator" class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span>
+                    <div id="mode-1v1" class="mode-pill rounded-xl p-2.5 text-center" onclick="setGameMode('1v1')">
+                        <div class="font-bold text-white text-sm">1v1 Duel</div>
+                        <div class="text-[10px] text-slate-400">Head-to-head combat</div>
+                    </div>
+                    <div id="mode-2v2" class="mode-pill rounded-xl p-2.5 text-center" onclick="setGameMode('2v2')">
+                        <div class="font-bold text-white text-sm">2v2 Team Clash</div>
+                        <div class="text-[10px] text-sky-300 font-semibold">2 Blue vs 2 Red (AI Fill)</div>
+                    </div>
+                    <div id="mode-ffa" class="mode-pill rounded-xl p-2.5 text-center" onclick="setGameMode('ffa')">
+                        <div class="font-bold text-white text-sm">5-Player FFA</div>
+                        <div class="text-[10px] text-amber-300 font-semibold">Every operative for self</div>
                     </div>
                 </div>
             </div>
 
             <!-- 3. Map Selector Grid -->
-            <div class="text-left mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400">Select Combat Theater (6 Arenas)</span>
+            <div class="text-left mb-3">
+                <div class="flex justify-between items-center mb-1.5">
+                    <span class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400">3. Select Combat Theater (6 Arenas)</span>
                     <span id="selected-map-badge" class="text-[11px] font-mono-tech text-slate-300 bg-slate-900/90 border border-slate-700 px-2.5 py-0.5 rounded">ACTIVE: SECTOR 07</span>
                 </div>
-                <div id="start-map-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5"></div>
+                <div id="start-map-grid" class="grid grid-cols-2 lg:grid-cols-3 gap-2"></div>
             </div>
 
             <!-- Compact Controls Strip -->
-            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-left bg-slate-900/75 p-2.5 rounded-xl border border-slate-800 mb-5 font-mono-tech text-[11px]">
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-left bg-slate-900/75 p-2 rounded-xl border border-slate-800 mb-3.5 font-mono-tech text-[10px] sm:text-[11px]">
                 <div>
                     <span class="text-sky-400 font-bold block">W A S D</span>
                     <span class="text-slate-400">Move</span>
@@ -519,15 +670,12 @@
                 </div>
             </div>
 
-            <button id="btn-play" class="btn-tactical w-full sm:w-auto px-10 py-3.5 rounded-xl text-white font-bold text-lg sm:text-xl tracking-widest uppercase cursor-pointer">
+            <button id="btn-play" class="btn-tactical w-full sm:w-auto px-10 py-3 rounded-xl text-white font-bold text-lg tracking-widest uppercase cursor-pointer">
                 Deploy to Arena
             </button>
-            <button id="btn-settings-start" class="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-sky-500/40 text-sky-300 font-bold text-sm sm:text-base tracking-widest uppercase transition cursor-pointer mt-2 sm:mt-0 sm:ml-3">
+            <button id="btn-settings-start" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-sky-500/40 text-sky-300 font-bold text-sm sm:text-base tracking-widest uppercase transition cursor-pointer mt-2 sm:mt-0 sm:ml-3">
                 Settings
             </button>
-            <div id="pointer-lock-hint" class="mt-2.5 text-[11px] text-slate-400 font-mono-tech">
-                360° Pointer Lock + sandboxed Click-Drag fallback &bull; Scroll Wheel switches items
-            </div>
         </div>
     </div>
 
@@ -609,9 +757,10 @@
         <div class="hud-panel max-w-md w-full rounded-2xl p-8 text-center">
             <div class="text-xs font-mono-tech tracking-widest text-amber-400 uppercase mb-1">System Suspended</div>
             <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-wider mb-2">COMBAT PAUSED</h2>
-            <div id="pause-map-label" class="text-xs font-mono-tech text-sky-400 mb-4">THEATER: SECTOR 07: CYBER BUNKER</div>
+            <div id="pause-map-label" class="text-xs font-mono-tech text-sky-400 mb-1">THEATER: SECTOR 07: CYBER BUNKER</div>
+            <div id="pause-room-label" class="hidden text-xs font-mono-tech font-bold text-emerald-400 mb-3">CONNECTED TO ROOM: -----</div>
             <div class="text-xs font-mono-tech text-slate-300 bg-slate-900/70 border border-slate-800 rounded-xl p-3 mb-6">
-                [WASD] Move &bull; [2x SPACE] Double Jump &bull; [SHIFT] Dash &bull; [Q/C] 10s Shield &bull; [1-3 / Wheel] Items
+                [WASD] Move &bull; [2x SPACE] Double Jump &bull; [SHIFT] Dash &bull; [Q/C] 10s Shield &bull; [TAB] Roster
             </div>
             <div class="flex flex-col gap-3">
                 <button id="btn-resume" class="btn-tactical w-full py-3.5 rounded-xl text-white font-bold text-lg tracking-wider uppercase cursor-pointer">
@@ -669,654 +818,239 @@
     </div>
 
     <script>
+        // ==========================================
+        // 0. VANILLA JS CROSS-DEVICE + TAB-SYNC NETWORK ENGINE
+        //    (Zero external script dependencies - works across separate devices AND browser tabs)
+        // ==========================================
+        class AegisCrossDeviceRelay {
+            constructor() {
+                this.uid = 'op-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36).slice(-4);
+                this.ws = null;
+                this.wsConnected = false;
+                this.channel = null;
+                this.subscribedTopics = new Set();
+                this.knownOpenRooms = new Map();
+                this.onMessageHandler = null;
+                this.packetId = 1;
+            }
 
-/* ------------------------------------------------------------------
-   Terrain Forge core: noise, erosion, biomes, scattering and geometry.
-   Pure functions; THREE is only used to assemble BufferGeometry.
-------------------------------------------------------------------- */
-(function (root) {
-'use strict';
-const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+            init() {
+                // 1. Same-Browser Multi-Tab Channel
+                try {
+                    this.channel = new BroadcastChannel('aegis_protocol_net_v2');
+                    this.channel.onmessage = (ev) => {
+                        if (ev && ev.data) this.dispatchIncoming(ev.data);
+                    };
+                } catch (e) {
+                    this.channel = null;
+                }
 
-function hashSeed(str) {
-  str = String(str);
-  let h = 1779033703 ^ str.length;
-  for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
-  h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
-  return (h ^ (h >>> 16)) >>> 0;
-}
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-function hash3(x, y, z) {
-  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
-  return s - Math.floor(s);
-}
-function lin(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
-}
+                // 2. Same-Browser LocalStorage Event Fallback
+                window.addEventListener('storage', (ev) => {
+                    if (ev.key === 'aegis_protocol_net_bus' && ev.newValue) {
+                        try {
+                            const parsed = JSON.parse(ev.newValue);
+                            if (parsed && parsed.payload) this.dispatchIncoming(parsed.payload);
+                        } catch (e) {}
+                    }
+                });
 
-function makeNoise(rand) {
-  const perm = new Uint8Array(256);
-  for (let i = 0; i < 256; i++) perm[i] = i;
-  for (let i = 255; i > 0; i--) { const j = (rand() * (i + 1)) | 0; const t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
-  const p = new Uint8Array(512);
-  for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
-  const GX = [1, -1, 1, -1, 1, -1, 0, 0], GY = [1, 1, -1, -1, 0, 0, 1, -1];
-  return function (x, y) {
-    const xi = Math.floor(x), yi = Math.floor(y), X = xi & 255, Y = yi & 255, xf = x - xi, yf = y - yi;
-    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10), v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
-    const a = p[p[X] + Y] & 7, b = p[p[X + 1] + Y] & 7, c = p[p[X] + Y + 1] & 7, d = p[p[X + 1] + Y + 1] & 7;
-    const n00 = GX[a] * xf + GY[a] * yf, n10 = GX[b] * (xf - 1) + GY[b] * yf;
-    const n01 = GX[c] * xf + GY[c] * (yf - 1), n11 = GX[d] * (xf - 1) + GY[d] * (yf - 1);
-    const x1 = n00 + (n10 - n00) * u, x2 = n01 + (n11 - n01) * u;
-    return x1 + (x2 - x1) * v;
-  };
-}
-function fbm(n, x, y, oct, gain, lac) {
-  let a = 1, f = 1, s = 0, t = 0;
-  for (let o = 0; o < oct; o++) { s += a * n(x * f, y * f); t += a; a *= gain; f *= lac; }
-  return s / t;
-}
-function ridged(n, x, y, oct, gain, lac) {
-  let a = 1, f = 1, s = 0, t = 0, w = 1;
-  for (let o = 0; o < oct; o++) {
-    let v = 1 - Math.abs(n(x * f, y * f)); v *= v; v *= w;
-    w = clamp(v * 2, 0, 1); s += v * a; t += a; a *= gain; f *= lac;
-  }
-  return s / t;
-}
+                // 3. Cross-Device Global WebSocket Relay (Lightweight MQTT v3.1.1 over WSS)
+                this.connectWebSocketRelay();
 
-/* ---------------- biome presets ---------------- */
-const PRESETS = {
-  temperate: { label: 'Temperate', flora: 'forest', rs: 0.8,
-    v: { size: 1200, height: 170, freq: 2.6, oct: 6, gain: 0.5, ridge: 0.35, warp: 0.45, island: 0.2, flat: 1.4, terrace: 0, erosion: 45, sea: 0.3, snow: 0.9, wet: 0, trees: 2400, rocks: 400, treeline: 0.7, conifer: 0.35, treeScale: 1.2, base: 40, towns: 3, townSize: 110 },
-    pal: { sand: '#cdbf8f', dry: '#8d9a55', grass: '#5a8a3a', forest: '#2f5e2d', high: '#7d8a5e', rock: '#7a766e', rockDark: '#4d4a45', snow: '#e8eef0', seabed: '#8d8765', deep: '#164358', water: '#2f7a96', needle: '#214c32', leafA: '#3a6e34', leafB: '#5f9441', trunk: '#5a4431' } },
-  alpine: { label: 'Alpine', flora: 'forest', rs: 0.7,
-    v: { size: 1600, height: 520, freq: 2.0, oct: 7, gain: 0.52, ridge: 0.8, warp: 0.5, island: 0, flat: 1.15, terrace: 0, erosion: 70, sea: 0.18, snow: 0.55, wet: -0.05, trees: 2600, rocks: 700, treeline: 0.42, conifer: 0.9, treeScale: 1.3, base: 60, towns: 2, townSize: 100 },
-    pal: { sand: '#bdb69a', dry: '#85905d', grass: '#5f8545', forest: '#35603a', high: '#8a8f70', rock: '#8a867f', rockDark: '#565350', snow: '#eef3f6', seabed: '#7f7d68', deep: '#173d52', water: '#3b829c', needle: '#1d4630', leafA: '#3a6a3a', leafB: '#5a8a46', trunk: '#55402e' } },
-  islands: { label: 'Islands', flora: 'forest', rs: 0.85,
-    v: { size: 1400, height: 180, freq: 3.2, oct: 6, gain: 0.5, ridge: 0.2, warp: 0.7, island: 0.95, flat: 1.6, terrace: 0, erosion: 35, sea: 0.36, snow: 1.05, wet: 0.1, trees: 2400, rocks: 250, treeline: 0.8, conifer: 0.15, treeScale: 1.3, base: 40, towns: 3, townSize: 100 },
-    pal: { sand: '#e2d3a4', dry: '#9aa75a', grass: '#4f9540', forest: '#2a6b34', high: '#6f8f52', rock: '#7a766e', rockDark: '#4d4a45', snow: '#e8eef0', seabed: '#b6aa7c', deep: '#0d4b66', water: '#25a0b4', needle: '#24533a', leafA: '#2f7d3a', leafB: '#5fae48', trunk: '#5d4733' } },
-  desert: { label: 'Desert', flora: 'arid', rs: 0.62,
-    v: { size: 1200, height: 200, freq: 2.2, oct: 5, gain: 0.46, ridge: 0.25, warp: 0.9, island: 0, flat: 1.9, terrace: 0.35, erosion: 25, sea: 0, snow: 1.05, wet: -0.45, trees: 500, rocks: 900, treeline: 0.7, conifer: 0, treeScale: 1.0, base: 40, towns: 2, townSize: 120 },
-    pal: { sand: '#dcc08a', dry: '#cfa86b', grass: '#b99a5c', forest: '#8d8a4e', high: '#b4825a', rock: '#a86f4c', rockDark: '#6e4632', snow: '#f0e9dc', seabed: '#c9a874', deep: '#3c6a70', water: '#4a9aa0', needle: '#5a7a46', leafA: '#6f8a4a', leafB: '#8d9a55', trunk: '#6b4f35' } },
-  tropical: { label: 'Tropical', flora: 'forest', rs: 0.85,
-    v: { size: 1200, height: 200, freq: 3.0, oct: 6, gain: 0.5, ridge: 0.3, warp: 0.6, island: 0.9, flat: 1.5, terrace: 0, erosion: 50, sea: 0.34, snow: 1.05, wet: 0.35, trees: 3500, rocks: 200, treeline: 0.85, conifer: 0, treeScale: 1.5, base: 40, towns: 3, townSize: 100 },
-    pal: { sand: '#e6d9a8', dry: '#7fb04a', grass: '#3f9a3a', forest: '#1b6b2c', high: '#4f8f3e', rock: '#77736a', rockDark: '#4a4743', snow: '#e8eef0', seabed: '#cdbf8f', deep: '#0b4e63', water: '#1fa6b0', needle: '#1f5a35', leafA: '#1f7a32', leafB: '#4fb04a', trunk: '#6a4e35' } },
-  arctic: { label: 'Arctic', flora: 'forest', rs: 0.7,
-    v: { size: 1400, height: 300, freq: 2.4, oct: 6, gain: 0.5, ridge: 0.55, warp: 0.5, island: 0.25, flat: 1.3, terrace: 0, erosion: 55, sea: 0.25, snow: 0.3, wet: -0.1, trees: 900, rocks: 600, treeline: 0.4, conifer: 1, treeScale: 1.2, base: 50, towns: 1, townSize: 90 },
-    pal: { sand: '#b9b7a8', dry: '#8e9a86', grass: '#7d8c7a', forest: '#4a6350', high: '#8f9a98', rock: '#75777a', rockDark: '#484a4f', snow: '#f2f6f8', seabed: '#7d8584', deep: '#1a3f55', water: '#4c93ad', needle: '#26443a', leafA: '#3c5c4a', leafB: '#5d7d66', trunk: '#504234' } },
-};
+                // Periodic Open-Room Discovery & Presence Sweep
+                setInterval(() => {
+                    const now = Date.now();
+                    let changed = false;
+                    this.knownOpenRooms.forEach((val, key) => {
+                        if (now - val.updatedAt > 25000) {
+                            this.knownOpenRooms.delete(key);
+                            changed = true;
+                        }
+                    });
+                    if (changed && window.renderOpenRoomsList) {
+                        window.renderOpenRoomsList(Array.from(this.knownOpenRooms.values()));
+                    }
+                }, 4000);
+            }
 
-/* ---------------- height field ---------------- */
-function buildHeights(P) {
-  const N = P.res, H = new Float32Array(N * N);
-  const rand = mulberry32(hashSeed('h:' + P.seed));
-  const nA = makeNoise(rand), nB = makeNoise(rand), nW = makeNoise(rand), nM = makeNoise(rand);
-  const maxOct = Math.max(2, Math.floor(Math.log2(N / 7 / P.freq)) + 1);
-  const oct = Math.min(P.oct, maxOct);
-  let lo = Infinity, hi = -Infinity;
-  for (let j = 0; j < N; j++) {
-    const v = j / (N - 1);
-    for (let i = 0; i < N; i++) {
-      const u = i / (N - 1);
-      let x = u * P.freq + 3.7, y = v * P.freq + 9.1;
-      if (P.warp > 0) {
-        const wx = fbm(nW, x * 0.8 + 11.3, y * 0.8 + 4.1, 3, 0.5, 2), wy = fbm(nW, x * 0.8 - 7.7, y * 0.8 + 19.2, 3, 0.5, 2);
-        x += wx * P.warp * 1.2; y += wy * P.warp * 1.2;
-      }
-      const base = fbm(nA, x, y, oct, P.gain, 2) * 0.5 + 0.5;
-      const rid = ridged(nB, x * 0.9 + 31.4, y * 0.9 + 17.9, oct, P.gain, 2.05);
-      const mask = smooth(0.3, 0.7, fbm(nM, u * P.freq * 0.5 + 5.5, v * P.freq * 0.5 + 9.9, 2, 0.5, 2) * 0.5 + 0.5);
-      let h = lerp(base, rid, P.ridge * (0.35 + 0.65 * mask));
-      if (P.island > 0) {
-        const dx = u * 2 - 1, dy = v * 2 - 1, d = Math.sqrt(dx * dx + dy * dy) / 1.1;
-        h = lerp(h, 0, P.island * smooth(0.35, 0.95, d));
-      }
-      H[j * N + i] = h;
-      if (h < lo) lo = h; if (h > hi) hi = h;
-    }
-  }
-  const span = Math.max(1e-6, hi - lo);
-  for (let k = 0; k < H.length; k++) {
-    let h = clamp((H[k] - lo) / span, 0, 1);
-    h = Math.pow(h, P.flat);
-    if (P.terrace > 0) {
-      const steps = 9, t = h * steps, f = t - Math.floor(t);
-      h = lerp(h, (Math.floor(t) + smooth(0.25, 0.75, f)) / steps, P.terrace);
-    }
-    H[k] = h;
-  }
-  return H;
-}
+            connectWebSocketRelay() {
+                try {
+                    this.ws = new WebSocket('wss://broker.emqx.io:8084/mqtt', 'mqtt');
+                    this.ws.binaryType = 'arraybuffer';
 
-function erode(H, P) {
-  const N = P.res, cell = P.size / (N - 1), k = P.height / cell;
-  const G = new Float32Array(H.length);
-  for (let i = 0; i < G.length; i++) G[i] = H[i] * k;
-  const drops = Math.round((P.erosion / 100) * N * N * 2);
-  if (drops > 0) {
-    const rand = mulberry32(hashSeed('e:' + P.seed));
-    const R = 2, brush = [];
-    let wsum = 0;
-    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d <= R) { const w = Math.max(0, R + 0.5 - d); brush.push([dy * N + dx, w]); wsum += w; }
-    }
-    for (const b of brush) b[1] /= wsum;
-    const inertia = 0.05, capF = 4, minSlope = 0.01, eroS = 0.3, depS = 0.3, evap = 0.012, grav = 4, life = 40;
-    for (let d = 0; d < drops; d++) {
-      let x = 1 + rand() * (N - 3), y = 1 + rand() * (N - 3);
-      let dx = 0, dy = 0, speed = 1, water = 1, sed = 0;
-      for (let s = 0; s < life; s++) {
-        const ix = x | 0, iy = y | 0, fx = x - ix, fy = y - iy, idx = iy * N + ix;
-        const hNW = G[idx], hNE = G[idx + 1], hSW = G[idx + N], hSE = G[idx + N + 1];
-        const gx = (hNE - hNW) * (1 - fy) + (hSE - hSW) * fy;
-        const gy = (hSW - hNW) * (1 - fx) + (hSE - hNE) * fx;
-        const h = hNW * (1 - fx) * (1 - fy) + hNE * fx * (1 - fy) + hSW * (1 - fx) * fy + hSE * fx * fy;
-        dx = dx * inertia - gx * (1 - inertia); dy = dy * inertia - gy * (1 - inertia);
-        const len = Math.sqrt(dx * dx + dy * dy);
-        if (len < 1e-6) { const a = rand() * 6.2831853; dx = Math.cos(a); dy = Math.sin(a); } else { dx /= len; dy /= len; }
-        const nx = x + dx, ny = y + dy;
-        if (nx < R + 1 || nx >= N - R - 2 || ny < R + 1 || ny >= N - R - 2) break;
-        const jx = nx | 0, jy = ny | 0, gx2 = nx - jx, gy2 = ny - jy, j0 = jy * N + jx;
-        const hn = G[j0] * (1 - gx2) * (1 - gy2) + G[j0 + 1] * gx2 * (1 - gy2) + G[j0 + N] * (1 - gx2) * gy2 + G[j0 + N + 1] * gx2 * gy2;
-        const dh = hn - h;
-        const cap = Math.max(-dh, minSlope) * speed * water * capF;
-        if (sed > cap || dh > 0) {
-          const dep = dh > 0 ? Math.min(dh, sed) : (sed - cap) * depS;
-          sed -= dep;
-          G[idx] += dep * (1 - fx) * (1 - fy); G[idx + 1] += dep * fx * (1 - fy);
-          G[idx + N] += dep * (1 - fx) * fy; G[idx + N + 1] += dep * fx * fy;
-        } else {
-          const er = Math.min((cap - sed) * eroS, -dh);
-          const c = (fx > 0.5 ? ix + 1 : ix) + (fy > 0.5 ? iy + 1 : iy) * N;
-          for (let b = 0; b < brush.length; b++) G[c + brush[b][0]] -= er * brush[b][1];
-          sed += er;
+                    this.ws.onopen = () => {
+                        // Send MQTT v3.1.1 CONNECT packet
+                        const clientId = 'aegis_' + this.uid;
+                        const cidBytes = new TextEncoder().encode(clientId);
+                        const varHeader = [0x00, 0x04, 0x4d, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3c];
+                        const payload = [(cidBytes.length >> 8) & 0xff, cidBytes.length & 0xff, ...cidBytes];
+                        const remLen = varHeader.length + payload.length;
+                        const pkt = new Uint8Array([0x10, ...this.encodeVarInt(remLen), ...varHeader, ...payload]);
+                        this.ws.send(pkt);
+                    };
+
+                    this.ws.onmessage = (ev) => {
+                        if (!(ev.data instanceof ArrayBuffer)) return;
+                        const buf = new Uint8Array(ev.data);
+                        if (buf.length < 2) return;
+                        const pktType = buf[0] >> 4;
+
+                        if (pktType === 2) {
+                            // CONNACK received - Global Cross-Device Link Online!
+                            this.wsConnected = true;
+                            this.updateStatusBadge('NETLINK: GLOBAL CLOUD + TAB SYNC ONLINE', 'text-emerald-300 border-emerald-400/60 bg-emerald-950/70');
+                            this.subscribeTopic('aegis_fps/v2/lobby');
+                            this.subscribedTopics.forEach(t => {
+                                if (t !== 'aegis_fps/v2/lobby') this.subscribeTopic(t);
+                            });
+                            this.publish('aegis_fps/v2/lobby', { type: 'LOBBY_SCAN', sender: this.uid });
+                        } else if (pktType === 3) {
+                            // PUBLISH packet received from another device
+                            this.parseMqttPublish(buf);
+                        }
+                    };
+
+                    this.ws.onclose = () => {
+                        this.wsConnected = false;
+                        this.updateStatusBadge('NETLINK: TAB SYNC ACTIVE (RECONNECTING...)', 'text-sky-300 border-sky-500/40 bg-sky-950/60');
+                        setTimeout(() => this.connectWebSocketRelay(), 3500);
+                    };
+
+                    this.ws.onerror = () => {
+                        this.wsConnected = false;
+                    };
+                } catch (e) {
+                    this.updateStatusBadge('NETLINK: MULTI-TAB SYNC READY', 'text-sky-300 border-sky-500/40 bg-sky-950/60');
+                }
+            }
+
+            encodeVarInt(len) {
+                const out = [];
+                do {
+                    let digit = len % 128;
+                    len = Math.floor(len / 128);
+                    if (len > 0) digit |= 0x80;
+                    out.push(digit);
+                } while (len > 0);
+                return out;
+            }
+
+            decodeVarInt(buf, offset) {
+                let mult = 1, val = 0, idx = offset, byte = 0;
+                do {
+                    if (idx >= buf.length) return { val: 0, next: buf.length };
+                    byte = buf[idx++];
+                    val += (byte & 127) * mult;
+                    mult *= 128;
+                } while ((byte & 128) !== 0);
+                return { val, next: idx };
+            }
+
+            subscribeTopic(topic) {
+                this.subscribedTopics.add(topic);
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+                const tBytes = new TextEncoder().encode(topic);
+                const pid = (this.packetId++) & 0xffff;
+                const body = [
+                    (pid >> 8) & 0xff, pid & 0xff,
+                    (tBytes.length >> 8) & 0xff, tBytes.length & 0xff,
+                    ...tBytes,
+                    0x00
+                ];
+                const pkt = new Uint8Array([0x82, ...this.encodeVarInt(body.length), ...body]);
+                try { this.ws.send(pkt); } catch (e) {}
+            }
+
+            parseMqttPublish(buf) {
+                try {
+                    const qos = (buf[0] >> 1) & 0x03;
+                    const { val: remLen, next: pos0 } = this.decodeVarInt(buf, 1);
+                    if (pos0 + 2 > buf.length) return;
+                    const topicLen = (buf[pos0] << 8) | buf[pos0 + 1];
+                    let pos = pos0 + 2 + topicLen;
+                    if (qos > 0) pos += 2;
+                    const end = Math.min(buf.length, pos0 + remLen);
+                    if (pos >= end) return;
+                    const msgStr = new TextDecoder().decode(buf.subarray(pos, end));
+                    const msgObj = JSON.parse(msgStr);
+                    if (msgObj) this.dispatchIncoming(msgObj);
+                } catch (e) {}
+            }
+
+            publish(topic, dataObj) {
+                const envelope = Object.assign({}, dataObj, { sender: this.uid, ts: Date.now() });
+                const jsonStr = JSON.stringify(envelope);
+
+                // 1. BroadcastChannel
+                if (this.channel) {
+                    try { this.channel.postMessage(envelope); } catch (e) {}
+                }
+
+                // 2. LocalStorage fallback
+                try {
+                    localStorage.setItem('aegis_protocol_net_bus', JSON.stringify({ r: Math.random(), payload: envelope }));
+                } catch (e) {}
+
+                // 3. Global WebSocket Relay
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    try {
+                        const tBytes = new TextEncoder().encode(topic);
+                        const mBytes = new TextEncoder().encode(jsonStr);
+                        const body = [
+                            (tBytes.length >> 8) & 0xff, tBytes.length & 0xff,
+                            ...tBytes,
+                            ...mBytes
+                        ];
+                        const pkt = new Uint8Array([0x30, ...this.encodeVarInt(body.length), ...body]);
+                        this.ws.send(pkt);
+                    } catch (e) {}
+                }
+            }
+
+            dispatchIncoming(msg) {
+                if (!msg || msg.sender === this.uid) return;
+
+                if (msg.type === 'ROOM_ADVERTISE' && msg.roomCode) {
+                    this.knownOpenRooms.set(msg.roomCode, {
+                        code: msg.roomCode,
+                        mapId: msg.mapId || 'bunker',
+                        gameMode: msg.gameMode || '1v1',
+                        hostName: msg.hostName || 'HOST',
+                        updatedAt: Date.now()
+                    });
+                    if (window.renderOpenRoomsList) {
+                        window.renderOpenRoomsList(Array.from(this.knownOpenRooms.values()));
+                    }
+                } else if (msg.type === 'LOBBY_SCAN') {
+                    if (window.mpSession && window.mpSession.active && window.mpSession.roomCode && window.mpSession.isHost) {
+                        this.publish('aegis_fps/v2/lobby', {
+                            type: 'ROOM_ADVERTISE',
+                            roomCode: window.mpSession.roomCode,
+                            mapId: window.selectedMapId,
+                            gameMode: window.selectedGameMode,
+                            hostName: window.mpSession.callsign
+                        });
+                    }
+                }
+
+                if (this.onMessageHandler) {
+                    this.onMessageHandler(msg);
+                }
+            }
+
+            updateStatusBadge(text, cls) {
+                const el = document.getElementById('net-transport-status');
+                if (el) {
+                    el.textContent = text;
+                    el.className = `text-[10px] font-mono-tech px-2 py-0.5 rounded border ${cls}`;
+                }
+            }
         }
-        speed = Math.sqrt(Math.max(0, speed * speed + dh * grav));
-        water *= 1 - evap;
-        x = nx; y = ny;
-      }
-    }
-    // thermal relaxation: collapse slopes steeper than ~40 degrees
-    const talus = 0.84, D = new Float32Array(G.length);
-    for (let it = 0; it < 5; it++) {
-      D.fill(0);
-      for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
-        const c = j * N + i, h = G[c];
-        let d = h - G[c - 1]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c - 1] += m; }
-        d = h - G[c + 1]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c + 1] += m; }
-        d = h - G[c - N]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c - N] += m; }
-        d = h - G[c + N]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c + N] += m; }
-      }
-      for (let i = 0; i < G.length; i++) G[i] += D[i];
-    }
-  }
-  const out = new Float32Array(H.length);
-  for (let i = 0; i < out.length; i++) out[i] = clamp(G[i] / k, 0, 1);
-  return out;
-}
 
-function analyse(H, P) {
-  const N = P.res, cell = P.size / (N - 1), hs = P.height;
-  const slope = new Float32Array(N * N), ao = new Float32Array(N * N), moist = new Float32Array(N * N);
-  const nM = makeNoise(mulberry32(hashSeed('m:' + P.seed)));
-  const r = 3;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const k = j * N + i;
-    const iL = Math.max(i - 1, 0), iR = Math.min(i + 1, N - 1), jU = Math.max(j - 1, 0), jD = Math.min(j + 1, N - 1);
-    const gx = (H[j * N + iR] - H[j * N + iL]) * hs / ((iR - iL) * cell);
-    const gz = (H[jD * N + i] - H[jU * N + i]) * hs / ((jD - jU) * cell);
-    slope[k] = Math.sqrt(gx * gx + gz * gz);
-    const a = H[j * N + Math.max(i - r, 0)], b = H[j * N + Math.min(i + r, N - 1)];
-    const c = H[Math.max(j - r, 0) * N + i], d = H[Math.min(j + r, N - 1) * N + i];
-    const conc = ((a + b + c + d) / 4 - H[k]) * hs / (r * cell);
-    ao[k] = 1 - clamp(conc * 0.6, -0.12, 0.28);
-    const u = i / (N - 1), v = j / (N - 1);
-    let m = 0.5 + fbm(nM, u * 3.3 + 40, v * 3.3 + 8, 4, 0.5, 2) * 1.1 + P.wet - (H[k] - 0.3) * 0.4 + clamp(conc * 0.8, 0, 0.3);
-    moist[k] = clamp(m, 0, 1);
-  }
-  return { slope, ao, moist };
-}
+        const netRelay = new AegisCrossDeviceRelay();
+        window.netRelay = netRelay;
 
-function makeSampler(F, N, size) {
-  const half = size / 2, k = (N - 1) / size;
-  return function (x, z) {
-    let u = clamp((x + half) * k, 0, N - 1.001), v = clamp((z + half) * k, 0, N - 1.001);
-    const i = u | 0, j = v | 0, fx = u - i, fy = v - j, a = F[j * N + i], b = F[j * N + i + 1], c = F[(j + 1) * N + i], d = F[(j + 1) * N + i + 1];
-    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
-  };
-}
-
-/* ---------------- geometry builders ---------------- */
-function mix(dst, a, b, t) { dst[0] = a[0] + (b[0] - a[0]) * t; dst[1] = a[1] + (b[1] - a[1]) * t; dst[2] = a[2] + (b[2] - a[2]) * t; }
-
-function buildTerrain(P, H, F, L, rs, roads) {
-  const N = P.res, size = P.size, hs = P.height, half = size / 2, cell = size / (N - 1);
-  const n = N * N, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
-  const dn = makeNoise(mulberry32(hashSeed('d:' + P.seed)));
-  const c = [0, 0, 0], tmp = [0, 0, 0], sea = P.sea;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const k = j * N + i, x = -half + i * cell, z = -half + j * cell, h01 = H[k];
-    pos[k * 3] = x; pos[k * 3 + 1] = h01 * hs; pos[k * 3 + 2] = z;
-    const n1 = dn(x * 0.045, z * 0.045), n2 = dn(x * 0.27 + 9.1, z * 0.27 + 4.3);
-    const sl = F.slope[k], m = F.moist[k], rel = Math.max(0, (h01 - sea) / (1 - sea + 1e-6));
-    mix(c, L.dry, L.grass, smooth(0.2, 0.7, m + n1 * 0.18));
-    mix(c, c, L.forest, smooth(0.55, 0.9, m) * (1 - smooth(0.3, 0.65, rel)) * 0.85);
-    mix(c, c, L.high, smooth(0.35, 0.7, rel + n1 * 0.08));
-    mix(tmp, L.rock, L.rockDark, n2 * 0.5 + 0.5);
-    const rockT = smooth(rs, rs + 0.4, sl + n1 * 0.12);
-    mix(c, c, tmp, Math.max(rockT, smooth(0.8, 1.0, rel) * 0.55));
-    if (sea > 0.001) {
-      const beach = 1 - smooth(0, 0.018, h01 - sea + n1 * 0.004);
-      mix(c, c, L.sand, beach * (1 - rockT * 0.6));
-    }
-    if (P.snow <= 1) {
-      const sn = smooth(P.snow, P.snow + 0.07, rel + n1 * 0.05) * (1 - smooth(0.9, 1.7, sl) * 0.8);
-      mix(c, c, L.snow, sn);
-    }
-    if (h01 < sea) {
-      const d = sea - h01;
-      mix(c, c, L.seabed, smooth(0, 0.015, d));
-      mix(c, c, L.deep, smooth(0.01, 0.12, d) * 0.85);
-    }
-    if (roads && roads[k] > 0 && h01 >= sea) mix(c, c, L.road, roads[k] * 0.85);
-    const shade = F.ao[k] * (1 + n2 * 0.06);
-    col[k * 3] = Math.min(1, c[0] * shade); col[k * 3 + 1] = Math.min(1, c[1] * shade); col[k * 3 + 2] = Math.min(1, c[2] * shade);
-  }
-  const IdxArr = n > 65535 ? Uint32Array : Uint16Array;
-  const idx = new IdxArr((N - 1) * (N - 1) * 6);
-  let q = 0;
-  for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
-    const a = j * N + i, b = (j + 1) * N + i, cc = j * N + i + 1, d = (j + 1) * N + i + 1;
-    idx[q++] = a; idx[q++] = b; idx[q++] = cc; idx[q++] = cc; idx[q++] = b; idx[q++] = d;
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeVertexNormals();
-  return g;
-}
-
-function edgeWalks(N) {
-  const a = [], b = [], c = [], d = [];
-  for (let i = 0; i < N; i++) a.push([i, N - 1]);
-  for (let j = N - 1; j >= 0; j--) b.push([N - 1, j]);
-  for (let i = N - 1; i >= 0; i--) c.push([i, 0]);
-  for (let j = 0; j < N; j++) d.push([0, j]);
-  return [{ p: a, n: [0, 0, 1] }, { p: b, n: [1, 0, 0] }, { p: c, n: [0, 0, -1] }, { p: d, n: [-1, 0, 0] }];
-}
-
-/* wall strip around the map: topFn / botFn give heights in metres, colorFn(y, top) gives rgb */
-function buildWalls(P, topFn, botFn, colorFn, uvFn, skipFlat) {
-  const N = P.res, half = P.size / 2, cell = P.size / (N - 1);
-  const pos = [], nrm = [], col = [], uv = [], idx = [];
-  let vc = 0;
-  for (const w of edgeWalks(N)) {
-    const base = vc;
-    for (const [i, j] of w.p) {
-      const x = -half + i * cell, z = -half + j * cell, t = topFn(i, j), b = botFn(i, j);
-      pos.push(x, t, z, x, b, z);
-      nrm.push(w.n[0], w.n[1], w.n[2], w.n[0], w.n[1], w.n[2]);
-      const ct = colorFn(t, t), cb = colorFn(b, t);
-      col.push(ct[0], ct[1], ct[2], cb[0], cb[1], cb[2]);
-      if (uvFn) { const a = uvFn(x, z, t), bb = uvFn(x, z, b); uv.push(a[0], a[1], bb[0], bb[1]); }
-      vc += 2;
-    }
-    for (let s = 0; s < w.p.length - 1; s++) {
-      const t0 = base + 2 * s, b0 = t0 + 1, t1 = t0 + 2, b1 = t0 + 3;
-      if (skipFlat) {
-        const h0 = pos[t0 * 3 + 1] - pos[b0 * 3 + 1], h1 = pos[t1 * 3 + 1] - pos[b1 * 3 + 1];
-        if (h0 < 0.001 && h1 < 0.001) continue;
-      }
-      idx.push(t0, b0, t1, t1, b0, b1);
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nrm), 3));
-  if (col.length && colorFn) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
-  if (uvFn) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
-  g.setIndex(new THREE.BufferAttribute(vc > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1));
-  return g;
-}
-
-function buildBase(P, H) {
-  const N = P.res, hs = P.height, depth = P.base, floor = -depth;
-  const soil = lin('#4a3a2b'), clay = lin('#7a5c3e'), deepc = lin('#2c231b'), top = lin('#3c2f23');
-  const colorFn = (y, topY) => {
-    if (topY - y < 1.2) return top;
-    const t = clamp((y - floor) / Math.max(1, hs * 0.5 + depth), 0, 1);
-    const band = 0.5 + 0.5 * Math.sin(y * 0.33);
-    const a = [0, 0, 0]; mix(a, deepc, soil, smooth(0, 0.5, t)); mix(a, a, clay, band * 0.35 * (0.4 + t));
-    return a;
-  };
-  const wall = buildWalls(P, (i, j) => H[j * N + i] * hs, () => floor, colorFn, null, false);
-  // bottom cap
-  const s = P.size / 2, cc = deepc;
-  const cp = new Float32Array([-s, floor, -s, s, floor, -s, s, floor, s, -s, floor, s]);
-  const merged = new THREE.BufferGeometry();
-  const wp = wall.attributes.position.array, wn = wall.attributes.normal.array, wc = wall.attributes.color.array, wi = wall.index.array;
-  const vcount = wp.length / 3;
-  const pos = new Float32Array(wp.length + 12), nrm = new Float32Array(wn.length + 12), col = new Float32Array(wc.length + 12);
-  pos.set(wp); pos.set(cp, wp.length); nrm.set(wn); col.set(wc);
-  for (let i = 0; i < 4; i++) { nrm[wn.length + i * 3 + 1] = -1; col[wc.length + i * 3] = cc[0]; col[wc.length + i * 3 + 1] = cc[1]; col[wc.length + i * 3 + 2] = cc[2]; }
-  const idx = new Uint32Array(wi.length + 6); idx.set(wi);
-  idx.set([vcount, vcount + 1, vcount + 2, vcount, vcount + 2, vcount + 3], wi.length);
-  merged.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  merged.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-  merged.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  merged.setIndex(new THREE.BufferAttribute(idx, 1));
-  wall.dispose();
-  return merged;
-}
-
-function buildWater(P, H) {
-  const N = P.res, hs = P.height, seaY = P.sea * hs, half = P.size / 2, tile = 90;
-  const wall = buildWalls(P, () => seaY, (i, j) => Math.min(H[j * N + i] * hs, seaY), () => [1, 1, 1], (x, z, y) => [(x + z) / tile, y / tile], true);
-  const wp = wall.attributes.position.array, wn = wall.attributes.normal.array, wu = wall.attributes.uv.array, wi = wall.index.array;
-  const vcount = wp.length / 3;
-  const pos = new Float32Array(wp.length + 12), nrm = new Float32Array(wn.length + 12), uv = new Float32Array(wu.length + 8);
-  pos.set(wp); nrm.set(wn); uv.set(wu);
-  const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
-  corners.forEach(([x, z], i) => {
-    pos.set([x, seaY, z], wp.length + i * 3); nrm.set([0, 1, 0], wn.length + i * 3); uv.set([x / tile, z / tile], wu.length + i * 2);
-  });
-  // top face, wound to face +y
-  const idx = new Uint32Array(wi.length + 6); idx.set(wi);
-  idx.set([vcount, vcount + 3, vcount + 1, vcount + 1, vcount + 3, vcount + 2], wi.length);
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  wall.dispose();
-  return g;
-}
-
-/* ---------------- vegetation and rocks ---------------- */
-class Baker {
-  constructor() { this.pos = []; this.nrm = []; this.col = []; this.idx = []; this.vc = 0; this._v = new THREE.Vector3(); this._n = new THREE.Vector3(); }
-  add(geo, color, m, nm, tint) {
-    const P = geo.attributes.position, Nn = geo.attributes.normal, v = this._v, n = this._n;
-    for (let i = 0; i < P.count; i++) {
-      v.fromBufferAttribute(P, i).applyMatrix4(m); this.pos.push(v.x, v.y, v.z);
-      n.fromBufferAttribute(Nn, i).applyMatrix3(nm).normalize(); this.nrm.push(n.x, n.y, n.z);
-      this.col.push(Math.min(1, color[0] * tint[0]), Math.min(1, color[1] * tint[1]), Math.min(1, color[2] * tint[2]));
-    }
-    const base = this.vc;
-    if (geo.index) for (let k = 0; k < geo.index.count; k++) this.idx.push(base + geo.index.getX(k));
-    else for (let k = 0; k < P.count; k++) this.idx.push(base + k);
-    this.vc += P.count;
-  }
-  build() {
-    if (!this.vc) return null;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(this.pos), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(this.nrm), 3));
-    g.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(this.col), 3));
-    g.setIndex(new THREE.BufferAttribute(this.vc > 65535 ? Uint32Array.from(this.idx) : Uint16Array.from(this.idx), 1));
-    return g;
-  }
-}
-function trunkGeo(h, r0, r1, seg) { const g = new THREE.CylinderGeometry(r1, r0, h, seg, 1, false); g.translate(0, h / 2, 0); return g; }
-function coneGeo(r, h, y, seg) { const g = new THREE.ConeGeometry(r, h, seg, 1, false); g.translate(0, y + h / 2, 0); return g; }
-function blobGeo(rx, ry, rz, cx, cy, cz, sd) {
-  const g = new THREE.SphereGeometry(1, 6, 4), p = g.attributes.position, nr = g.attributes.normal;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const j = 1 + 0.4 * (hash3(x * 3.1 + sd, y * 3.1, z * 3.1) - 0.5);
-    p.setXYZ(i, x * rx * j + cx, y * ry * j + cy, z * rz * j + cz);
-    const ny = y + 0.45, l = Math.hypot(x, ny, z) || 1;
-    nr.setXYZ(i, x / l, ny / l, z / l);
-  }
-  return g;
-}
-function rockGeo(sd) {
-  const g = new THREE.IcosahedronGeometry(1, 0), p = g.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), j = 0.72 + 0.5 * hash3(x * 5.3 + sd, y * 5.3, z * 5.3);
-    p.setXYZ(i, x * j, y * j * 0.85, z * j);
-  }
-  g.computeVertexNormals();
-  return g;
-}
-function cactusParts() {
-  const mk = (r0, r1, h, seg, tx, ty, tz, rz) => { const g = trunkGeo(h, r0, r1, seg); if (rz) g.rotateZ(rz); g.translate(tx, ty, tz); return g; };
-  return [mk(0.38, 0.3, 3.6, 6, 0, 0, 0, 0), mk(0.2, 0.2, 1.1, 5, 0.55, 1.5, 0, -Math.PI / 2), mk(0.2, 0.17, 1.3, 5, 1.1, 1.5, 0, 0), mk(0.18, 0.18, 0.9, 5, -0.5, 2.1, 0, Math.PI / 2), mk(0.18, 0.15, 1.0, 5, -0.95, 2.1, 0, 0)];
-}
-
-function scatter(P, pal, L, H, F, flora, towns) {
-  const near = (x, z, k) => towns.some(t => Math.hypot(x - t.x, z - t.z) < t.R * k);
-  const trees = new Baker(), rocks = new Baker();
-  const N = P.res, size = P.size, sampH = makeSampler(H, N, size), sampS = makeSampler(F.slope, N, size), sampM = makeSampler(F.moist, N, size);
-  const rand = mulberry32(hashSeed('s:' + P.seed));
-  const forestN = makeNoise(mulberry32(hashSeed('f:' + P.seed)));
-  const m = new THREE.Matrix4(), nm = new THREE.Matrix3(), q = new THREE.Quaternion(), e = new THREE.Euler(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
-  // reusable part sets, three variants each
-  const conif = [], broad = [], rockV = [], cact = cactusParts();
-  for (let v = 0; v < 3; v++) {
-    const k = 1 + (v - 1) * 0.12;
-    conif.push([[trunkGeo(2.4, 0.42, 0.26, 6), L.trunk], [coneGeo(2.1 * k, 3.4, 1.7, 6), L.needle], [coneGeo(1.6 * k, 3.0, 3.5, 6), L.needle], [coneGeo(1.05 * k, 2.6, 5.4, 6), L.needle]]);
-    broad.push([[trunkGeo(3.0, 0.45, 0.28, 6), L.trunk], [blobGeo(2.3 * k, 1.8, 2.3 * k, 0, 4.3, 0, v * 7), L.leafA], [blobGeo(1.5, 1.3, 1.5, 1.3, 3.5, 0.5, v * 7 + 3), L.leafB]]);
-    rockV.push(rockGeo(v * 11 + 1));
-  }
-  const tint = (t, r) => [t, t * (0.94 + 0.12 * r()), t * (0.9 + 0.14 * r())];
-  const cellSz = Math.max(2.4, 3.6 * P.treeScale), occ = new Set();
-  const keyOf = (x, z) => (Math.floor(x / cellSz) + 20000) * 40000 + (Math.floor(z / cellSz) + 20000);
-  let placed = 0, tries = 0;
-  const maxTries = P.trees * 14, margin = 6;
-  let nTrees = 0;
-  while (nTrees < P.trees && tries < maxTries) {
-    tries++;
-    const x = (rand() - 0.5) * (size - margin * 2), z = (rand() - 0.5) * (size - margin * 2);
-    const h01 = sampH(x, z);
-    if (h01 <= P.sea + 0.012 || near(x, z, 1.1)) continue;
-    const rel = (h01 - P.sea) / (1 - P.sea);
-    if (rel > P.treeline + (rand() - 0.5) * 0.08) continue;
-    const sl = sampS(x, z);
-    if (sl > 0.9) continue;
-    const mo = sampM(x, z);
-    const dens = smooth(0.28, 0.6, forestN(x * 0.006, z * 0.006) * 0.5 + 0.5 + (mo - 0.5) * 0.35);
-    if (rand() > dens * Math.min(1, mo * 1.5 + 0.2) * (1 - smooth(0.5, 0.9, sl))) continue;
-    const key = keyOf(x, z);
-    if (occ.has(key)) continue;
-    occ.add(key);
-    const y = h01 * P.height - 0.2, v = (rand() * 3) | 0;
-    let set, sc = P.treeScale * (0.75 + 0.6 * rand()) * (1 - rel * 0.25);
-    if (flora === 'arid') {
-      if (rand() < 0.65) { set = cact.map(g => [g, L.leafA]); sc *= 0.9; } else { set = broad[v]; sc *= 0.5; }
-    } else {
-      const pc = clamp(P.conifer + (rel - 0.4) * 0.9, 0, 1);
-      set = rand() < pc ? conif[v] : broad[v];
-    }
-    q.setFromAxisAngle(up, rand() * 6.2832);
-    m.compose(pv.set(x, y, z), q, sv.set(sc, sc * (0.9 + 0.25 * rand()), sc));
-    nm.getNormalMatrix(m);
-    const t = tint(0.82 + 0.36 * rand(), rand);
-    for (const [g, c] of set) trees.add(g, c, m, nm, t);
-    nTrees++;
-  }
-  let nRocks = 0; tries = 0;
-  while (nRocks < P.rocks && tries < P.rocks * 30) {
-    tries++;
-    const x = (rand() - 0.5) * (size - 4), z = (rand() - 0.5) * (size - 4), h01 = sampH(x, z);
-    if (h01 <= P.sea + 0.004 || near(x, z, 1.0)) continue;
-    const rel = (h01 - P.sea) / (1 - P.sea), sl = sampS(x, z);
-    if (rand() > 0.12 + smooth(0.35, 1.0, sl) * 0.9 + smooth(0.7, 1, rel) * 0.3) continue;
-    const s = (0.8 + Math.pow(rand(), 2.2) * 4.5) * Math.max(0.6, P.treeScale * 0.8);
-    e.set((rand() - 0.5) * 0.5, rand() * 6.2832, (rand() - 0.5) * 0.5);
-    q.setFromEuler(e);
-    m.compose(pv.set(x, h01 * P.height - s * 0.25, z), q, sv.set(s * (0.8 + 0.5 * rand()), s * (0.55 + 0.4 * rand()), s * (0.8 + 0.5 * rand())));
-    nm.getNormalMatrix(m);
-    const c = [0, 0, 0]; mix(c, L.rock, L.rockDark, rand());
-    rocks.add(rockV[(rand() * 3) | 0], c, m, nm, tint(0.85 + 0.3 * rand(), rand));
-    nRocks++;
-  }
-  [conif, broad].forEach(a => a.forEach(s => s.forEach(p => p[0].dispose())));
-  cact.forEach(g => g.dispose()); rockV.forEach(g => g.dispose());
-  return { trees: trees.build(), rocks: rocks.build(), nTrees, nRocks };
-}
-
-
-/* ---------------- towns ---------------- */
-function siteTowns(P, H, rand) {
-  const N = P.res, R = P.townSize, sampH = makeSampler(H, N, P.size), half = P.size / 2;
-  const cand = [];
-  for (let t = 0; t < 700; t++) {
-    const x = (rand() - 0.5) * (P.size - R * 3), z = (rand() - 0.5) * (P.size - R * 3);
-    const h0 = sampH(x, z);
-    if (h0 < P.sea + 0.03 || (h0 - P.sea) / (1 - P.sea) > 0.5) continue;
-    let dev = 0, sum = h0;
-    for (let a = 0; a < 8; a++) {
-      const h = sampH(x + Math.cos(a * 0.7854) * R * 0.8, z + Math.sin(a * 0.7854) * R * 0.8);
-      if (h < P.sea + 0.01) { dev = 1e9; break; }
-      dev = Math.max(dev, Math.abs(h - h0) * P.height); sum += h;
-    }
-    if (dev < R * 0.4) cand.push({ x, z, dev, h: sum / 9, R, ang: rand() * 3.1416 });
-  }
-  cand.sort((a, b) => a.dev - b.dev);
-  const out = [], minD = Math.max(R * 3.2, P.size * 0.16);
-  for (const c of cand) {
-    if (out.length >= P.towns) break;
-    if (out.every(o => Math.hypot(o.x - c.x, o.z - c.z) > minD)) out.push(c);
-  }
-  return out;
-}
-function levelTowns(P, H, towns) {
-  const N = P.res, cell = P.size / (N - 1), half = P.size / 2;
-  for (const t of towns) {
-    const r = t.R * 1.4, i0 = Math.max(0, Math.floor((t.x - r + half) / cell)), i1 = Math.min(N - 1, Math.ceil((t.x + r + half) / cell));
-    const j0 = Math.max(0, Math.floor((t.z - r + half) / cell)), j1 = Math.min(N - 1, Math.ceil((t.z + r + half) / cell));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const d = Math.hypot(-half + i * cell - t.x, -half + j * cell - t.z), w = 1 - smooth(t.R * 0.85, r, d);
-      if (w > 0) H[j * N + i] = lerp(H[j * N + i], t.h, w);
-    }
-  }
-}
-function paintRoads(P, H, towns) {
-  const N = P.res, cell = P.size / (N - 1), half = P.size / 2, mask = new Float32Array(N * N);
-  const dab = (x, z, w) => {
-    const i0 = Math.floor((x - w + half) / cell), i1 = Math.ceil((x + w + half) / cell), j0 = Math.floor((z - w + half) / cell), j1 = Math.ceil((z + w + half) / cell);
-    for (let j = Math.max(0, j0); j <= Math.min(N - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(N - 1, i1); i++) {
-      const d = Math.hypot(-half + i * cell - x, -half + j * cell - z), v = 1 - smooth(w * 0.5, w, d);
-      if (v > mask[j * N + i]) mask[j * N + i] = v;
-    }
-  };
-  const line = (a, b, w) => { const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.ceil(len / (cell * 0.6)); for (let k = 0; k <= n; k++) dab(lerp(a[0], b[0], k / n), lerp(a[1], b[1], k / n), w); };
-  for (const t of towns) {
-    for (let k = 0; k < 4; k++) { const a = t.ang + k * 1.5708; line([t.x, t.z], [t.x + Math.cos(a) * t.R * 0.85, t.z + Math.sin(a) * t.R * 0.85], 3.2); }
-    for (let a = 0; a < 24; a++) dab(t.x + Math.cos(a * 0.2618) * t.R * 0.2, t.z + Math.sin(a * 0.2618) * t.R * 0.2, 3);
-  }
-  const left = towns.slice(1), cur = [towns[0]];
-  while (left.length && cur.length) {
-    const a = cur[cur.length - 1];
-    left.sort((u, v) => Math.hypot(u.x - a.x, u.z - a.z) - Math.hypot(v.x - a.x, v.z - a.z));
-    const b = left.shift(); line([a.x, a.z], [b.x, b.z], 2.6); cur.push(b);
-  }
-  return mask;
-}
-function gableGeo() {
-  const q = (a, b, c, d) => [...a, ...b, ...c, ...a, ...c, ...d];
-  const v = [
-    ...q([-.5, 0, .5], [.5, 0, .5], [.5, 1, 0], [-.5, 1, 0]),
-    ...q([.5, 0, -.5], [-.5, 0, -.5], [-.5, 1, 0], [.5, 1, 0]),
-    .5, 0, .5, .5, 0, -.5, .5, 1, 0,
-    -.5, 0, -.5, -.5, 0, .5, -.5, 1, 0,
-    ...q([-.5, 0, -.5], [.5, 0, -.5], [.5, 0, .5], [-.5, 0, .5]),
-  ];
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(v), 3));
-  g.computeVertexNormals();
-  return g;
-}
-function buildTowns(P, towns, sampH, rand) {
-  const bk = new Baker(), box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
-  const roof = gableGeo(), spire = new THREE.ConeGeometry(3.4, 4.5, 4, 1, false); spire.rotateY(Math.PI / 4); spire.translate(0, 10 + 2.25, 0);
-  const walls = ['#e8dfcc', '#d9c9a8', '#c9b79a', '#b8b2a6', '#efe9dd'].map(lin), roofs = ['#a4503a', '#7c3b30', '#56606a', '#6b4a3a', '#8d5a3c'].map(lin);
-  const stone = lin('#a39d90'), slate = lin('#4a5058');
-  const m = new THREE.Matrix4(), nm = new THREE.Matrix3(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  const one = [1, 1, 1];
-  let count = 0;
-  const put = (g, col, x, y, z, yaw, sx, sy, sz, tint) => {
-    q.setFromAxisAngle(up, yaw); m.compose(pv.set(x, y, z), q, sv.set(sx, sy, sz)); nm.getNormalMatrix(m); bk.add(g, col, m, nm, tint || one);
-  };
-  for (const t of towns) {
-    const y0 = sampH(t.x, t.z) * P.height, occ = new Set(), cs = 11;
-    put(box, stone, t.x, y0, t.z, t.ang, 5, 10, 5, one); put(spire, slate, t.x, y0, t.z, t.ang, 1, 1, 1, one); count++;
-    occ.add(Math.floor(t.x / cs) * 9973 + Math.floor(t.z / cs));
-    const want = Math.round(t.R * t.R / 480);
-    for (let n = 0, tries = 0; n < want && tries < want * 25; tries++) {
-      const r = t.R * Math.sqrt(rand()) * 0.92, a = rand() * 6.2832;
-      if (r < t.R * 0.16) continue;
-      const x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r, key = Math.floor(x / cs) * 9973 + Math.floor(z / cs);
-      if (occ.has(key)) continue;
-      const h = sampH(x, z);
-      if (h < P.sea + 0.008) continue;
-      occ.add(key);
-      const w = 6 + rand() * 4, d = 5 + rand() * 2.8, wh = 3 + rand() * 1.4, rh = 1.8 + rand() * 1.2;
-      const yaw = t.ang + (rand() < 0.5 ? 0 : 1.5708) + (rand() - 0.5) * 0.16, y = h * P.height - 0.15;
-      const tn = 0.92 + rand() * 0.12, tint = [tn, tn, tn];
-      put(box, walls[(rand() * 5) | 0], x, y, z, yaw, w, wh, d, tint);
-      put(roof, roofs[(rand() * 5) | 0], x, y + wh, z, yaw, w * 1.14, rh, d * 1.14, tint);
-      n++; count++;
-    }
-  }
-  box.dispose(); roof.dispose(); spire.dispose();
-  return { geo: bk.build(), count };
-}
-
-/* ---------------- orchestration ---------------- */
-function heightKey(P) { return [P.seed, P.res, P.size, P.height, P.freq, P.oct, P.gain, P.ridge, P.warp, P.island, P.flat, P.terrace, P.erosion].join('|'); }
-function bytesOf(g) {
-  if (!g) return 0;
-  let b = 0;
-  for (const k in g.attributes) b += g.attributes[k].array.byteLength;
-  if (g.index) b += g.index.array.byteLength;
-  return b;
-}
-function generate(P, cache) {
-  const preset = PRESETS[P.preset] || PRESETS.temperate;
-  const L = {}; for (const k in preset.pal) L[k] = lin(preset.pal[k]);
-  const key = heightKey(P);
-  if (cache.key !== key) { cache.H = erode(buildHeights(P), P); cache.key = key; }
-  let H = cache.H, towns = [], roads = null;
-  if (P.towns > 0) {
-    H = Float32Array.from(H);
-    towns = siteTowns(P, H, mulberry32(hashSeed('t:' + P.seed)));
-    if (towns.length) { levelTowns(P, H, towns); roads = paintRoads(P, H, towns); }
-  }
-  L.road = lin('#a19478');
-  const F = analyse(H, P);
-  const terrain = buildTerrain(P, H, F, L, preset.rs, roads);
-  const base = P.base > 0 ? buildBase(P, H) : null;
-  const water = P.sea > 0.001 ? buildWater(P, H) : null;
-  const sc = scatter(P, preset.pal, L, H, F, preset.flora, towns);
-  const tw = towns.length ? buildTowns(P, towns, makeSampler(H, P.res, P.size), mulberry32(hashSeed('b:' + P.seed))) : { geo: null, count: 0 };
-  let hmax = 0; for (let i = 0; i < H.length; i++) if (H[i] > hmax) hmax = H[i];
-  const geos = { terrain, base, water, trees: sc.trees, rocks: sc.rocks, towns: tw.geo };
-  let tris = 0, bytes = 0;
-  for (const k in geos) { const g = geos[k]; if (g) { tris += (g.index ? g.index.count : g.attributes.position.count) / 3; bytes += bytesOf(g); } }
-  return { geos, pal: preset.pal, H, info: { verts: P.res * P.res, tris: Math.round(tris), trees: sc.nTrees, rocks: sc.nRocks, towns: towns.length, houses: tw.count, bytes, hmax: hmax * P.height, seaY: P.sea * P.height } };
-}
-
-root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
-})(typeof window !== 'undefined' ? window : globalThis);
-
-</script>
-<script>
         // ==========================================
         // 1. PROCEDURAL WEB AUDIO API SYNTHESIZER
         // ==========================================
@@ -1515,26 +1249,26 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
 
         function createCombatantLabelSprite(text, textColor = '#ffffff', borderColor = '#38bdf8') {
             const canvas = document.createElement('canvas');
-            canvas.width = 256;
+            canvas.width = 320;
             canvas.height = 64;
             const ctx = canvas.getContext('2d');
 
-            ctx.fillStyle = 'rgba(9, 13, 22, 0.84)';
-            ctx.fillRect(18, 10, 220, 44);
+            ctx.fillStyle = 'rgba(9, 13, 22, 0.86)';
+            ctx.fillRect(14, 10, 292, 44);
             ctx.strokeStyle = borderColor;
             ctx.lineWidth = 4;
-            ctx.strokeRect(18, 10, 220, 44);
+            ctx.strokeRect(14, 10, 292, 44);
 
             ctx.fillStyle = textColor;
-            ctx.font = 'bold 24px "JetBrains Mono", monospace';
+            ctx.font = 'bold 22px "JetBrains Mono", monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(text, 128, 33);
+            ctx.fillText(text.slice(0, 18), 160, 33);
 
             const tex = new THREE.CanvasTexture(canvas);
             const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
             const sprite = new THREE.Sprite(mat);
-            sprite.scale.set(1.5, 0.38, 1);
+            sprite.scale.set(1.85, 0.38, 1);
             return sprite;
         }
 
@@ -1570,18 +1304,36 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         // Global Game State & Settings
         let gameState = 'START'; // 'START', 'PLAYING', 'PAUSED', 'GAMEOVER'
         let settingsReturnTarget = 'START';
+        let selectedBattleSystem = 'ai'; // 'ai' (Beta AI v0.9) or 'pvp' (Real Player Online Room)
+        let selectedBetaAiTier = 'tactical'; // 'tactical', 'adaptive', 'veteran'
         let selectedGameMode = 'battle'; // 'battle', '1v1', '2v2', 'ffa'
-        let selectedOpponentType = 'ai'; // 'ai' or 'human'
+        window.selectedGameMode = selectedGameMode;
+
         let currentWave = 1;
         let score = 0;
         let weaponHits = 0;
         let killsCount = 0;
+        let deathsCount = 0;
         let isMouseDown = false;
         let isRmbDown = false;
         let isDraggingLook = false;
         let lastMouseX = 0;
         let lastMouseY = 0;
         let shootCooldownTimer = 0;
+
+        // Multiplayer Session State
+        const mpSession = {
+            active: false,
+            roomCode: '',
+            callsign: 'OPERATIVE-01',
+            isHost: false,
+            syncTimer: 0,
+            syncInterval: 0.05, // 20Hz real-time state sync
+            lobbyHeartTimer: 0,
+            remotePlayers: new Map(), // uid -> { uid, state, group, hbFg, shieldDome, heldRifle, heldKnife, targetPos, targetYaw, lastSeen }
+            lobbyPeers: new Map() // uid -> { uid, callsign, isHost, team, lastSeen }
+        };
+        window.mpSession = mpSession;
 
         // Customizable Settings & Keybindings
         const DEFAULT_KEYBINDS = {
@@ -1635,8 +1387,56 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             if (shieldKeyEl) shieldKeyEl.textContent = formatKeyLabel(gameSettings.keybinds.shield);
         }
 
+        function generateRoomCode() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 5; i++) {
+                code += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return code;
+        }
+
+        function setOpponentType(sys) {
+            selectedBattleSystem = sys;
+            document.getElementById('battle-sys-ai').classList.toggle('selected', sys === 'ai');
+            document.getElementById('battle-sys-pvp').classList.toggle('selected', sys === 'pvp');
+
+            document.getElementById('ai-beta-panel').classList.toggle('hidden', sys !== 'ai');
+            document.getElementById('pvp-lobby-panel').classList.toggle('hidden', sys !== 'pvp');
+
+            const battleModePill = document.getElementById('mode-battle');
+            if (sys === 'pvp') {
+                battleModePill.classList.add('disabled-pill');
+                if (selectedGameMode === 'battle') {
+                    setGameMode('1v1');
+                }
+                const codeInput = document.getElementById('input-room-code');
+                if (codeInput && !codeInput.value.trim()) {
+                    codeInput.value = generateRoomCode();
+                }
+                netRelay.publish('aegis_fps/v2/lobby', { type: 'LOBBY_SCAN' });
+            } else {
+                battleModePill.classList.remove('disabled-pill');
+            }
+        }
+        window.setOpponentType = setOpponentType;
+        window.setBattleSystem = setOpponentType;
+
+        function setBetaAiTier(tier) {
+            selectedBetaAiTier = tier;
+            ['tactical', 'adaptive', 'veteran'].forEach(t => {
+                const el = document.getElementById(`ai-tier-${t}`);
+                if (el) el.classList.toggle('selected', t === tier);
+            });
+        }
+        window.setBetaAiTier = setBetaAiTier;
+
         function setGameMode(mode) {
+            if (selectedBattleSystem === 'pvp' && mode === 'battle') {
+                mode = '1v1';
+            }
             selectedGameMode = mode;
+            window.selectedGameMode = mode;
             ['battle', '1v1', '2v2', 'ffa'].forEach(m => {
                 const el = document.getElementById(`mode-${m}`);
                 if (el) {
@@ -1645,17 +1445,158 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 }
             });
         }
+        window.setGameMode = setGameMode;
 
-        function setOpponentType(type) {
-            selectedOpponentType = type;
-            ['ai', 'human'].forEach(t => {
-                const el = document.getElementById(`opp-${t}`);
-                if (el) {
-                    if (t === type) el.classList.add('selected');
-                    else el.classList.remove('selected');
+        function updateLobbyRosterUI() {
+            const rosterEl = document.getElementById('pvp-lobby-roster');
+            const hintEl = document.getElementById('pvp-roster-hint');
+            const banner = document.getElementById('pvp-connection-banner');
+            const led = document.getElementById('pvp-status-led');
+            const text = document.getElementById('pvp-connection-text');
+            const peersBadge = document.getElementById('pvp-player-count-badge');
+
+            if (!mpSession.active || !mpSession.roomCode) {
+                if (banner) banner.className = 'mb-2.5 px-3 py-2 rounded-lg bg-slate-950/90 border border-amber-500/40 flex items-center justify-between gap-2';
+                if (led) led.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0';
+                if (text) {
+                    text.className = 'font-mono-tech text-xs font-extrabold tracking-wider text-amber-300';
+                    text.textContent = 'STATUS: OFFLINE — CLICK CREATE ROOM OR JOIN ROOM';
                 }
-            });
+                if (peersBadge) {
+                    peersBadge.textContent = '1 OPERATIVE';
+                    peersBadge.className = 'text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300';
+                }
+                if (rosterEl) {
+                    rosterEl.innerHTML = `<span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-400">No active room yet</span>`;
+                }
+                if (hintEl) hintEl.textContent = 'Waiting for room link...';
+                return;
+            }
+
+            const totalOperatives = 1 + mpSession.lobbyPeers.size;
+            if (banner) banner.className = 'mb-2.5 px-3 py-2 rounded-lg bg-emerald-950/90 border border-emerald-400 flex items-center justify-between gap-2 shadow-[0_0_16px_rgba(16,185,129,0.28)]';
+            if (led) led.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping flex-shrink-0';
+            if (text) {
+                text.className = 'font-mono-tech text-xs font-extrabold tracking-wider text-emerald-300';
+                text.textContent = `CONNECTED TO ROOM: ${mpSession.roomCode} (${totalOperatives} OPERATIVE${totalOperatives > 1 ? 'S' : ''} SYNCED)`;
+            }
+            if (peersBadge) {
+                peersBadge.textContent = `${totalOperatives} IN ROOM`;
+                peersBadge.className = 'text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40';
+            }
+            if (hintEl) {
+                hintEl.textContent = totalOperatives > 1 ? 'Friend connected! Ready to Deploy!' : 'Share code with friend to join';
+            }
+
+            if (rosterEl) {
+                let html = `<span class="px-2 py-0.5 rounded bg-sky-950/90 border border-sky-400/60 text-sky-200 font-bold">★ ${mpSession.callsign} (YOU${mpSession.isHost ? ' / HOST' : ''})</span>`;
+                mpSession.lobbyPeers.forEach((peer) => {
+                    html += `<span class="px-2 py-0.5 rounded bg-emerald-950/90 border border-emerald-400/60 text-emerald-200 font-bold">● ${peer.callsign} (${peer.isHost ? 'HOST' : 'GUEST'})</span>`;
+                });
+                rosterEl.innerHTML = html;
+            }
         }
+
+        function connectToMultiplayerRoom(rawCode, isCreating = false) {
+            const code = (rawCode || document.getElementById('input-room-code')?.value || '').trim().toUpperCase();
+            if (code.length < 3) {
+                document.getElementById('pvp-room-status').innerHTML = `<span class="text-rose-400 font-bold">Enter a valid 5-character Room Code first!</span>`;
+                return false;
+            }
+            const callsign = (document.getElementById('input-callsign')?.value || 'OPERATIVE-01').trim().toUpperCase() || 'OPERATIVE-01';
+            document.getElementById('input-room-code').value = code;
+
+            if (mpSession.roomCode && mpSession.roomCode !== code) {
+                clearAllRemoteAvatars();
+                mpSession.lobbyPeers.clear();
+            }
+
+            mpSession.active = true;
+            mpSession.roomCode = code;
+            mpSession.callsign = callsign;
+            mpSession.isHost = isCreating;
+
+            const roomTopic = `aegis_fps/v2/room/${code}`;
+            netRelay.subscribeTopic(roomTopic);
+
+            // Announce presence to room & global lobby
+            netRelay.publish(roomTopic, {
+                type: 'HELLO',
+                roomCode: code,
+                callsign,
+                isHost: isCreating,
+                mapId: selectedMapId,
+                gameMode: selectedGameMode
+            });
+
+            if (isCreating) {
+                netRelay.publish('aegis_fps/v2/lobby', {
+                    type: 'ROOM_ADVERTISE',
+                    roomCode: code,
+                    mapId: selectedMapId,
+                    gameMode: selectedGameMode,
+                    hostName: callsign
+                });
+            }
+
+            try { window.history.replaceState(null, '', `#room=${code}`); } catch (e) {}
+            updateLobbyRosterUI();
+            document.getElementById('pvp-room-status').innerHTML = `Connected to Room <span class="text-emerald-300 font-extrabold">${code}</span> &bull; Click <span class="text-sky-300 font-bold">Deploy to Arena</span>!`;
+            return true;
+        }
+
+        function createMultiplayerRoom() {
+            const newCode = generateRoomCode();
+            connectToMultiplayerRoom(newCode, true);
+        }
+        window.createMultiplayerRoom = createMultiplayerRoom;
+
+        function joinMultiplayerRoom() {
+            const code = (document.getElementById('input-room-code')?.value || '').trim().toUpperCase();
+            connectToMultiplayerRoom(code, false);
+        }
+        window.joinMultiplayerRoom = joinMultiplayerRoom;
+
+        function quickMatchRoom() {
+            const openRooms = Array.from(netRelay.knownOpenRooms.values());
+            if (openRooms.length > 0) {
+                const target = openRooms[0];
+                window.quickSelectOpenRoom(target.code, target.mapId || 'bunker', target.gameMode || '1v1');
+            } else {
+                createMultiplayerRoom();
+            }
+        }
+        window.quickMatchRoom = quickMatchRoom;
+
+        window.renderOpenRoomsList = function(rooms) {
+            const container = document.getElementById('open-rooms-list');
+            if (!container) return;
+            if (!rooms || rooms.length === 0) {
+                container.innerHTML = `<span class="text-[10px] font-mono-tech text-slate-400">ACTIVE OPEN ROOMS:</span> <span class="text-[10px] font-mono-tech text-slate-500">None open (Click Create Room!)</span>`;
+                return;
+            }
+            let html = `<span class="text-[10px] font-mono-tech text-slate-400">ACTIVE OPEN ROOMS:</span>`;
+            rooms.slice(0, 4).forEach(r => {
+                html += `<button type="button" onclick="quickSelectOpenRoom('${r.code}', '${r.mapId || 'bunker'}', '${r.gameMode || '1v1'}')" class="px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-800/80 border border-emerald-500/50 text-emerald-300 font-mono-tech text-[10px] font-bold cursor-pointer transition">JOIN ${r.code} (${(r.gameMode || '1V1').toUpperCase()})</button>`;
+            });
+            container.innerHTML = html;
+        };
+
+        window.quickSelectOpenRoom = function(code, mapId, mode) {
+            const codeInput = document.getElementById('input-room-code');
+            if (codeInput) codeInput.value = code;
+            if (MAPS.some(m => m.id === mapId)) {
+                selectedMapId = mapId;
+                window.selectedMapId = mapId;
+                const found = MAPS.find(m => m.id === mapId);
+                if (found) document.getElementById('selected-map-badge').textContent = `ACTIVE: ${found.shortName}`;
+                renderMapSelectors();
+            }
+            if (['1v1', '2v2', 'ffa'].includes(mode)) {
+                setGameMode(mode);
+            }
+            connectToMultiplayerRoom(code, false);
+        };
 
         // ==========================================
         // 4. FIRST-PERSON 3D VIEWMODEL RIG
@@ -1836,6 +1777,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         ];
 
         let selectedMapId = 'bunker';
+        window.selectedMapId = selectedMapId;
         let currentMapConfig = MAPS[0];
 
         const mapRootGroup = new THREE.Group();
@@ -1858,7 +1800,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         const shootableMeshes = [];
 
         function clearCurrentMap() {
-            window.__aegisMapLoadToken = (window.__aegisMapLoadToken || 0) + 1;
             colliders.length = 0;
             wallMeshes.length = 0;
             shootableMeshes.length = 0;
@@ -1885,62 +1826,17 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             scene.fog.color.setHex(cfg.fogColor);
             scene.fog.density = cfg.fogDensity;
 
-            // Load the external Terrain Forge GLB instead of generating terrain at runtime.
-            // Keep map.glb beside this HTML file (same folder).
-            if (!window.__aegisGLTFLoader) {
-                window.__aegisGLTFLoader = new THREE.GLTFLoader();
-            }
-            const loadToken = (window.__aegisMapLoadToken || 0) + 1;
-            window.__aegisMapLoadToken = loadToken;
-            window.__aegisGLTFLoader.load(
-                './map.glb',
-                (gltf) => {
-                    // Ignore a late load if the player switched arenas while it was loading.
-                    if (loadToken !== window.__aegisMapLoadToken) return;
-
-                    const model = gltf.scene;
-                    model.updateMatrixWorld(true);
-
-                    // The supplied GLB spans approximately 1200 x 1200 units.
-                    // Fit it to the existing 180-unit arena while preserving proportions.
-                    const initialBounds = new THREE.Box3().setFromObject(model);
-                    const size = initialBounds.getSize(new THREE.Vector3());
-                    const fitScale = ARENA_SIZE / Math.max(size.x, size.z, 1);
-                    model.scale.setScalar(fitScale);
-                    model.updateMatrixWorld(true);
-
-                    const fittedBounds = new THREE.Box3().setFromObject(model);
-                    const center = fittedBounds.getCenter(new THREE.Vector3());
-                    model.position.x -= center.x;
-                    model.position.z -= center.z;
-                    // Terrain in this GLB is authored with its ground surface near Y=0.
-                    model.position.y -= 1.35;
-                    model.updateMatrixWorld(true);
-
-                    model.traverse((obj) => {
-                        if (!obj.isMesh) return;
-                        obj.castShadow = true;
-                        obj.receiveShadow = true;
-
-                        const label = (obj.name || '').toLowerCase();
-                        if (label.includes('terrain') || label.includes('water')) {
-                            shootableMeshes.push(obj);
-                        } else {
-                            // Keep natural features and structures available to hit tests/AI line of sight.
-                            wallMeshes.push(obj);
-                            shootableMeshes.push(obj);
-                        }
-                    });
-
-                    mapRootGroup.add(model);
-                },
-                undefined,
-                (error) => {
-                    console.error('Could not load ./map.glb:', error);
-                    const hint = document.getElementById('pointer-lock-hint');
-                    if (hint) hint.textContent = 'MAP LOAD FAILED — put map.glb beside this HTML file and run from a local web server.';
-                }
-            );
+            const floorGeo = new THREE.PlaneGeometry(ARENA_SIZE, ARENA_SIZE);
+            const floorMat = new THREE.MeshStandardMaterial({
+                map: createThemedFloorTexture(cfg.id),
+                roughness: cfg.floorRoughness,
+                metalness: cfg.floorMetalness
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            mapRootGroup.add(floor);
+            shootableMeshes.push(floor);
 
             const wallMat = new THREE.MeshStandardMaterial({
                 map: createThemedWallTexture(cfg.id),
@@ -1969,28 +1865,17 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             addBox(-half, 7, 0, 2.5, 14, ARENA_SIZE);
             addBox(half, 7, 0, 2.5, 14, ARENA_SIZE);
 
-            // Procedurally place tactical cover, leaving a clear deployment zone.
-            let mapRand = 0x811c9dc5;
-            for (const ch of cfg.id) mapRand = Math.imul(mapRand ^ ch.charCodeAt(0), 16777619);
-            const randMap = () => {
-                mapRand += 0x6D2B79F5;
-                let z = mapRand;
-                z = Math.imul(z ^ (z >>> 15), z | 1);
-                z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
-                return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
-            };
-            for (let i = 0; i < 22; i++) {
-                const x = (randMap() - 0.5) * 126;
-                const z = (randMap() - 0.5) * 126;
-                if (Math.abs(x) < 13 && z > 35) continue;
-                const w = 3.5 + randMap() * 5.5;
-                const d = 3 + randMap() * 5;
-                const h = 2.5 + randMap() * 5.5;
-                addBox(x, h / 2, z, w, h, d, true, cfg.obstacleColor);
-            }
+            // Central Citadel & Tactical Cover Walls
+            addBox(0, 5.5, 0, 9, 11, 9, true);
+            [[-24, -24], [24, -24], [-24, 24], [24, 24]].forEach(([px, pz]) => {
+                addBox(px, 6, pz, 5.5, 12, 5.5, true);
+            });
+            // Flanking cover barricades
+            [[0, -34, 14, 4.5, 2.5], [0, 34, 14, 4.5, 2.5], [-38, 0, 2.5, 4.5, 16], [38, 0, 2.5, 4.5, 16]].forEach(([bx, bz, bw, bh, bd]) => {
+                addBox(bx, bh / 2, bz, bw, bh, bd, true, cfg.obstacleColor);
+            });
         }
 
-        // Resolve circle-vs-AABB collisions on the XZ plane so neither player nor AI can walk through walls
         function resolveHorizontalCollisions(pos, radius, feetY = 0, headY = 2.0) {
             const halfSize = ARENA_SIZE / 2 - 1.8;
             pos.x = Math.max(-halfSize, Math.min(halfSize, pos.x));
@@ -2020,7 +1905,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             }
         }
 
-        // Check if any wall blocks direct line-of-sight between point A and point B
         const losRaycaster = new THREE.Raycaster();
         function hasLineOfSight(fromPos, toPos) {
             const dir = new THREE.Vector3().subVectors(toPos, fromPos);
@@ -2063,14 +1947,12 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             bandages: 3,
             isHealing: false,
             healProgress: 0,
-            // Phase Dash ability state
             dashDuration: 0.22,
             dashTimer: 0,
             dashCooldown: 3.0,
             dashCooldownTimer: 0,
             dashSpeed: 36.0,
             dashDir: new THREE.Vector3(),
-            // 10-Second Aegis Energy Shield state
             shieldActive: false,
             shieldDuration: 10.0,
             shieldTimer: 0,
@@ -2133,6 +2015,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
 
             try { sfx.init(); sfx.playShieldActivate(); } catch (e) {}
             showToast('AEGIS SHIELD ONLINE (10.0s)', 'text-cyan-300 border-cyan-400/60');
+            if (mpSession.active) syncPlayerNetworkState();
         }
 
         function deactivateShield(startCooldown = true) {
@@ -2149,13 +2032,11 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         function updateAbilitiesHUD(dt) {
-            // Jump pips
             const jp1 = document.getElementById('jump-pip-1');
             const jp2 = document.getElementById('jump-pip-2');
             if (jp1) jp1.style.opacity = player.jumpsRemaining >= 1 ? '1' : '0.2';
             if (jp2) jp2.style.opacity = player.jumpsRemaining >= 2 ? '1' : '0.2';
 
-            // Dash cooldown & active timer
             if (player.dashTimer > 0) {
                 player.dashTimer = Math.max(0, player.dashTimer - dt);
             }
@@ -2180,7 +2061,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 }
             }
 
-            // 10s Shield active & cooldown timers
             const shieldText = document.getElementById('shield-status-text');
             const shieldBar = document.getElementById('shield-cd-bar');
             const abShield = document.getElementById('ab-shield');
@@ -2231,15 +2111,205 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         // ==========================================
-        // 7. FACTION AI COMBATANTS (ALLY, TEAM & FFA BOTS)
+        // 7. LIVE KILL FEED & SCOREBOARD SYSTEM
+        // ==========================================
+        function pushKillFeed(killerName, weaponName, victimName, isFriendlyKill = true) {
+            const container = document.getElementById('kill-feed-container');
+            if (!container) return;
+
+            const item = document.createElement('div');
+            item.className = `px-2.5 py-1 rounded-lg bg-slate-950/85 border text-[11px] font-mono-tech font-bold flex items-center gap-1.5 shadow-lg transition-opacity duration-500 ${isFriendlyKill ? 'border-sky-400/60 text-sky-200' : 'border-rose-500/60 text-rose-200'}`;
+            item.innerHTML = `
+                <span class="${isFriendlyKill ? 'text-sky-400' : 'text-rose-400'}">${killerName}</span>
+                <span class="text-slate-400 text-[10px]">[${weaponName}]</span>
+                <span class="text-white">${victimName}</span>
+            `;
+            container.prepend(item);
+
+            while (container.children.length > 4) {
+                container.removeChild(container.lastChild);
+            }
+
+            setTimeout(() => {
+                item.style.opacity = '0';
+                setTimeout(() => { if (item.parentNode) item.parentNode.removeChild(item); }, 500);
+            }, 4200);
+        }
+
+        function refreshScoreboardUI() {
+            const tbody = document.getElementById('scoreboard-body');
+            if (!tbody) return;
+
+            const rows = [];
+            const myCallsign = (document.getElementById('input-callsign')?.value || 'OPERATIVE-01').trim().toUpperCase() || 'OPERATIVE-01';
+            rows.push({
+                name: `${myCallsign} (YOU)`,
+                faction: player.team.toUpperCase(),
+                hp: Math.max(0, Math.round(player.health)),
+                kills: killsCount,
+                deaths: deathsCount,
+                status: player.health > 0 ? 'ONLINE' : 'DOWN',
+                isSelf: true,
+                isAlly: true
+            });
+
+            mpSession.remotePlayers.forEach((rp) => {
+                const st = rp.state || {};
+                const sameTeam = (selectedGameMode === '2v2' && st.team === player.team);
+                rows.push({
+                    name: `${st.callsign || 'PLAYER'} [PVP]`,
+                    faction: (st.team || 'RIVAL').toUpperCase(),
+                    hp: Math.max(0, Math.round(st.hp ?? 100)),
+                    kills: st.kills || 0,
+                    deaths: st.deaths || 0,
+                    status: (st.hp ?? 100) > 0 ? 'ONLINE' : 'RESPAWNING',
+                    isSelf: false,
+                    isAlly: sameTeam
+                });
+            });
+
+            enemies.forEach((bot) => {
+                rows.push({
+                    name: bot.botName || (bot.isAlly ? 'AEGIS-ALLY [AI]' : 'BETA-BOT [AI]'),
+                    faction: (bot.team || 'RED').toUpperCase(),
+                    hp: Math.max(0, Math.round(bot.hp)),
+                    kills: bot.kills || 0,
+                    deaths: bot.deaths || 0,
+                    status: bot.hp > 0 ? (bot.shieldActive ? 'SHIELDED' : 'ACTIVE') : 'DOWN',
+                    isSelf: false,
+                    isAlly: bot.isAlly
+                });
+            });
+
+            rows.sort((a, b) => b.kills - a.kills);
+
+            tbody.innerHTML = rows.map(r => `
+                <tr class="${r.isSelf ? 'bg-sky-950/45 text-white' : 'text-slate-200'}">
+                    <td class="py-2 px-2 font-bold ${r.isAlly ? 'text-sky-300' : 'text-rose-300'}">${r.name}</td>
+                    <td class="py-2 px-2">${r.faction}</td>
+                    <td class="py-2 px-2 text-center font-bold ${r.hp > 40 ? 'text-emerald-400' : 'text-rose-400'}">${r.hp}%</td>
+                    <td class="py-2 px-2 text-center text-sky-300 font-bold">${r.kills}</td>
+                    <td class="py-2 px-2 text-center text-slate-400">${r.deaths}</td>
+                    <td class="py-2 px-2 text-right text-[10px] ${r.isAlly ? 'text-emerald-400' : 'text-amber-300'}">${r.status}</td>
+                </tr>
+            `).join('');
+
+            const infoEl = document.getElementById('scoreboard-room-info');
+            if (infoEl) {
+                infoEl.textContent = mpSession.active
+                    ? `ROOM: ${mpSession.roomCode} // ${selectedGameMode.toUpperCase()}`
+                    : `${selectedBetaAiTier.toUpperCase()} BETA AI // ${selectedGameMode.toUpperCase()}`;
+            }
+        }
+
+        // ==========================================
+        // 8. ARTICULATED 3D EXOSUIT BUILDER (FOR REMOTE PLAYERS & BETA AI)
+        // ==========================================
+        function buildExosuitAvatar({ chassisColor, visorColor, labelText, badgeBorder, badgeText, isAlly }) {
+            const group = new THREE.Group();
+
+            const torso = new THREE.Mesh(
+                new THREE.BoxGeometry(0.92, 1.15, 0.62),
+                new THREE.MeshStandardMaterial({ color: chassisColor, metalness: 0.55, roughness: 0.35 })
+            );
+            torso.position.y = 1.05;
+            torso.castShadow = true;
+
+            const chestCore = new THREE.Mesh(
+                new THREE.BoxGeometry(0.46, 0.34, 0.66),
+                new THREE.MeshBasicMaterial({ color: visorColor })
+            );
+            chestCore.position.set(0, 1.18, 0.01);
+
+            const pauldronGeo = new THREE.BoxGeometry(0.32, 0.34, 0.56);
+            const pauldronMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 });
+            const leftShoulder = new THREE.Mesh(pauldronGeo, pauldronMat);
+            leftShoulder.position.set(-0.62, 1.42, 0);
+            const rightShoulder = new THREE.Mesh(pauldronGeo, pauldronMat);
+            rightShoulder.position.set(0.62, 1.42, 0);
+
+            const helmet = new THREE.Mesh(
+                new THREE.BoxGeometry(0.62, 0.52, 0.62),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.75, roughness: 0.25 })
+            );
+            helmet.position.y = 1.88;
+
+            const eyeGlow = new THREE.Mesh(
+                new THREE.BoxGeometry(0.50, 0.14, 0.06),
+                new THREE.MeshBasicMaterial({ color: visorColor })
+            );
+            eyeGlow.position.set(0, 1.88, 0.31);
+
+            const legGeo = new THREE.BoxGeometry(0.30, 0.55, 0.36);
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.5 });
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.24, 0.28, 0);
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.24, 0.28, 0);
+
+            const weaponHolder = new THREE.Group();
+            weaponHolder.position.set(0.56, 1.12, 0.35);
+
+            const heldRifle = new THREE.Mesh(
+                new THREE.BoxGeometry(0.10, 0.14, 0.72),
+                new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.25 })
+            );
+            const heldRifleCore = new THREE.Mesh(
+                new THREE.BoxGeometry(0.11, 0.04, 0.48),
+                new THREE.MeshBasicMaterial({ color: visorColor })
+            );
+            heldRifleCore.position.y = 0.04;
+            heldRifle.add(heldRifleCore);
+
+            const heldKnife = new THREE.Mesh(
+                new THREE.BoxGeometry(0.04, 0.08, 0.46),
+                new THREE.MeshBasicMaterial({ color: 0xfbbf24 })
+            );
+            heldKnife.visible = false;
+
+            weaponHolder.add(heldRifle, heldKnife);
+
+            const shieldDome = new THREE.Mesh(
+                new THREE.SphereGeometry(1.65, 18, 18),
+                new THREE.MeshBasicMaterial({ color: isAlly ? 0x38bdf8 : 0xf43f5e, wireframe: true, transparent: true, opacity: 0.42 })
+            );
+            shieldDome.position.y = 1.15;
+            shieldDome.visible = false;
+
+            group.add(torso, chestCore, leftShoulder, rightShoulder, helmet, eyeGlow, leftLeg, rightLeg, weaponHolder, shieldDome);
+
+            const hbBg = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.2, 0.15),
+                new THREE.MeshBasicMaterial({ color: 0x090d16, side: THREE.DoubleSide })
+            );
+            hbBg.position.y = 2.38;
+
+            const hbFg = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.12, 0.10),
+                new THREE.MeshBasicMaterial({ color: isAlly ? 0x38bdf8 : 0x22c55e, side: THREE.DoubleSide })
+            );
+            hbFg.position.set(0, 2.38, 0.01);
+            group.add(hbBg, hbFg);
+
+            if (labelText) {
+                const tagSprite = createCombatantLabelSprite(labelText, badgeText, badgeBorder);
+                tagSprite.position.set(0, 2.78, 0);
+                group.add(tagSprite);
+            }
+
+            return { group, hbFg, shieldDome, heldRifle, heldKnife };
+        }
+
+        // ==========================================
+        // 9. FACTION AI BETA v0.9 COMBATANTS
         // ==========================================
         const enemies = [];
 
         const FFA_FACTION_PALETTES = [
-            { team: 'ffa_1', name: 'CRIMSON', chassisColor: 0xf43f5e, visorColor: 0xfda4af, tracerColor: 0xf43f5e, badgeBorder: '#f43f5e', badgeText: '#fda4af' },
-            { team: 'ffa_2', name: 'AMBER',   chassisColor: 0xf59e0b, visorColor: 0xfde68a, tracerColor: 0xf59e0b, badgeBorder: '#f59e0b', badgeText: '#fde68a' },
-            { team: 'ffa_3', name: 'VIOLET',  chassisColor: 0xa855f7, visorColor: 0xe9d5ff, tracerColor: 0xc084fc, badgeBorder: '#a855f7', badgeText: '#e9d5ff' },
-            { team: 'ffa_4', name: 'EMERALD', chassisColor: 0x10b981, visorColor: 0xa7f3d0, tracerColor: 0x34d399, badgeBorder: '#10b981', badgeText: '#a7f3d0' }
+            { team: 'ffa_1', name: 'BETA-CRIMSON', chassisColor: 0xf43f5e, visorColor: 0xfda4af, tracerColor: 0xf43f5e, badgeBorder: '#f43f5e', badgeText: '#fda4af' },
+            { team: 'ffa_2', name: 'BETA-AMBER',   chassisColor: 0xf59e0b, visorColor: 0xfde68a, tracerColor: 0xf59e0b, badgeBorder: '#f59e0b', badgeText: '#fde68a' },
+            { team: 'ffa_3', name: 'BETA-VIOLET',  chassisColor: 0xa855f7, visorColor: 0xe9d5ff, tracerColor: 0xc084fc, badgeBorder: '#a855f7', badgeText: '#e9d5ff' },
+            { team: 'ffa_4', name: 'BETA-EMERALD', chassisColor: 0x10b981, visorColor: 0xa7f3d0, tracerColor: 0x34d399, badgeBorder: '#10b981', badgeText: '#a7f3d0' }
         ];
 
         function isHostileToPlayer(bot) {
@@ -2268,54 +2338,19 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             const chassisColor = options.chassisColor !== undefined ? options.chassisColor : (isAlly ? 0x0ea5e9 : 0xf43f5e);
             const visorColor = options.visorColor !== undefined ? options.visorColor : (isAlly ? 0x7dd3fc : 0x38bdf8);
             const tracerColor = options.tracerColor !== undefined ? options.tracerColor : (isAlly ? 0x38bdf8 : 0xf43f5e);
-            const labelText = options.labelText || (isAlly ? '[ALLY]' : '');
+            const botName = options.botName || (isAlly ? 'ALLY-BETA-01' : `BETA-AI-0${index + 1}`);
+            const labelText = options.labelText || (isAlly ? '[ALLY BETA]' : `[${botName}]`);
             const badgeBorder = options.badgeBorder || (isAlly ? '#38bdf8' : '#f43f5e');
             const badgeText = options.badgeText || (isAlly ? '#7dd3fc' : '#fda4af');
 
-            const group = new THREE.Group();
-
-            // Tactical Drone / Bot Chassis
-            const torso = new THREE.Mesh(
-                new THREE.BoxGeometry(0.95, 1.35, 0.75),
-                new THREE.MeshStandardMaterial({ color: chassisColor, metalness: 0.45, roughness: 0.4 })
-            );
-            torso.position.y = 0.95;
-            torso.castShadow = true;
-
-            const visor = new THREE.Mesh(
-                new THREE.BoxGeometry(0.75, 0.28, 0.65),
-                new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.7, roughness: 0.2 })
-            );
-            visor.position.y = 1.78;
-
-            const eyeGlow = new THREE.Mesh(
-                new THREE.BoxGeometry(0.56, 0.1, 0.05),
-                new THREE.MeshBasicMaterial({ color: visorColor })
-            );
-            eyeGlow.position.set(0, 1.78, 0.33);
-
-            group.add(torso, visor, eyeGlow);
-
-            // Overhead Health Bar
-            const hbBg = new THREE.Mesh(
-                new THREE.PlaneGeometry(1.1, 0.14),
-                new THREE.MeshBasicMaterial({ color: 0x090d16, side: THREE.DoubleSide })
-            );
-            hbBg.position.y = 2.25;
-
-            const hbFg = new THREE.Mesh(
-                new THREE.PlaneGeometry(1.02, 0.09),
-                new THREE.MeshBasicMaterial({ color: isAlly ? 0x38bdf8 : 0x22c55e, side: THREE.DoubleSide })
-            );
-            hbFg.position.set(0, 2.25, 0.01);
-            group.add(hbBg, hbFg);
-
-            // Floating Faction / Ally Tag Sprite
-            if (labelText) {
-                const tagSprite = createCombatantLabelSprite(labelText, badgeText, badgeBorder);
-                tagSprite.position.set(0, 2.65, 0);
-                group.add(tagSprite);
-            }
+            const avatar = buildExosuitAvatar({
+                chassisColor,
+                visorColor,
+                labelText,
+                badgeBorder,
+                badgeText,
+                isAlly
+            });
 
             let spawnPos;
             if (options.customSpawn) {
@@ -2324,29 +2359,46 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             } else {
                 spawnPos = getValidSpawnPosition(index, total);
             }
-            group.position.set(spawnPos.x, 0, spawnPos.z);
-            scene.add(group);
+            avatar.group.position.set(spawnPos.x, 0, spawnPos.z);
+            scene.add(avatar.group);
 
-            // Balanced Battle Waves stats vs Duel/Elite stats
-            const isElite = selectedOpponentType === 'human';
+            const tier = selectedBetaAiTier;
             const isBattleWaves = selectedGameMode === 'battle';
 
-            const baseHp = isBattleWaves ? Math.min(115, 75 + (currentWave - 1) * 10) : (isElite ? 120 : 100);
-            const moveSpeed = isBattleWaves ? Math.min(5.4, 3.8 + (currentWave - 1) * 0.2) : (isElite ? 5.8 : 4.9);
-            const gunDmg = isBattleWaves ? Math.min(8, 4 + Math.floor((currentWave - 1) * 0.5)) : (isElite ? 11 : 9);
-            const meleeDmg = isBattleWaves ? 9 : (isElite ? 18 : 14);
-            const shootCd = isBattleWaves ? Math.max(1.8, 2.6 - (currentWave - 1) * 0.1) : (isElite ? 1.35 : 1.75);
-            const accuracy = isBattleWaves ? Math.min(0.65, 0.40 + (currentWave - 1) * 0.03) : (isElite ? 0.68 : 0.55);
+            const baseHp = isBattleWaves
+                ? Math.min(125, 80 + (currentWave - 1) * 10)
+                : (tier === 'veteran' ? 125 : (tier === 'adaptive' ? 110 : 95));
+            const moveSpeed = isBattleWaves
+                ? Math.min(6.0, 4.2 + (currentWave - 1) * 0.22)
+                : (tier === 'veteran' ? 6.4 : (tier === 'adaptive' ? 5.6 : 4.8));
+            const gunDmg = isBattleWaves
+                ? Math.min(9, 4 + Math.floor((currentWave - 1) * 0.5))
+                : (tier === 'veteran' ? 11 : (tier === 'adaptive' ? 9 : 7));
+            const meleeDmg = isBattleWaves ? 10 : (tier === 'veteran' ? 18 : 14);
+            const shootCd = isBattleWaves
+                ? Math.max(1.6, 2.5 - (currentWave - 1) * 0.1)
+                : (tier === 'veteran' ? 1.25 : (tier === 'adaptive' ? 1.55 : 1.9));
+            const accuracy = isBattleWaves
+                ? Math.min(0.68, 0.42 + (currentWave - 1) * 0.03)
+                : (tier === 'veteran' ? 0.68 : (tier === 'adaptive' ? 0.56 : 0.45));
+
+            const canUseAbilities = (tier === 'adaptive' || tier === 'veteran' || (isBattleWaves && currentWave >= 2));
 
             enemies.push({
-                group,
-                hbFg,
+                group: avatar.group,
+                hbFg: avatar.hbFg,
+                shieldDome: avatar.shieldDome,
+                heldRifle: avatar.heldRifle,
+                heldKnife: avatar.heldKnife,
+                botName,
                 team,
                 isAlly,
                 tracerColor,
                 chassisColor,
                 hp: baseHp,
                 maxHp: baseHp,
+                kills: 0,
+                deaths: 0,
                 speed: moveSpeed,
                 radius: 0.78,
                 gunDamage: gunDmg,
@@ -2356,7 +2408,14 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 meleeCooldown: 0,
                 accuracy: accuracy,
                 strafeDir: Math.random() > 0.5 ? 1 : -1,
-                strafeTimer: 1.5 + Math.random() * 2.0
+                strafeTimer: 1.5 + Math.random() * 2.0,
+                canUseAbilities,
+                dashTimer: 0,
+                dashCooldownTimer: 1.5 + Math.random() * 2.5,
+                dashDir: new THREE.Vector3(),
+                shieldActive: false,
+                shieldTimer: 0,
+                shieldCooldownTimer: 2.0 + Math.random() * 3.0
             });
         }
 
@@ -2367,10 +2426,23 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             const allyBox = document.getElementById('hud-ally-box');
             const allyDiv = document.getElementById('hud-ally-divider');
             const enemiesLabel = document.getElementById('hud-enemies-label');
+            const netBadge = document.getElementById('hud-net-badge');
 
             if (allyBox) allyBox.classList.add('hidden');
             if (allyDiv) allyDiv.classList.add('hidden');
             if (enemiesLabel) enemiesLabel.textContent = 'Hostiles';
+
+            if (mpSession.active) {
+                if (netBadge) {
+                    netBadge.textContent = `ONLINE PVP // ${mpSession.roomCode}`;
+                    netBadge.className = 'text-[9px] font-mono-tech font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-300';
+                }
+            } else {
+                if (netBadge) {
+                    netBadge.textContent = `BETA AI // ${selectedBetaAiTier.toUpperCase()}`;
+                    netBadge.className = 'text-[9px] font-mono-tech font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/50 text-amber-300';
+                }
+            }
 
             if (selectedGameMode === 'battle') {
                 player.team = 'blue';
@@ -2378,9 +2450,13 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 startWave(1);
             } else if (selectedGameMode === '1v1') {
                 player.team = 'blue';
-                document.getElementById('hud-mode-title').textContent = '1v1 DUEL';
-                spawnCombatantAI(0, 1, { team: 'red', labelText: '[RIVAL]' });
-                showWaveBanner('1v1 DUEL // ELIMINATE OPPONENT');
+                document.getElementById('hud-mode-title').textContent = mpSession.active ? '1v1 PVP DUEL' : '1v1 BETA DUEL';
+                if (!mpSession.active) {
+                    spawnCombatantAI(0, 1, { team: 'red', botName: 'BETA-RIVAL-01', labelText: '[BETA RIVAL]' });
+                    showWaveBanner('1v1 BETA DUEL // ELIMINATE OPPONENT');
+                } else {
+                    showWaveBanner(`1v1 PVP ROOM ${mpSession.roomCode} // READY`);
+                }
             } else if (selectedGameMode === '2v2') {
                 player.team = 'blue';
                 document.getElementById('hud-mode-title').textContent = '2v2 TEAM CLASH';
@@ -2388,45 +2464,51 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 if (allyDiv) allyDiv.classList.remove('hidden');
                 if (enemiesLabel) enemiesLabel.textContent = 'Red Team';
 
-                // Spawn Allied AI Teammate near player on Blue Team
-                spawnCombatantAI(0, 1, {
-                    team: 'blue',
-                    customSpawn: new THREE.Vector3(6, 0, 58),
-                    chassisColor: 0x0ea5e9,
-                    visorColor: 0x7dd3fc,
-                    tracerColor: 0x38bdf8,
-                    labelText: '[ALLY]',
-                    badgeBorder: '#38bdf8',
-                    badgeText: '#7dd3fc'
-                });
-
-                // Spawn 2 Enemy AI Combatants on Red Team
-                spawnCombatantAI(0, 2, { team: 'red', labelText: '[RED 01]' });
-                spawnCombatantAI(1, 2, { team: 'red', labelText: '[RED 02]' });
-
-                updateAllyStatusHUD();
-                showWaveBanner('2v2 CLASH // ALLY BOT DEPLOYED');
+                if (!mpSession.active) {
+                    spawnCombatantAI(0, 1, {
+                        team: 'blue',
+                        botName: 'ALLY-BETA-01',
+                        customSpawn: new THREE.Vector3(6, 0, 58),
+                        chassisColor: 0x0ea5e9,
+                        visorColor: 0x7dd3fc,
+                        tracerColor: 0x38bdf8,
+                        labelText: '[ALLY BETA]',
+                        badgeBorder: '#38bdf8',
+                        badgeText: '#7dd3fc'
+                    });
+                    spawnCombatantAI(0, 2, { team: 'red', botName: 'BETA-RED-01', labelText: '[BETA RED 01]' });
+                    spawnCombatantAI(1, 2, { team: 'red', botName: 'BETA-RED-02', labelText: '[BETA RED 02]' });
+                    updateAllyStatusHUD();
+                    showWaveBanner('2v2 BETA CLASH // ALLY DEPLOYED');
+                } else {
+                    showWaveBanner(`2v2 PVP ROOM ${mpSession.roomCode} // SQUAD ACTIVE`);
+                }
             } else if (selectedGameMode === 'ffa') {
-                player.team = 'player';
+                player.team = 'player_' + netRelay.uid;
                 document.getElementById('hud-mode-title').textContent = '5-PLAYER FFA';
                 if (enemiesLabel) enemiesLabel.textContent = 'Rivals Alive';
 
-                // Spawn 4 independent AI bots on unique FFA teams so they fight each other AND the player
-                for (let i = 0; i < 4; i++) {
-                    const pal = FFA_FACTION_PALETTES[i];
-                    spawnCombatantAI(i, 4, {
-                        team: pal.team,
-                        chassisColor: pal.chassisColor,
-                        visorColor: pal.visorColor,
-                        tracerColor: pal.tracerColor,
-                        labelText: `[${pal.name}]`,
-                        badgeBorder: pal.badgeBorder,
-                        badgeText: pal.badgeText
-                    });
+                if (!mpSession.active) {
+                    for (let i = 0; i < 4; i++) {
+                        const pal = FFA_FACTION_PALETTES[i];
+                        spawnCombatantAI(i, 4, {
+                            team: pal.team,
+                            botName: pal.name,
+                            chassisColor: pal.chassisColor,
+                            visorColor: pal.visorColor,
+                            tracerColor: pal.tracerColor,
+                            labelText: `[${pal.name}]`,
+                            badgeBorder: pal.badgeBorder,
+                            badgeText: pal.badgeText
+                        });
+                    }
+                    showWaveBanner('5-PLAYER BETA FFA // ALL COMBATANTS HOSTILE');
+                } else {
+                    showWaveBanner(`5-PLAYER FFA ROOM ${mpSession.roomCode} // FREE FOR ALL`);
                 }
-                showWaveBanner('5-PLAYER FFA // ALL COMBATANTS HOSTILE');
             }
             updateEnemiesHUD();
+            refreshScoreboardUI();
         }
 
         function startWave(waveNum) {
@@ -2434,10 +2516,11 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             document.getElementById('hud-mode-title').textContent = `WAVE ${String(waveNum).padStart(2, '0')}`;
             const count = Math.min(8, 2 + waveNum);
             for (let i = 0; i < count; i++) {
-                spawnCombatantAI(i, count, { team: 'red' });
+                spawnCombatantAI(i, count, { team: 'red', botName: `BETA-W${waveNum}-0${i + 1}` });
             }
             updateEnemiesHUD();
-            showWaveBanner(`WAVE ${String(waveNum).padStart(2, '0')} // ${count} DRONES DEPLOYED`);
+            refreshScoreboardUI();
+            showWaveBanner(`WAVE ${String(waveNum).padStart(2, '0')} // ${count} BETA DRONES DEPLOYED`);
         }
 
         function showWaveBanner(text) {
@@ -2454,7 +2537,186 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         // ==========================================
-        // 8. WEAPONS, SCOPE & HOTBAR SCROLLING
+        // 10. MULTIPLAYER REMOTE AVATAR & PACKET HANDLER
+        // ==========================================
+        function getOrCreateRemoteAvatar(uid, state) {
+            if (mpSession.remotePlayers.has(uid)) {
+                return mpSession.remotePlayers.get(uid);
+            }
+            const isTeammate = (selectedGameMode === '2v2' && state.team === player.team);
+            const avatar = buildExosuitAvatar({
+                chassisColor: isTeammate ? 0x0ea5e9 : 0xf43f5e,
+                visorColor: isTeammate ? 0x7dd3fc : 0xfda4af,
+                labelText: `[${state.callsign || 'PLAYER'}]`,
+                badgeBorder: isTeammate ? '#38bdf8' : '#f43f5e',
+                badgeText: isTeammate ? '#7dd3fc' : '#fda4af',
+                isAlly: isTeammate
+            });
+            avatar.group.position.set(state.x || 0, Math.max(0, (state.y || 1.8) - 1.8), state.z || -62);
+            scene.add(avatar.group);
+
+            const entry = {
+                uid,
+                state,
+                group: avatar.group,
+                hbFg: avatar.hbFg,
+                shieldDome: avatar.shieldDome,
+                heldRifle: avatar.heldRifle,
+                heldKnife: avatar.heldKnife,
+                targetPos: avatar.group.position.clone(),
+                targetYaw: state.yaw || 0,
+                lastSeen: Date.now()
+            };
+            mpSession.remotePlayers.set(uid, entry);
+            showToast(`${state.callsign || 'OPERATIVE'} ENTERED ARENA`, 'text-emerald-300 border-emerald-400/60');
+            updateEnemiesHUD();
+            refreshScoreboardUI();
+            return entry;
+        }
+
+        function removeRemoteAvatar(uid) {
+            const entry = mpSession.remotePlayers.get(uid);
+            if (!entry) return;
+            scene.remove(entry.group);
+            mpSession.remotePlayers.delete(uid);
+            updateEnemiesHUD();
+            refreshScoreboardUI();
+        }
+
+        function clearAllRemoteAvatars() {
+            mpSession.remotePlayers.forEach((entry) => {
+                scene.remove(entry.group);
+            });
+            mpSession.remotePlayers.clear();
+        }
+
+        netRelay.onMessageHandler = (msg) => {
+            if (!mpSession.active || !mpSession.roomCode) return;
+            if (msg.roomCode !== mpSession.roomCode) return;
+
+            const peerUid = msg.sender;
+            const roomTopic = `aegis_fps/v2/room/${mpSession.roomCode}`;
+
+            if (msg.type === 'HELLO') {
+                mpSession.lobbyPeers.set(peerUid, {
+                    uid: peerUid,
+                    callsign: msg.callsign || 'OPERATIVE',
+                    isHost: !!msg.isHost,
+                    lastSeen: Date.now()
+                });
+                updateLobbyRosterUI();
+
+                // Reply with HELLO_ACK so the newcomer immediately sees us in their lobby roster
+                netRelay.publish(roomTopic, {
+                    type: 'HELLO_ACK',
+                    roomCode: mpSession.roomCode,
+                    callsign: mpSession.callsign,
+                    isHost: mpSession.isHost
+                });
+
+                if (gameState === 'PLAYING') {
+                    syncPlayerNetworkState();
+                }
+            } else if (msg.type === 'HELLO_ACK') {
+                mpSession.lobbyPeers.set(peerUid, {
+                    uid: peerUid,
+                    callsign: msg.callsign || 'OPERATIVE',
+                    isHost: !!msg.isHost,
+                    lastSeen: Date.now()
+                });
+                updateLobbyRosterUI();
+            } else if (msg.type === 'PLAYER_STATE') {
+                mpSession.lobbyPeers.set(peerUid, {
+                    uid: peerUid,
+                    callsign: msg.callsign || 'OPERATIVE',
+                    isHost: !!msg.isHost,
+                    lastSeen: Date.now()
+                });
+                updateLobbyRosterUI();
+
+                const entry = getOrCreateRemoteAvatar(peerUid, msg);
+                entry.state = msg;
+                entry.lastSeen = Date.now();
+                entry.targetPos.set(msg.x || 0, Math.max(0, (msg.y || 1.8) - 1.8), msg.z || 0);
+                entry.targetYaw = (msg.yaw || 0) + Math.PI;
+
+                const hpPct = Math.max(0.01, Math.min(1, (msg.hp ?? 100) / 100));
+                entry.hbFg.scale.x = hpPct;
+                entry.group.visible = (msg.hp ?? 100) > 0;
+                entry.shieldDome.visible = !!msg.shieldActive;
+                entry.heldRifle.visible = (msg.slot ?? 0) === 0;
+                entry.heldKnife.visible = (msg.slot ?? 0) === 1;
+                refreshScoreboardUI();
+            } else if (msg.type === 'PLAYER_LEAVE') {
+                mpSession.lobbyPeers.delete(peerUid);
+                updateLobbyRosterUI();
+                removeRemoteAvatar(peerUid);
+            } else if (msg.type === 'SHOT_TRACER') {
+                const start = new THREE.Vector3(msg.sx, msg.sy, msg.sz);
+                const end = new THREE.Vector3(msg.ex, msg.ey, msg.ez);
+                spawnTracer(start, end, msg.color || 0xf43f5e);
+            } else if (msg.type === 'HIT_PLAYER' && msg.targetUid === netRelay.uid) {
+                if (gameState !== 'PLAYING') return;
+                if (player.shieldActive) {
+                    try { sfx.playShieldBlock(); } catch (e) {}
+                    netRelay.publish(roomTopic, {
+                        type: 'SHIELD_BLOCKED',
+                        roomCode: mpSession.roomCode,
+                        targetUid: peerUid
+                    });
+                    return;
+                }
+                const prevHp = player.health;
+                applyPlayerDamage(msg.damage || 34);
+                if (prevHp > 0 && player.health <= 0) {
+                    deathsCount++;
+                    netRelay.publish(roomTopic, {
+                        type: 'PLAYER_ELIMINATED',
+                        roomCode: mpSession.roomCode,
+                        killerUid: peerUid,
+                        killerName: msg.killerName || 'RIVAL',
+                        victimName: mpSession.callsign,
+                        weaponName: msg.weaponName || 'V-9 PULSE'
+                    });
+                }
+            } else if (msg.type === 'SHIELD_BLOCKED' && msg.targetUid === netRelay.uid) {
+                showToast('TARGET AEGIS SHIELD BLOCKED SHOT', 'text-cyan-300 border-cyan-400/60');
+            } else if (msg.type === 'PLAYER_ELIMINATED') {
+                pushKillFeed(msg.killerName || 'RIVAL', msg.weaponName || 'V-9 PULSE', msg.victimName || 'OPERATIVE', msg.killerUid === netRelay.uid);
+                if (msg.killerUid === netRelay.uid) {
+                    killsCount++;
+                    score += 250;
+                    document.getElementById('hud-score').textContent = String(score).padStart(6, '0');
+                    showToast(`ELIMINATED ${msg.victimName} (+250)`, 'text-emerald-300 border-emerald-400/60');
+                }
+                refreshScoreboardUI();
+            }
+        };
+
+        function syncPlayerNetworkState() {
+            if (!mpSession.active || !mpSession.roomCode) return;
+            const roomTopic = `aegis_fps/v2/room/${mpSession.roomCode}`;
+            netRelay.publish(roomTopic, {
+                type: 'PLAYER_STATE',
+                roomCode: mpSession.roomCode,
+                callsign: mpSession.callsign,
+                isHost: mpSession.isHost,
+                team: player.team,
+                x: Number(player.pos.x.toFixed(2)),
+                y: Number(player.pos.y.toFixed(2)),
+                z: Number(player.pos.z.toFixed(2)),
+                yaw: Number(player.yaw.toFixed(3)),
+                pitch: Number(player.pitch.toFixed(3)),
+                hp: Math.round(player.health),
+                slot: player.activeSlot,
+                shieldActive: player.shieldActive,
+                kills: killsCount,
+                deaths: deathsCount
+            });
+        }
+
+        // ==========================================
+        // 11. WEAPONS, SCOPE & HOTBAR SCROLLING
         // ==========================================
         function initAmmoPips() {
             const container = document.getElementById('ammo-pips');
@@ -2488,7 +2750,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             if (isRmbDown) {
                 if (scopeOverlay) scopeOverlay.classList.remove('hidden');
                 viewmodelRoot.visible = false;
-                camera.fov = 22; // 3.5x zoom
+                camera.fov = 22;
             } else {
                 if (scopeOverlay) scopeOverlay.classList.add('hidden');
                 viewmodelRoot.visible = true;
@@ -2573,7 +2835,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             updateAmmoHUD();
             try { sfx.init(); sfx.playShoot(); } catch (e) {}
 
-            // Recoil kick
             viewmodelRoot.position.z = BASE_VIEWMODEL_POSITIONS[0].z + 0.05;
             muzzleLight.intensity = 3.5;
             muzzleFlashMesh.material.opacity = 0.9;
@@ -2587,15 +2848,28 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             raycaster.far = 140;
 
-            const targets = shootableMeshes.concat(enemies.map(en => en.group));
+            const remoteGroups = Array.from(mpSession.remotePlayers.values()).map(rp => rp.group);
+            const targets = shootableMeshes.concat(enemies.map(en => en.group), remoteGroups);
             const intersects = raycaster.intersectObjects(targets, true);
 
             const muzzleWorld = new THREE.Vector3(0.22, -0.18, -0.85).applyMatrix4(camera.matrixWorld);
             if (isRmbDown) muzzleWorld.copy(camera.position).add(new THREE.Vector3(0, -0.12, -0.5).applyQuaternion(camera.quaternion));
 
+            let endTracerPoint = new THREE.Vector3(0, 0, -140).applyMatrix4(camera.matrixWorld);
+
             if (intersects.length > 0) {
                 const hit = intersects[0];
+                endTracerPoint = hit.point.clone();
                 spawnTracer(muzzleWorld, hit.point, 0x38bdf8);
+
+                let hitRemote = null;
+                mpSession.remotePlayers.forEach((rp) => {
+                    let obj = hit.object;
+                    while (obj) {
+                        if (obj === rp.group) { hitRemote = rp; break; }
+                        obj = obj.parent;
+                    }
+                });
 
                 const botHit = enemies.find(en => {
                     let obj = hit.object;
@@ -2606,13 +2880,44 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                     return false;
                 });
 
-                if (botHit) {
+                if (hitRemote) {
+                    const sameTeam = (selectedGameMode === '2v2' && hitRemote.state?.team === player.team);
+                    if (sameTeam) {
+                        showToast('FRIENDLY FIRE BLOCKED // SQUADMATES', 'text-sky-300 border-sky-400/50');
+                        spawnExplosion(hit.point, 0x38bdf8, 3, 0.25);
+                    } else if (hitRemote.state?.shieldActive) {
+                        try { sfx.playShieldBlock(); } catch (e) {}
+                        showToast('ENEMY AEGIS SHIELD BLOCKED SHOT', 'text-cyan-300 border-cyan-400/60');
+                        spawnExplosion(hit.point, 0x38bdf8, 6, 0.45);
+                    } else {
+                        const dmg = isRmbDown ? 50 : 34;
+                        weaponHits++;
+                        document.getElementById('hud-gun-score').textContent = weaponHits;
+                        try { sfx.playHitmarker(); } catch (e) {}
+                        showHitmarker();
+                        spawnExplosion(hit.point, 0xf43f5e, 6, 0.45);
+
+                        if (mpSession.active && mpSession.roomCode) {
+                            netRelay.publish(`aegis_fps/v2/room/${mpSession.roomCode}`, {
+                                type: 'HIT_PLAYER',
+                                roomCode: mpSession.roomCode,
+                                targetUid: hitRemote.uid,
+                                damage: dmg,
+                                killerName: mpSession.callsign,
+                                weaponName: isRmbDown ? 'V-9 OPTIC' : 'V-9 PULSE'
+                            });
+                        }
+                    }
+                } else if (botHit) {
                     if (!isHostileToPlayer(botHit)) {
-                        // Friendly fire disabled for AI teammate
                         showToast('FRIENDLY FIRE BLOCKED // ALLY', 'text-sky-300 border-sky-400/50');
                         spawnExplosion(hit.point, 0x38bdf8, 3, 0.25);
+                    } else if (botHit.shieldActive) {
+                        try { sfx.playShieldBlock(); } catch (e) {}
+                        showToast('BETA AI AEGIS SHIELD BLOCKED SHOT', 'text-cyan-300 border-cyan-400/60');
+                        spawnExplosion(hit.point, 0x38bdf8, 6, 0.45);
                     } else {
-                        const dmg = isRmbDown ? 50 : 34; // Precision scope bonus
+                        const dmg = isRmbDown ? 50 : 34;
                         weaponHits++;
                         document.getElementById('hud-gun-score').textContent = weaponHits;
                         try { sfx.playHitmarker(); } catch (e) {}
@@ -2623,8 +2928,21 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                     spawnExplosion(hit.point, 0x38bdf8, 3, 0.25);
                 }
             } else {
-                const endPoint = new THREE.Vector3(0, 0, -140).applyMatrix4(camera.matrixWorld);
-                spawnTracer(muzzleWorld, endPoint, 0x38bdf8);
+                spawnTracer(muzzleWorld, endTracerPoint, 0x38bdf8);
+            }
+
+            if (mpSession.active && mpSession.roomCode) {
+                netRelay.publish(`aegis_fps/v2/room/${mpSession.roomCode}`, {
+                    type: 'SHOT_TRACER',
+                    roomCode: mpSession.roomCode,
+                    sx: Number(muzzleWorld.x.toFixed(2)),
+                    sy: Number(muzzleWorld.y.toFixed(2)),
+                    sz: Number(muzzleWorld.z.toFixed(2)),
+                    ex: Number(endTracerPoint.x.toFixed(2)),
+                    ey: Number(endTracerPoint.y.toFixed(2)),
+                    ez: Number(endTracerPoint.z.toFixed(2)),
+                    color: 0x38bdf8
+                });
             }
 
             if (player.ammo === 0) {
@@ -2644,23 +2962,62 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             }, 150);
 
             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const en = enemies[i];
-                if (!isHostileToPlayer(en)) continue; // Never slash allied AI teammate
+                if (!isHostileToPlayer(en)) continue;
                 const enemyCenter = en.group.position.clone().add(new THREE.Vector3(0, 1.1, 0));
                 const toEnemy = new THREE.Vector3().subVectors(enemyCenter, camera.position);
                 const dist = toEnemy.length();
                 if (dist <= 4.2) {
                     toEnemy.normalize();
                     if (forward.dot(toEnemy) > 0.6 && hasLineOfSight(camera.position, enemyCenter)) {
-                        weaponHits++;
-                        document.getElementById('hud-gun-score').textContent = weaponHits;
-                        try { sfx.playKnifeImpact(); } catch (e) {}
-                        showHitmarker();
-                        damageCombatantBot(en, 65, enemyCenter, 'player', 0xfbbf24);
+                        if (en.shieldActive) {
+                            try { sfx.playShieldBlock(); } catch (e) {}
+                            showToast('BETA AI SHIELD BLOCKED SLASH', 'text-cyan-300 border-cyan-400/60');
+                        } else {
+                            weaponHits++;
+                            document.getElementById('hud-gun-score').textContent = weaponHits;
+                            try { sfx.playKnifeImpact(); } catch (e) {}
+                            showHitmarker();
+                            damageCombatantBot(en, 65, enemyCenter, 'player', 0xfbbf24);
+                        }
                     }
                 }
             }
+
+            mpSession.remotePlayers.forEach((rp) => {
+                const sameTeam = (selectedGameMode === '2v2' && rp.state?.team === player.team);
+                if (sameTeam || (rp.state?.hp ?? 100) <= 0) return;
+                const targetCenter = rp.group.position.clone().add(new THREE.Vector3(0, 1.1, 0));
+                const toTarget = new THREE.Vector3().subVectors(targetCenter, camera.position);
+                const dist = toTarget.length();
+                if (dist <= 4.2) {
+                    toTarget.normalize();
+                    if (forward.dot(toTarget) > 0.6 && hasLineOfSight(camera.position, targetCenter)) {
+                        if (rp.state?.shieldActive) {
+                            try { sfx.playShieldBlock(); } catch (e) {}
+                            showToast('SHIELD BLOCKED SLASH', 'text-cyan-300 border-cyan-400/60');
+                        } else {
+                            weaponHits++;
+                            document.getElementById('hud-gun-score').textContent = weaponHits;
+                            try { sfx.playKnifeImpact(); } catch (e) {}
+                            showHitmarker();
+                            spawnExplosion(targetCenter, 0xfbbf24, 6, 0.5);
+                            if (mpSession.active && mpSession.roomCode) {
+                                netRelay.publish(`aegis_fps/v2/room/${mpSession.roomCode}`, {
+                                    type: 'HIT_PLAYER',
+                                    roomCode: mpSession.roomCode,
+                                    targetUid: rp.uid,
+                                    damage: 65,
+                                    killerName: mpSession.callsign,
+                                    weaponName: 'TAC KNIFE'
+                                });
+                            }
+                        }
+                    }
+                }
+            });
         }
 
         function startBandageHeal() {
@@ -2707,18 +3064,24 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             pickups.push({ mesh, life: 25.0 });
         }
 
-        function damageCombatantBot(bot, amount, impactPos = null, attackerType = 'player', sparkColor = null) {
+        function damageCombatantBot(bot, amount, impactPos = null, attackerType = 'player', sparkColor = null, attackerName = null) {
             if (!bot || bot.hp <= 0) return;
+            if (bot.shieldActive) {
+                try { sfx.playShieldBlock(); } catch (e) {}
+                const hitPos = impactPos || bot.group.position.clone().add(new THREE.Vector3(0, 1.1, 0));
+                spawnExplosion(hitPos, 0x38bdf8, 5, 0.4);
+                return;
+            }
             bot.hp -= amount;
             updateEnemyHealthBar(bot);
             const hitPos = impactPos || bot.group.position.clone().add(new THREE.Vector3(0, 1.1, 0));
             spawnExplosion(hitPos, sparkColor || bot.chassisColor || 0xf43f5e, 5, 0.4);
             if (bot.hp <= 0) {
-                destroyEnemy(bot, attackerType);
+                destroyEnemy(bot, attackerType, attackerName);
             }
         }
 
-        function destroyEnemy(en, killerType = 'player') {
+        function destroyEnemy(en, killerType = 'player', killerName = null) {
             const idx = enemies.indexOf(en);
             if (idx === -1) return;
             enemies.splice(idx, 1);
@@ -2736,32 +3099,37 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 killsCount++;
                 if (killerType === 'player') {
                     score += 200;
+                    pushKillFeed(mpSession.callsign, isRmbDown ? 'V-9 OPTIC' : 'V-9 PULSE', en.botName || 'BETA-BOT', true);
                 } else if (killerType === 'ally') {
                     score += 150;
-                    showToast('ALLY AI ELIMINATED HOSTILE (+150)', 'text-sky-300 border-sky-400/50');
-                } else if (selectedGameMode === 'ffa') {
-                    showToast('FFA RIVAL ELIMINATED BY BOT', 'text-amber-300 border-amber-400/50');
+                    pushKillFeed(killerName || 'ALLY-BETA', 'V-9 PULSE', en.botName || 'BETA-BOT', true);
+                } else {
+                    pushKillFeed(killerName || 'BETA-BOT', 'V-9 PULSE', en.botName || 'BETA-BOT', false);
                 }
                 document.getElementById('hud-score').textContent = String(score).padStart(6, '0');
             } else if (wasAlly) {
-                showToast('WARNING: ALLY AI BOT DOWN!', 'text-rose-300 border-rose-500/60');
+                pushKillFeed(killerName || 'BETA-BOT', 'V-9 PULSE', en.botName || 'ALLY-BETA', false);
+                showToast('WARNING: ALLY BETA BOT DOWN!', 'text-rose-300 border-rose-500/60');
             }
 
             scene.remove(en.group);
             updateEnemiesHUD();
             updateAllyStatusHUD();
+            refreshScoreboardUI();
 
             const remainingHostiles = enemies.filter(b => isHostileToPlayer(b)).length;
 
-            if (selectedGameMode !== 'battle' && remainingHostiles === 0) {
-                setTimeout(() => triggerVictory(), 900);
-            } else if (selectedGameMode === 'battle' && remainingHostiles === 0) {
-                setTimeout(() => startWave(currentWave + 1), 1400);
+            if (!mpSession.active) {
+                if (selectedGameMode !== 'battle' && remainingHostiles === 0) {
+                    setTimeout(() => triggerVictory(), 900);
+                } else if (selectedGameMode === 'battle' && remainingHostiles === 0) {
+                    setTimeout(() => startWave(currentWave + 1), 1400);
+                }
             }
         }
 
         // ==========================================
-        // 9. SCREENS, PAUSE & SETTINGS CONTROLLERS
+        // 12. SCREENS, PAUSE & SETTINGS CONTROLLERS
         // ==========================================
         function triggerVictory() {
             gameState = 'GAMEOVER';
@@ -2824,8 +3192,19 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         function returnToMainHub() {
-            gameState = 'START';
-            isMouseDown = false;
+            if (mpSession.active && mpSession.roomCode) {
+                netRelay.publish(`aegis_fps/v2/room/${mpSession.roomCode}`, {
+                    type: 'PLAYER_LEAVE',
+                    roomCode: mpSession.roomCode
+                });
+            }
+            mpSession.active = false;
+            mpSession.roomCode = '';
+            mpSession.lobbyPeers.clear();
+            clearAllRemoteAvatars();
+            updateLobbyRosterUI();
+            document.getElementById('hud-room-pill').classList.add('hidden');
+            document.getElementById('pause-room-label').classList.add('hidden');
             setScopeActive(false);
             deactivateShield(false);
             sfx.stopMusic();
@@ -2835,6 +3214,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             document.getElementById('gameover-screen').classList.add('hidden');
             document.getElementById('settings-screen').classList.add('hidden');
             document.getElementById('start-screen').classList.remove('hidden');
+            gameState = 'START';
             renderMapSelectors();
         }
 
@@ -2868,9 +3248,13 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         // ==========================================
-        // 10. INPUT LISTENERS (KEYS, SCROLL WHEEL, SCOPE, SETTINGS)
+        // 13. INPUT LISTENERS (KEYS, TAB SCOREBOARD, SCROLL WHEEL, SCOPE, SETTINGS)
         // ==========================================
         window.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                return;
+            }
+
             if (listeningForAction) {
                 e.preventDefault();
                 if (e.code !== 'Escape') {
@@ -2878,6 +3262,15 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 }
                 listeningForAction = null;
                 refreshKeybindUI();
+                return;
+            }
+
+            if (e.code === 'Tab') {
+                if (gameState === 'PLAYING') {
+                    e.preventDefault();
+                    refreshScoreboardUI();
+                    document.getElementById('scoreboard-overlay').classList.remove('hidden');
+                }
                 return;
             }
 
@@ -2936,7 +3329,16 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         });
 
         window.addEventListener('keyup', (e) => {
+            if (e.code === 'Tab') {
+                document.getElementById('scoreboard-overlay').classList.add('hidden');
+            }
             keys[e.code] = false;
+        });
+
+        document.getElementById('btn-hud-scoreboard').addEventListener('click', () => {
+            const sb = document.getElementById('scoreboard-overlay');
+            refreshScoreboardUI();
+            sb.classList.toggle('hidden');
         });
 
         window.addEventListener('wheel', (e) => {
@@ -3004,6 +3406,16 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             player.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, player.pitch));
         });
 
+        document.getElementById('btn-copy-room').addEventListener('click', () => {
+            const input = document.getElementById('input-room-code');
+            if (!input) return;
+            input.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            const btn = document.getElementById('btn-copy-room');
+            btn.textContent = 'COPIED!';
+            setTimeout(() => { btn.textContent = 'COPY CODE'; }, 1500);
+        });
+
         document.getElementById('btn-settings-start').addEventListener('click', () => openSettings('START'));
         document.getElementById('btn-settings-pause').addEventListener('click', () => openSettings('PAUSED'));
         document.getElementById('btn-close-settings').addEventListener('click', closeSettings);
@@ -3028,10 +3440,35 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         });
 
         // ==========================================
-        // 11. DEPLOY & START GAME
+        // 14. DEPLOY & START GAME (BETA AI OR ONLINE PVP ROOM)
         // ==========================================
         function startPlay() {
             try { sfx.init(); } catch (e) {}
+
+            mpSession.callsign = (document.getElementById('input-callsign')?.value || 'OPERATIVE-01').trim().toUpperCase() || 'OPERATIVE-01';
+
+            if (selectedBattleSystem === 'pvp') {
+                let code = (document.getElementById('input-room-code')?.value || '').trim().toUpperCase();
+                if (!code) {
+                    code = generateRoomCode();
+                    document.getElementById('input-room-code').value = code;
+                }
+                if (!mpSession.active || mpSession.roomCode !== code) {
+                    connectToMultiplayerRoom(code, false);
+                }
+
+                document.getElementById('hud-room-pill').classList.remove('hidden');
+                document.getElementById('hud-room-code-text').textContent = `CONNECTED TO ROOM: ${code} (${mpSession.callsign})`;
+                const pauseRoomEl = document.getElementById('pause-room-label');
+                pauseRoomEl.classList.remove('hidden');
+                pauseRoomEl.textContent = `CONNECTED TO ROOM: ${code}`;
+            } else {
+                clearAllRemoteAvatars();
+                mpSession.active = false;
+                document.getElementById('hud-room-pill').classList.add('hidden');
+                document.getElementById('pause-room-label').classList.add('hidden');
+            }
+
             buildArena(selectedMapId);
 
             document.getElementById('start-screen').classList.add('hidden');
@@ -3042,9 +3479,14 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
 
             gameState = 'PLAYING';
             const spawn = currentMapConfig.playerSpawn || [0, 1.8, 62];
-            player.pos.set(spawn[0], spawn[1], spawn[2]);
+            if (mpSession.active && !mpSession.isHost) {
+                player.pos.set(0, 1.8, -62);
+                player.yaw = Math.PI;
+            } else {
+                player.pos.set(spawn[0], spawn[1], spawn[2]);
+                player.yaw = 0;
+            }
             player.vel.set(0, 0, 0);
-            player.yaw = 0;
             player.pitch = 0;
             player.health = player.maxHealth;
             player.ammo = player.maxAmmo;
@@ -3061,6 +3503,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             score = 0;
             weaponHits = 0;
             killsCount = 0;
+            deathsCount = 0;
             document.getElementById('hud-score').textContent = '000000';
             document.getElementById('hud-gun-score').textContent = '0';
 
@@ -3072,6 +3515,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             updateAmmoHUD();
             updateHotbarUI(0);
             setupModeMatches();
+            if (mpSession.active) syncPlayerNetworkState();
             try { sfx.startMusic(); } catch (e) {}
 
             try {
@@ -3083,13 +3527,12 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         // ==========================================
-        // 12. AI TARGET ACQUISITION HELPER (PLAYER + ALL BOTS)
+        // 15. AI TARGET ACQUISITION HELPER
         // ==========================================
         function findBestTargetForAI(bot) {
             const botEyePos = bot.group.position.clone().add(new THREE.Vector3(0, 1.45, 0));
             const candidates = [];
 
-            // 1. Consider Player if on a different team
             if (player.health > 0 && player.team !== bot.team) {
                 const dist = bot.group.position.distanceTo(player.pos);
                 const los = hasLineOfSight(botEyePos, player.pos);
@@ -3103,7 +3546,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 });
             }
 
-            // 2. Consider every other living AI bot on a different team
             for (let j = 0; j < enemies.length; j++) {
                 const other = enemies[j];
                 if (other === bot || other.hp <= 0 || other.team === bot.team) continue;
@@ -3122,7 +3564,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
 
             if (candidates.length === 0) return null;
 
-            // Prioritize targets with direct Line-Of-Sight, breaking ties by closest distance
             candidates.sort((a, b) => {
                 if (a.los !== b.los) return a.los ? -1 : 1;
                 return a.dist - b.dist;
@@ -3132,7 +3573,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         // ==========================================
-        // 13. MAIN SIMULATION LOOP & SCOPE/CROSSHAIR RANGE CHECK
+        // 16. MAIN SIMULATION LOOP & SCOPE/CROSSHAIR RANGE CHECK
         // ==========================================
         const aimRaycaster = new THREE.Raycaster();
 
@@ -3218,6 +3659,29 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             camera.position.copy(player.pos);
             camera.rotation.set(player.pitch, player.yaw, 0);
 
+            // Network Sync Tick (20Hz) & Smooth Remote Player Interpolation
+            if (mpSession.active) {
+                mpSession.syncTimer += dt;
+                if (mpSession.syncTimer >= mpSession.syncInterval) {
+                    mpSession.syncTimer = 0;
+                    syncPlayerNetworkState();
+                }
+
+                const now = Date.now();
+                mpSession.remotePlayers.forEach((rp, uid) => {
+                    if (now - rp.lastSeen > 18000) {
+                        removeRemoteAvatar(uid);
+                        return;
+                    }
+                    rp.group.position.lerp(rp.targetPos, Math.min(1, dt * 14));
+                    rp.group.rotation.y = rp.targetYaw;
+                    rp.hbFg.lookAt(camera.position);
+                    if (rp.shieldDome.visible) {
+                        rp.shieldDome.rotation.y += dt * 1.5;
+                    }
+                });
+            }
+
             // =================================================================
             // SCOPE & CROSSHAIR RANGE DETECTION (BLUE -> RED ON HOSTILES ONLY)
             // =================================================================
@@ -3229,10 +3693,11 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             let enemyInRangeUnderAim = false;
             let detectedDistance = 0;
 
-            if (maxDamageRange > 0 && enemies.length > 0) {
+            const remoteGroups = Array.from(mpSession.remotePlayers.values()).map(rp => rp.group);
+            if (maxDamageRange > 0 && (enemies.length > 0 || remoteGroups.length > 0)) {
                 aimRaycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
                 aimRaycaster.far = maxDamageRange;
-                const checkObjects = wallMeshes.concat(enemies.map(en => en.group));
+                const checkObjects = wallMeshes.concat(enemies.map(en => en.group), remoteGroups);
                 const hits = aimRaycaster.intersectObjects(checkObjects, true);
 
                 if (hits.length > 0) {
@@ -3246,7 +3711,19 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                         return false;
                     });
 
-                    if (hitBot && isHostileToPlayer(hitBot) && firstHit.distance <= maxDamageRange) {
+                    let hitRemote = null;
+                    mpSession.remotePlayers.forEach((rp) => {
+                        let obj = firstHit.object;
+                        while (obj) {
+                            if (obj === rp.group) { hitRemote = rp; break; }
+                            obj = obj.parent;
+                        }
+                    });
+
+                    const isValidHostileBot = hitBot && isHostileToPlayer(hitBot);
+                    const isValidHostileRemote = hitRemote && !(selectedGameMode === '2v2' && hitRemote.state?.team === player.team) && (hitRemote.state?.hp ?? 100) > 0;
+
+                    if ((isValidHostileBot || isValidHostileRemote) && firstHit.distance <= maxDamageRange) {
                         enemyInRangeUnderAim = true;
                         detectedDistance = firstHit.distance;
                     }
@@ -3265,7 +3742,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             const chDot = document.getElementById('ch-dot');
 
             if (isRmbDown && player.activeSlot === 0) {
-                // Keep the blue scope lines across the screen, and reveal the thin red line in the center on valid targets
                 if (scopeHLine) scopeHLine.className = 'absolute w-full h-0.5 bg-blue-500 shadow-[0_0_8px_#3b82f6] transition-colors duration-100';
                 if (scopeVLine) scopeVLine.className = 'absolute w-0.5 h-full bg-blue-500 shadow-[0_0_8px_#3b82f6] transition-colors duration-100';
                 if (scopeCenterRedH && scopeCenterRedV) {
@@ -3346,7 +3822,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             }
 
             // =================================================================
-            // UPDATE ALL AI COMBATANTS (ALLY BOT, TEAM ENEMIES & FFA BOTS)
+            // UPDATE ALL BETA AI COMBATANTS
             // =================================================================
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const en = enemies[i];
@@ -3366,15 +3842,49 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 const enemyEyePos = en.group.position.clone().add(new THREE.Vector3(0, 1.45, 0));
                 const canSeeTarget = target.los;
 
-                // Strafe timer for tactical flanking around cover
+                if (en.canUseAbilities) {
+                    if (en.shieldActive) {
+                        en.shieldTimer -= dt;
+                        en.shieldDome.rotation.y += dt * 1.6;
+                        if (en.shieldTimer <= 0) {
+                            en.shieldActive = false;
+                            en.shieldDome.visible = false;
+                            en.shieldCooldownTimer = 9.0;
+                        }
+                    } else {
+                        en.shieldCooldownTimer = Math.max(0, en.shieldCooldownTimer - dt);
+                        if (en.hp < en.maxHp * 0.65 && canSeeTarget && en.shieldCooldownTimer <= 0) {
+                            en.shieldActive = true;
+                            en.shieldTimer = 4.5;
+                            en.shieldDome.visible = true;
+                        }
+                    }
+
+                    if (en.dashTimer > 0) {
+                        en.dashTimer = Math.max(0, en.dashTimer - dt);
+                    } else {
+                        en.dashCooldownTimer = Math.max(0, en.dashCooldownTimer - dt);
+                        if (canSeeTarget && dist > 10 && dist < 35 && en.dashCooldownTimer <= 0 && Math.random() < dt * 0.85) {
+                            const forwardDir = dist > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(0, 0, -1);
+                            const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x).multiplyScalar(en.strafeDir);
+                            en.dashDir.copy(sideDir).addScaledVector(forwardDir, 0.35).normalize();
+                            en.dashTimer = 0.20;
+                            en.dashCooldownTimer = 4.2;
+                            spawnExplosion(en.group.position.clone().add(new THREE.Vector3(0, 1.0, 0)), 0x38bdf8, 5, 0.35);
+                        }
+                    }
+                }
+
                 en.strafeTimer -= dt;
                 if (en.strafeTimer <= 0) {
                     en.strafeDir *= -1;
                     en.strafeTimer = 1.6 + Math.random() * 2.2;
                 }
 
+                en.heldRifle.visible = dist >= 4.2;
+                en.heldKnife.visible = dist < 4.2;
+
                 if (dist < 3.2 && canSeeTarget) {
-                    // Close-range melee slash against Player OR rival AI (faster & heavier vs AI)
                     en.meleeCooldown += dt;
                     const activeMeleeCd = target.type === 'bot' ? 0.95 : 1.45;
                     if (en.meleeCooldown >= activeMeleeCd) {
@@ -3384,28 +3894,31 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                             try { sfx.playKnifeImpact(); } catch (e) {}
                             spawnExplosion(player.pos.clone().add(new THREE.Vector3(0, -0.3, 0)), 0xfbbf24, 5, 0.45);
                         } else if (target.type === 'bot') {
-                            const botVsBotMelee = selectedOpponentType === 'human' ? 42 : 36;
-                            damageCombatantBot(target.entity, botVsBotMelee, target.aimPos, en.isAlly ? 'ally' : 'ai', 0xfbbf24);
+                            const botVsBotMelee = selectedBetaAiTier === 'veteran' ? 42 : 36;
+                            damageCombatantBot(target.entity, botVsBotMelee, target.aimPos, en.isAlly ? 'ally' : 'ai', 0xfbbf24, en.botName);
                         }
                     }
                 } else {
-                    const forwardDir = dist > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(0, 0, -1);
-                    const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x).multiplyScalar(en.strafeDir);
-                    const moveVec = new THREE.Vector3();
-
-                    if (!canSeeTarget || dist > 16) {
-                        moveVec.addScaledVector(forwardDir, 0.85);
-                        moveVec.addScaledVector(sideDir, canSeeTarget ? 0.35 : 0.75);
+                    if (en.dashTimer > 0) {
+                        en.group.position.addScaledVector(en.dashDir, 26.0 * dt);
                     } else {
-                        moveVec.addScaledVector(sideDir, 0.75);
+                        const forwardDir = dist > 0.001 ? toTarget.clone().normalize() : new THREE.Vector3(0, 0, -1);
+                        const sideDir = new THREE.Vector3(-forwardDir.z, 0, forwardDir.x).multiplyScalar(en.strafeDir);
+                        const moveVec = new THREE.Vector3();
+
+                        if (!canSeeTarget || dist > 16) {
+                            moveVec.addScaledVector(forwardDir, 0.85);
+                            moveVec.addScaledVector(sideDir, canSeeTarget ? 0.35 : 0.75);
+                        } else {
+                            moveVec.addScaledVector(sideDir, 0.75);
+                        }
+
+                        if (moveVec.lengthSq() > 0) {
+                            moveVec.normalize();
+                            en.group.position.addScaledVector(moveVec, en.speed * dt);
+                        }
                     }
 
-                    if (moveVec.lengthSq() > 0) {
-                        moveVec.normalize();
-                        en.group.position.addScaledVector(moveVec, en.speed * dt);
-                    }
-
-                    // Prevent AI from walking through walls or overlapping other combatants
                     resolveHorizontalCollisions(en.group.position, en.radius, 0, 2.0);
                     for (let j = 0; j < enemies.length; j++) {
                         if (i === j) continue;
@@ -3418,7 +3931,6 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                         }
                     }
 
-                    // Shoot if AI has clear Line-Of-Sight to its target (faster fire rate, accuracy & damage in AI-vs-AI duels)
                     en.shootTimer += dt;
                     const effectiveShootCd = target.type === 'bot' ? en.shootCooldown * 0.62 : en.shootCooldown;
                     if (canSeeTarget && dist <= 75 && en.shootTimer >= effectiveShootCd) {
@@ -3429,7 +3941,7 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                         } catch (e) {}
 
                         const effectiveAccuracy = target.type === 'bot'
-                            ? (selectedOpponentType === 'human' ? 0.85 : 0.78)
+                            ? (selectedBetaAiTier === 'veteran' ? 0.85 : 0.78)
                             : en.accuracy;
                         const hitsTarget = Math.random() < effectiveAccuracy;
                         const shotTargetPos = hitsTarget
@@ -3442,8 +3954,8 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                             if (target.type === 'player') {
                                 applyPlayerDamage(en.gunDamage);
                             } else if (target.type === 'bot') {
-                                const botVsBotDmg = selectedOpponentType === 'human' ? 28 : 24;
-                                damageCombatantBot(target.entity, botVsBotDmg, shotTargetPos, en.isAlly ? 'ally' : 'ai');
+                                const botVsBotDmg = selectedBetaAiTier === 'veteran' ? 28 : 24;
+                                damageCombatantBot(target.entity, botVsBotDmg, shotTargetPos, en.isAlly ? 'ally' : 'ai', null, en.botName);
                             }
                         }
                     }
@@ -3472,7 +3984,19 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
             }
 
             if (player.health <= 0) {
-                triggerGameOver();
+                if (mpSession.active) {
+                    syncPlayerNetworkState();
+                    showToast('EXOSUIT CRITICAL // RESPAWNING', 'text-rose-300 border-rose-500/60');
+                    player.health = player.maxHealth;
+                    const rx = (Math.random() - 0.5) * 90;
+                    const rz = (Math.random() - 0.5) * 90;
+                    player.pos.set(rx, 1.8, rz);
+                    resolveHorizontalCollisions(player.pos, player.radius, 0, 2.0);
+                    updateHealthHUD();
+                    syncPlayerNetworkState();
+                } else {
+                    triggerGameOver();
+                }
             }
         }
 
@@ -3510,8 +4034,13 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         function updateEnemiesHUD() {
             const el = document.getElementById('hud-enemies');
             if (el) {
-                const hostileCount = enemies.filter(b => isHostileToPlayer(b)).length;
-                el.textContent = String(hostileCount).padStart(2, '0');
+                const aiHostiles = enemies.filter(b => isHostileToPlayer(b)).length;
+                let remoteHostiles = 0;
+                mpSession.remotePlayers.forEach((rp) => {
+                    const sameTeam = (selectedGameMode === '2v2' && rp.state?.team === player.team);
+                    if (!sameTeam && (rp.state?.hp ?? 100) > 0) remoteHostiles++;
+                });
+                el.textContent = String(aiHostiles + remoteHostiles).padStart(2, '0');
             }
         }
 
@@ -3559,19 +4088,20 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 MAPS.forEach(m => {
                     const isSelected = m.id === selectedMapId;
                     const card = document.createElement('div');
-                    card.className = `map-card rounded-xl p-3 flex flex-col justify-between ${isSelected ? 'selected' : ''}`;
+                    card.className = `map-card rounded-xl p-2.5 flex flex-col justify-between ${isSelected ? 'selected' : ''}`;
                     card.innerHTML = `
                         <div>
-                            <div class="flex items-center justify-between gap-1.5 mb-1.5">
-                                <span class="text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded border ${m.badgeColor}">${m.badge}</span>
-                                <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${m.accentHex};"></span>
+                            <div class="flex items-center justify-between gap-1.5 mb-1">
+                                <span class="text-[9px] font-mono-tech font-bold px-1.5 py-0.5 rounded border ${m.badgeColor}">${m.badge}</span>
+                                <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:${m.accentHex};"></span>
                             </div>
-                            <div class="font-bold text-sm text-white tracking-wide leading-tight mb-1">${m.name}</div>
-                            <p class="text-[11px] text-slate-400 leading-snug line-clamp-2">${m.desc}</p>
+                            <div class="font-bold text-xs sm:text-sm text-white tracking-wide leading-tight mb-0.5">${m.name}</div>
+                            <p class="text-[10px] text-slate-400 leading-snug line-clamp-2">${m.desc}</p>
                         </div>
                     `;
                     card.onclick = () => {
                         selectedMapId = m.id;
+                        window.selectedMapId = m.id;
                         document.getElementById('selected-map-badge').textContent = `ACTIVE: ${m.shortName}`;
                         renderMapSelectors();
                     };
@@ -3590,6 +4120,31 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
                 const t = now * 0.00022;
                 camera.position.set(Math.sin(t) * 52, 16, Math.cos(t) * 52);
                 camera.lookAt(0, 3, 0);
+
+                // Periodic Lobby Heartbeat when waiting in PvP Lobby
+                if (mpSession.active && mpSession.roomCode) {
+                    mpSession.lobbyHeartTimer += dt;
+                    if (mpSession.lobbyHeartTimer >= 3.0) {
+                        mpSession.lobbyHeartTimer = 0;
+                        netRelay.publish(`aegis_fps/v2/room/${mpSession.roomCode}`, {
+                            type: 'HELLO',
+                            roomCode: mpSession.roomCode,
+                            callsign: mpSession.callsign,
+                            isHost: mpSession.isHost,
+                            mapId: selectedMapId,
+                            gameMode: selectedGameMode
+                        });
+                        if (mpSession.isHost) {
+                            netRelay.publish('aegis_fps/v2/lobby', {
+                                type: 'ROOM_ADVERTISE',
+                                roomCode: mpSession.roomCode,
+                                mapId: selectedMapId,
+                                gameMode: selectedGameMode,
+                                hostName: mpSession.callsign
+                            });
+                        }
+                    }
+                }
             } else if (gameState === 'PLAYING') {
                 updateGame(dt);
             }
@@ -3597,10 +4152,26 @@ root.TF = { PRESETS, generate, hash3, lin, smooth, clamp };
         }
 
         window.addEventListener('load', () => {
-            renderMapSelectors();
-            initAmmoPips();
-            refreshKeybindUI();
-            requestAnimationFrame(animate);
+            try {
+                renderMapSelectors();
+                initAmmoPips();
+                refreshKeybindUI();
+                netRelay.init();
+
+                // Auto-fill Room Code from URL hash if shared via link (#room=XXXXX)
+                const hash = window.location.hash || '';
+                const match = hash.match(/room=([A-Z0-9]{3,5})/i);
+                if (match && match[1]) {
+                    const code = match[1].toUpperCase();
+                    setOpponentType('pvp');
+                    document.getElementById('input-room-code').value = code;
+                    connectToMultiplayerRoom(code, false);
+                }
+
+                requestAnimationFrame(animate);
+            } catch (err) {
+                console.error('AEGIS Initialization error:', err);
+            }
         });
     </script>
 </body>
