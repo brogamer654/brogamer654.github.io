@@ -509,8 +509,8 @@
                     <div id="battle-sys-ai" class="mode-pill selected rounded-xl p-3 flex items-center justify-between" onclick="setBattleSystem('ai')">
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="font-bold text-white text-sm sm:text-base">AI Combatants</span>
-                                <span class="text-[10px] font-mono-tech font-extrabold px-2 py-0.5 rounded bg-amber-500/25 border border-amber-400 text-amber-300">BETA AI v0.9</span>
+                                <span class="font-bold text-white text-sm sm:text-base">BETA AI v0.9 (SOLO / CO-OP)</span>
+                                <span class="text-[10px] font-mono-tech font-extrabold px-2 py-0.5 rounded bg-amber-500/25 border border-amber-400 text-amber-300">BETA v0.9</span>
                             </div>
                             <div class="text-[11px] text-slate-300 mt-0.5">Beta neural bots use Phase Dash, Energy Shields &amp; cover flanking</div>
                         </div>
@@ -521,7 +521,7 @@
                     <div id="battle-sys-pvp" class="mode-pill rounded-xl p-3 flex items-center justify-between" onclick="setBattleSystem('pvp')">
                         <div>
                             <div class="flex items-center gap-2">
-                                <span class="font-bold text-white text-sm sm:text-base">Real Player PvP</span>
+                                <span class="font-bold text-white text-sm sm:text-base">REAL PLAYER PvP (MULTIPLAYER)</span>
                                 <span class="text-[10px] font-mono-tech font-extrabold px-2 py-0.5 rounded bg-emerald-500/25 border border-emerald-400 text-emerald-300">ONLINE ROOM</span>
                             </div>
                             <div class="text-[11px] text-slate-300 mt-0.5">Live multiplayer rooms with 5-char Room Codes &amp; 3D Exosuit sync</div>
@@ -538,42 +538,58 @@
                     </div>
                     <div class="grid grid-cols-3 gap-2">
                         <div id="ai-tier-tactical" class="mode-pill selected rounded-lg p-2 text-center" onclick="setBetaAiTier('tactical')">
-                            <div class="font-bold text-white text-xs sm:text-sm">Tactical Bot</div>
+                            <div class="font-bold text-white text-xs sm:text-sm">Tactical Bot (v0.9-T)</div>
                             <div class="text-[10px] text-slate-400">Standard cover &amp; burst fire</div>
                         </div>
                         <div id="ai-tier-adaptive" class="mode-pill rounded-lg p-2 text-center" onclick="setBetaAiTier('adaptive')">
-                            <div class="font-bold text-amber-300 text-xs sm:text-sm">Adaptive Beta AI</div>
+                            <div class="font-bold text-amber-300 text-xs sm:text-sm">Adaptive Beta AI (v0.9-A)</div>
                             <div class="text-[10px] text-slate-300">Tactical Dash + Energy Shields</div>
                         </div>
                         <div id="ai-tier-veteran" class="mode-pill rounded-lg p-2 text-center" onclick="setBetaAiTier('veteran')">
-                            <div class="font-bold text-rose-300 text-xs sm:text-sm">Veteran Beta AI</div>
+                            <div class="font-bold text-rose-300 text-xs sm:text-sm">Veteran Beta AI (v0.9-V)</div>
                             <div class="text-[10px] text-slate-300">Aggressive flank, Dash &amp; Shield</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Sub-panel B: Real Player PvP Room Lobby -->
-                <div id="pvp-lobby-panel" class="hidden bg-slate-900/85 border border-emerald-500/35 rounded-xl p-3">
-                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <div id="pvp-lobby-panel" class="hidden bg-slate-900/95 border-2 border-emerald-500/50 rounded-xl p-3 shadow-[0_0_24px_rgba(16,185,129,0.18)]">
+                    <!-- Unmistakable Connection Status Banner -->
+                    <div id="pvp-connection-banner" class="mb-2.5 px-3 py-2 rounded-lg bg-slate-950/90 border border-amber-500/40 flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span id="pvp-status-led" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0"></span>
+                            <span id="pvp-connection-text" class="font-mono-tech text-xs font-extrabold tracking-wider text-amber-300">
+                                STATUS: OFFLINE — CLICK CREATE ROOM OR JOIN ROOM
+                            </span>
+                        </div>
+                        <span id="pvp-player-count-badge" class="text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            0 PEERS
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-end">
                         <!-- Callsign Input -->
                         <div class="md:col-span-4">
-                            <label class="block text-[10px] font-mono-tech font-bold text-emerald-300 uppercase mb-1">Your Operative Callsign</label>
+                            <label class="block text-[10px] font-mono-tech font-bold text-emerald-300 uppercase mb-1">Operative Callsign</label>
                             <input id="input-callsign" type="text" maxlength="14" value="OPERATIVE-01" class="w-full bg-slate-950 border border-slate-700 focus:border-sky-400 rounded-lg px-2.5 py-1.5 font-mono-tech text-xs text-white font-bold uppercase outline-none" placeholder="OPERATIVE-01">
                         </div>
 
-                        <!-- Room Code & Create / Join Controls -->
+                        <!-- Room Code & Create / Join / Quick Match Controls -->
                         <div class="md:col-span-8">
-                            <label class="block text-[10px] font-mono-tech font-bold text-sky-300 uppercase mb-1">5-Character Room Code (Create or Join)</label>
+                            <label class="block text-[10px] font-mono-tech font-bold text-sky-300 uppercase mb-1">5-Character Room Code</label>
                             <div class="flex flex-wrap sm:flex-nowrap gap-1.5">
-                                <input id="input-room-code" type="text" maxlength="5" class="w-28 bg-slate-950 border border-slate-700 focus:border-emerald-400 rounded-lg px-2.5 py-1.5 font-mono-tech text-sm text-center text-emerald-300 font-extrabold uppercase tracking-widest outline-none" placeholder="A7X9K">
-                                <button id="btn-copy-room" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-mono-tech text-[11px] font-bold cursor-pointer">
-                                    COPY
-                                </button>
+                                <input id="input-room-code" type="text" maxlength="5" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')" class="w-28 bg-slate-950 border-2 border-emerald-500/50 focus:border-emerald-400 rounded-lg px-2.5 py-1.5 font-mono-tech text-sm text-center text-emerald-300 font-extrabold uppercase tracking-widest outline-none" placeholder="A7X9K">
                                 <button id="btn-create-room" type="button" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-400 text-white font-mono-tech text-[11px] font-bold uppercase cursor-pointer">
                                     Create Room
                                 </button>
                                 <button id="btn-join-room" type="button" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white font-mono-tech text-[11px] font-bold uppercase cursor-pointer">
                                     Join Room
+                                </button>
+                                <button id="btn-quick-match" type="button" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 border border-amber-400 text-white font-mono-tech text-[11px] font-bold uppercase cursor-pointer">
+                                    Quick Match
+                                </button>
+                                <button id="btn-copy-room" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-mono-tech text-[11px] font-bold cursor-pointer">
+                                    COPY CODE
                                 </button>
                             </div>
                         </div>
@@ -582,10 +598,10 @@
                     <!-- Active Room Status & Quick Matchmaking Open Rooms List -->
                     <div class="mt-2.5 pt-2 border-t border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                         <div id="pvp-room-status" class="text-[11px] font-mono-tech text-slate-300">
-                            Click <span class="text-emerald-300 font-bold">Create Room</span> or enter a 5-char code &amp; click <span class="text-sky-300 font-bold">Deploy</span>.
+                            Share your 5-character Room Code with a friend or open a second tab to test live PvP.
                         </div>
                         <div class="flex items-center gap-1.5 flex-wrap" id="open-rooms-list">
-                            <span class="text-[10px] font-mono-tech text-slate-400">OPEN LOBBIES:</span>
+                            <span class="text-[10px] font-mono-tech text-slate-400">ACTIVE OPEN ROOMS:</span>
                             <span class="text-[10px] font-mono-tech text-slate-500">Scanning...</span>
                         </div>
                     </div>
@@ -739,7 +755,8 @@
         <div class="hud-panel max-w-md w-full rounded-2xl p-8 text-center">
             <div class="text-xs font-mono-tech tracking-widest text-amber-400 uppercase mb-1">System Suspended</div>
             <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-wider mb-2">COMBAT PAUSED</h2>
-            <div id="pause-map-label" class="text-xs font-mono-tech text-sky-400 mb-4">THEATER: SECTOR 07: CYBER BUNKER</div>
+            <div id="pause-map-label" class="text-xs font-mono-tech text-sky-400 mb-1">THEATER: SECTOR 07: CYBER BUNKER</div>
+            <div id="pause-room-label" class="hidden text-xs font-mono-tech font-bold text-emerald-400 mb-3">CONNECTED TO ROOM: -----</div>
             <div class="text-xs font-mono-tech text-slate-300 bg-slate-900/70 border border-slate-800 rounded-xl p-3 mb-6">
                 [WASD] Move &bull; [2x SPACE] Double Jump &bull; [SHIFT] Dash &bull; [Q/C] 10s Shield &bull; [TAB] Roster
             </div>
@@ -829,24 +846,40 @@
                             this.user = cred.user;
                         }
                         this.mode = 'firebase';
-                        this.updateNetStatusUI('NETLINK: CLOUD PVP READY', 'text-emerald-400 border-emerald-500/40 bg-emerald-950/60');
+                        this.updateNetStatusUI('NETLINK: CLOUD + TAB SYNC READY', 'text-emerald-400 border-emerald-500/40 bg-emerald-950/60');
                         this.listenOpenRooms();
-                        return;
                     }
                 } catch (err) {
                     console.warn('Cloud netlink fallback to local multi-tab channel:', err);
                 }
 
-                // Graceful Local Multi-Tab BroadcastChannel Fallback (works across multiple browser tabs/windows immediately)
-                this.mode = 'broadcast';
-                this.user = { uid: 'local-' + Math.random().toString(36).slice(2, 10) };
+                // Always initialize Dual-Layer BroadcastChannel + LocalStorage fallback so same-browser tabs connect instantaneously
+                if (!this.user) {
+                    this.mode = 'broadcast';
+                    this.user = { uid: 'local-' + Math.random().toString(36).slice(2, 10) };
+                    this.updateNetStatusUI('NETLINK: MULTI-TAB PVP READY', 'text-sky-300 border-sky-500/40 bg-sky-950/60');
+                }
                 try {
                     this.channel = new BroadcastChannel('aegis_protocol_pvp_v1');
                 } catch (e) {
                     this.channel = null;
                 }
-                this.updateNetStatusUI('NETLINK: MULTI-TAB PVP READY', 'text-sky-300 border-sky-500/40 bg-sky-950/60');
                 this.listenLocalLobbies();
+                this.checkUrlHashRoom();
+            },
+
+            checkUrlHashRoom() {
+                try {
+                    const hash = window.location.hash || '';
+                    const match = hash.match(/room=([A-Z0-9]{4,5})/i);
+                    if (match && match[1]) {
+                        const code = match[1].toUpperCase();
+                        if (window.setBattleSystem) window.setBattleSystem('pvp');
+                        const codeInput = document.getElementById('input-room-code');
+                        if (codeInput) codeInput.value = code;
+                        if (window.joinRoomFromLobby) window.joinRoomFromLobby(code, false);
+                    }
+                } catch (e) {}
             },
 
             updateNetStatusUI(text, classes) {
@@ -869,21 +902,48 @@
                             activeRooms.push({ id: d.id, ...data });
                         }
                     });
+                    window._cachedOpenRooms = activeRooms;
                     if (window.renderOpenRoomsList) window.renderOpenRoomsList(activeRooms);
                 }, () => {});
             },
 
             listenLocalLobbies() {
-                if (!this.channel) return;
                 const knownRooms = new Map();
-                this.channel.addEventListener('message', (ev) => {
-                    const msg = ev.data;
-                    if (!msg) return;
-                    if (msg.type === 'LOBBY_ANNOUNCE' && msg.room) {
-                        knownRooms.set(msg.room.code, { ...msg.room, updatedAt: Date.now() });
-                        const fresh = Array.from(knownRooms.values()).filter(r => Date.now() - r.updatedAt < 15000);
-                        if (window.renderOpenRoomsList) window.renderOpenRoomsList(fresh);
-                    } else if (msg.type === 'LOBBY_QUERY' && window.mpSession && window.mpSession.active && window.mpSession.isHost) {
+                const refreshLocalRooms = () => {
+                    const now = Date.now();
+                    const fresh = Array.from(knownRooms.values()).filter(r => now - r.updatedAt < 18000);
+                    window._cachedOpenRooms = fresh;
+                    if (window.renderOpenRoomsList) window.renderOpenRoomsList(fresh);
+                };
+
+                if (this.channel) {
+                    this.channel.addEventListener('message', (ev) => {
+                        const msg = ev.data;
+                        if (!msg) return;
+                        if (msg.type === 'LOBBY_ANNOUNCE' && msg.room) {
+                            knownRooms.set(msg.room.code, { ...msg.room, updatedAt: Date.now() });
+                            refreshLocalRooms();
+                        } else if (msg.type === 'LOBBY_QUERY' && window.mpSession && window.mpSession.roomCode) {
+                            this.channel.postMessage({
+                                type: 'LOBBY_ANNOUNCE',
+                                room: {
+                                    code: window.mpSession.roomCode,
+                                    mapId: window.selectedMapId,
+                                    gameMode: window.selectedGameMode,
+                                    hostName: window.mpSession.callsign
+                                }
+                            });
+                        }
+                        if (window.handleLocalBroadcastMessage) {
+                            window.handleLocalBroadcastMessage(msg);
+                        }
+                    });
+                    this.channel.postMessage({ type: 'LOBBY_QUERY' });
+                }
+
+                // Periodic heartbeat so newly opened tabs immediately see active rooms
+                setInterval(() => {
+                    if (this.channel && window.mpSession && window.mpSession.roomCode) {
                         this.channel.postMessage({
                             type: 'LOBBY_ANNOUNCE',
                             room: {
@@ -894,14 +954,17 @@
                             }
                         });
                     }
-                    if (window.handleLocalBroadcastMessage) {
-                        window.handleLocalBroadcastMessage(msg);
-                    }
-                });
-                this.channel.postMessage({ type: 'LOBBY_QUERY' });
+                    refreshLocalRooms();
+                }, 2500);
             },
 
             async createOrJoinRoom(roomCode, mapId, gameMode, callsign, isCreating) {
+                if (this.channel) {
+                    this.channel.postMessage({
+                        type: 'LOBBY_ANNOUNCE',
+                        room: { code: roomCode, mapId, gameMode, hostName: callsign }
+                    });
+                }
                 if (this.mode === 'firebase' && this.db && this.user) {
                     const roomRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'aegis_rooms', roomCode);
                     const snap = await getDoc(roomRef);
@@ -924,13 +987,94 @@
                         };
                     }
                 } else {
-                    if (this.channel) {
-                        this.channel.postMessage({
-                            type: 'LOBBY_ANNOUNCE',
-                            room: { code: roomCode, mapId, gameMode, hostName: callsign }
-                        });
-                    }
                     return { mapId, gameMode, isHost: isCreating };
+                }
+            },
+
+            subscribeToRoom(roomCode, onPlayersUpdate, onEventReceived) {
+                this.clearSubscriptions();
+                if (this.mode === 'firebase' && this.db && this.user) {
+                    const playersCol = collection(this.db, 'artifacts', this.appId, 'public', 'data', `aegis_room_${roomCode}_players`);
+                    const unsubPlayers = onSnapshot(playersCol, (snap) => {
+                        const map = {};
+                        snap.forEach(d => {
+                            map[d.id] = { uid: d.id, ...d.data() };
+                        });
+                        onPlayersUpdate(map);
+                    }, () => {});
+
+                    const eventsCol = collection(this.db, 'artifacts', this.appId, 'public', 'data', `aegis_room_${roomCode}_events`);
+                    const seenEventIds = new Set();
+                    let initialLoad = true;
+                    const unsubEvents = onSnapshot(eventsCol, (snap) => {
+                        if (initialLoad) {
+                            snap.forEach(d => seenEventIds.add(d.id));
+                            initialLoad = false;
+                            return;
+                        }
+                        snap.docChanges().forEach(change => {
+                            if (change.type === 'added' && !seenEventIds.has(change.doc.id)) {
+                                seenEventIds.add(change.doc.id);
+                                onEventReceived(change.doc.data());
+                            }
+                        });
+                    }, () => {});
+
+                    this.unsubscribers.push(unsubPlayers, unsubEvents);
+                }
+            },
+
+            async publishPlayerState(roomCode, statePayload) {
+                if (this.channel && this.user) {
+                    this.channel.postMessage({
+                        type: 'PLAYER_STATE',
+                        roomCode,
+                        uid: this.user.uid,
+                        state: { ...statePayload, uid: this.user.uid, updatedAt: Date.now() }
+                    });
+                }
+                if (this.mode === 'firebase' && this.db && this.user) {
+                    const pRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', `aegis_room_${roomCode}_players`, this.user.uid);
+                    await setDoc(pRef, { ...statePayload, updatedAt: Date.now() }, { merge: true });
+                    if (window.mpSession && window.mpSession.isHost) {
+                        const roomRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', 'aegis_rooms', roomCode);
+                        updateDoc(roomRef, { updatedAt: Date.now() }).catch(() => {});
+                    }
+                }
+            },
+
+            async sendRoomEvent(roomCode, eventPayload) {
+                const payload = {
+                    ...eventPayload,
+                    senderId: this.user ? this.user.uid : 'unknown',
+                    timestamp: Date.now()
+                };
+                if (this.channel) {
+                    this.channel.postMessage({
+                        type: 'ROOM_EVENT',
+                        roomCode,
+                        event: payload
+                    });
+                }
+                if (this.mode === 'firebase' && this.db && this.user) {
+                    const eventsCol = collection(this.db, 'artifacts', this.appId, 'public', 'data', `aegis_room_${roomCode}_events`);
+                    await addDoc(eventsCol, payload);
+                }
+            },
+
+            async leaveRoom(roomCode) {
+                this.clearSubscriptions();
+                if (!roomCode) return;
+                if (this.channel && this.user) {
+                    this.channel.postMessage({
+                        type: 'PLAYER_LEAVE',
+                        roomCode,
+                        uid: this.user.uid
+                    });
+                }
+                if (this.mode === 'firebase' && this.db && this.user) {
+                    const pRef = doc(this.db, 'artifacts', this.appId, 'public', 'data', `aegis_room_${roomCode}_players`, this.user.uid);
+                    deleteDoc(pRef).catch(() => {});
                 }
             },
 
@@ -1394,6 +1538,7 @@
                 battleModePill.classList.remove('disabled-pill');
             }
         }
+        window.setBattleSystem = setBattleSystem;
 
         function setBetaAiTier(tier) {
             selectedBetaAiTier = tier;
@@ -1418,18 +1563,105 @@
             });
         }
 
+        function updateLobbyConnectionBanner(connected, code = '', peerCount = 0) {
+            const banner = document.getElementById('pvp-connection-banner');
+            const led = document.getElementById('pvp-status-led');
+            const text = document.getElementById('pvp-connection-text');
+            const peersBadge = document.getElementById('pvp-player-count-badge');
+            if (!banner || !led || !text) return;
+
+            if (connected && code) {
+                banner.className = 'mb-2.5 px-3 py-2 rounded-lg bg-emerald-950/90 border border-emerald-400 flex items-center justify-between gap-2 shadow-[0_0_16px_rgba(16,185,129,0.28)]';
+                led.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping flex-shrink-0';
+                text.className = 'font-mono-tech text-xs font-extrabold tracking-wider text-emerald-300';
+                text.textContent = `CONNECTED TO ROOM: ${code} (LIVE SYNC ACTIVE)`;
+                if (peersBadge) {
+                    peersBadge.textContent = `${peerCount + 1} IN LOBBY`;
+                    peersBadge.className = 'text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/40';
+                }
+            } else {
+                banner.className = 'mb-2.5 px-3 py-2 rounded-lg bg-slate-950/90 border border-amber-500/40 flex items-center justify-between gap-2';
+                led.className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0';
+                text.className = 'font-mono-tech text-xs font-extrabold tracking-wider text-amber-300';
+                text.textContent = 'STATUS: OFFLINE — CLICK CREATE ROOM OR JOIN ROOM';
+                if (peersBadge) {
+                    peersBadge.textContent = '0 PEERS';
+                    peersBadge.className = 'text-[10px] font-mono-tech font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300';
+                }
+            }
+        }
+
+        async function joinRoomFromLobby(rawCode, isCreating = false) {
+            const code = (rawCode || document.getElementById('input-room-code')?.value || '').trim().toUpperCase();
+            if (code.length < 3) {
+                document.getElementById('pvp-room-status').innerHTML = `<span class="text-rose-400 font-bold">Enter a valid 5-character Room Code first!</span>`;
+                return false;
+            }
+            const callsign = (document.getElementById('input-callsign')?.value || 'OPERATIVE-01').trim().toUpperCase() || 'OPERATIVE-01';
+            document.getElementById('input-room-code').value = code;
+
+            mpSession.active = true;
+            mpSession.roomCode = code;
+            mpSession.callsign = callsign;
+
+            if (window.AegisNetBridge) {
+                const roomInfo = await window.AegisNetBridge.createOrJoinRoom(
+                    code,
+                    selectedMapId,
+                    selectedGameMode,
+                    callsign,
+                    isCreating
+                );
+                mpSession.isHost = roomInfo.isHost;
+                if (!isCreating && roomInfo.mapId && MAPS.some(m => m.id === roomInfo.mapId)) {
+                    selectedMapId = roomInfo.mapId;
+                    window.selectedMapId = roomInfo.mapId;
+                    const found = MAPS.find(m => m.id === roomInfo.mapId);
+                    if (found) document.getElementById('selected-map-badge').textContent = `ACTIVE: ${found.shortName}`;
+                    renderMapSelectors();
+                }
+                if (!isCreating && roomInfo.gameMode && ['1v1', '2v2', 'ffa'].includes(roomInfo.gameMode)) {
+                    setGameMode(roomInfo.gameMode);
+                }
+                window.AegisNetBridge.subscribeToRoom(code, handleRemotePlayersSnapshot, handleRoomEventReceived);
+                syncPlayerNetworkState(true);
+            }
+
+            try { window.history.replaceState(null, '', `#room=${code}`); } catch (e) {}
+            updateLobbyConnectionBanner(true, code, mpSession.remotePlayers.size);
+            document.getElementById('pvp-room-status').innerHTML = `Lobby linked to <span class="text-emerald-300 font-extrabold">${code}</span> &bull; Click <span class="text-sky-300 font-bold">Deploy to Arena</span> to enter battle!`;
+            return true;
+        }
+        window.joinRoomFromLobby = joinRoomFromLobby;
+
         window.renderOpenRoomsList = function(rooms) {
             const container = document.getElementById('open-rooms-list');
             if (!container) return;
             if (!rooms || rooms.length === 0) {
-                container.innerHTML = `<span class="text-[10px] font-mono-tech text-slate-400">OPEN LOBBIES:</span> <span class="text-[10px] font-mono-tech text-slate-500">None active (Create one!)</span>`;
+                container.innerHTML = `<span class="text-[10px] font-mono-tech text-slate-400">ACTIVE OPEN ROOMS:</span> <span class="text-[10px] font-mono-tech text-slate-500">None active (Create one!)</span>`;
                 return;
             }
-            let html = `<span class="text-[10px] font-mono-tech text-slate-400">OPEN LOBBIES:</span>`;
+            let html = `<span class="text-[10px] font-mono-tech text-slate-400">ACTIVE OPEN ROOMS:</span>`;
             rooms.slice(0, 4).forEach(r => {
-                html += `<button type="button" onclick="quickSelectOpenRoom('${r.code}', '${r.mapId || 'bunker'}', '${r.gameMode || '1v1'}')" class="px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-800/80 border border-emerald-500/50 text-emerald-300 font-mono-tech text-[10px] font-bold cursor-pointer transition">${r.code} (${(r.gameMode || '1V1').toUpperCase()})</button>`;
+                html += `<button type="button" onclick="quickSelectOpenRoom('${r.code}', '${r.mapId || 'bunker'}', '${r.gameMode || '1v1'}')" class="px-2 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-800/80 border border-emerald-500/50 text-emerald-300 font-mono-tech text-[10px] font-bold cursor-pointer transition">JOIN ${r.code} (${(r.gameMode || '1V1').toUpperCase()})</button>`;
             });
             container.innerHTML = html;
+        };
+
+        window.quickSelectOpenRoom = async function(code, mapId, mode) {
+            const codeInput = document.getElementById('input-room-code');
+            if (codeInput) codeInput.value = code;
+            if (MAPS.some(m => m.id === mapId)) {
+                selectedMapId = mapId;
+                window.selectedMapId = mapId;
+                const found = MAPS.find(m => m.id === mapId);
+                if (found) document.getElementById('selected-map-badge').textContent = `ACTIVE: ${found.shortName}`;
+                renderMapSelectors();
+            }
+            if (['1v1', '2v2', 'ffa'].includes(mode)) {
+                setGameMode(mode);
+            }
+            await joinRoomFromLobby(code, false);
         };
 
         window.quickSelectOpenRoom = function(code, mapId, mode) {
@@ -2382,65 +2614,8 @@
             }
             updateEnemiesHUD();
             refreshScoreboardUI();
-            showWaveBanner(`WAVE ${String(waveNum).padStart(2, '0')} // ${count} BETA DRONES DEPLOYED`);
-        }
-
-        function showWaveBanner(text) {
-            const banner = document.getElementById('wave-banner');
-            const bannerText = document.getElementById('wave-banner-text');
-            if (!banner || !bannerText) return;
-            bannerText.textContent = text;
-            banner.classList.remove('opacity-0', '-translate-y-4');
-            banner.classList.add('opacity-100', 'translate-y-0');
-            setTimeout(() => {
-                banner.classList.add('opacity-0', '-translate-y-4');
-                banner.classList.remove('opacity-100', 'translate-y-0');
-            }, 2600);
-        }
-
-        // ==========================================
-        // 10. REAL-TIME MULTIPLAYER REMOTE AVATARS & HIT SYNC
-        // ==========================================
-        function getOrCreateRemoteAvatar(uid, state) {
-            let entry = mpSession.remotePlayers.get(uid);
-            const sameTeam = (selectedGameMode === '2v2' && state.team === player.team);
-
-            if (!entry) {
-                const avatar = buildExosuitAvatar({
-                    chassisColor: sameTeam ? 0x0ea5e9 : 0xf43f5e,
-                    visorColor: sameTeam ? 0x7dd3fc : 0xfda4af,
-                    labelText: `${state.callsign || 'PLAYER'}`,
-                    badgeBorder: sameTeam ? '#38bdf8' : '#f43f5e',
-                    badgeText: sameTeam ? '#7dd3fc' : '#fda4af',
-                    isAlly: sameTeam
-                });
-                avatar.group.position.set(state.x || 0, (state.y || 1.8) - 1.8, state.z || -50);
-                scene.add(avatar.group);
-
-                entry = {
-                    uid,
-                    state,
-                    targetPos: new THREE.Vector3(state.x || 0, (state.y || 1.8) - 1.8, state.z || -50),
-                    targetYaw: state.yaw || 0,
-                    group: avatar.group,
-                    hbFg: avatar.hbFg,
-                    shieldDome: avatar.shieldDome,
-                    heldRifle: avatar.heldRifle,
-                    heldKnife: avatar.heldKnife
-                };
-                mpSession.remotePlayers.set(uid, entry);
-                showToast(`${state.callsign || 'OPERATIVE'} JOINED ARENA`, 'text-emerald-300 border-emerald-400/60');
-            }
-            return entry;
-        }
-
-        function removeRemoteAvatar(uid) {
-            const entry = mpSession.remotePlayers.get(uid);
-            if (entry) {
-                scene.remove(entry.group);
-                mpSession.remotePlayers.delete(uid);
-                updateEnemiesHUD();
-                refreshScoreboardUI();
+            if (mpSession.active && mpSession.roomCode) {
+                updateLobbyConnectionBanner(true, mpSession.roomCode, mpSession.remotePlayers.size);
             }
         }
 
@@ -3048,11 +3223,11 @@
                 window.AegisNetBridge.leaveRoom(mpSession.roomCode);
             }
             mpSession.active = false;
+            mpSession.roomCode = '';
             clearAllRemoteAvatars();
+            updateLobbyConnectionBanner(false);
             document.getElementById('hud-room-pill').classList.add('hidden');
-
-            gameState = 'START';
-            isMouseDown = false;
+            document.getElementById('pause-room-label').classList.add('hidden');
             setScopeActive(false);
             deactivateShield(false);
             sfx.stopMusic();
@@ -3254,10 +3429,35 @@
         });
 
         // PvP Lobby Room Buttons
-        document.getElementById('btn-create-room').addEventListener('click', () => {
+        document.getElementById('btn-create-room').addEventListener('click', async () => {
             const newCode = generateRoomCode();
-            document.getElementById('input-room-code').value = newCode;
-            document.getElementById('pvp-room-status').innerHTML = `Created Room <span class="text-emerald-300 font-extrabold">${newCode}</span> &bull; Share code &amp; click <span class="text-sky-300 font-bold">Deploy to Arena</span>!`;
+            await joinRoomFromLobby(newCode, true);
+        });
+
+        document.getElementById('btn-join-room').addEventListener('click', async () => {
+            const code = (document.getElementById('input-room-code').value || '').trim().toUpperCase();
+            await joinRoomFromLobby(code, false);
+        });
+
+        document.getElementById('btn-quick-match').addEventListener('click', async () => {
+            const openRooms = window._cachedOpenRooms || [];
+            if (openRooms.length > 0) {
+                const target = openRooms[0];
+                await window.quickSelectOpenRoom(target.code, target.mapId || 'bunker', target.gameMode || '1v1');
+            } else {
+                const newCode = generateRoomCode();
+                await joinRoomFromLobby(newCode, true);
+            }
+        });
+
+        document.getElementById('btn-copy-room').addEventListener('click', () => {
+            const input = document.getElementById('input-room-code');
+            if (!input) return;
+            input.select();
+            try { document.execCommand('copy'); } catch (e) {}
+            const btn = document.getElementById('btn-copy-room');
+            btn.textContent = 'COPIED!';
+            setTimeout(() => { btn.textContent = 'COPY CODE'; }, 1500);
         });
 
         document.getElementById('btn-join-room').addEventListener('click', () => {
@@ -3309,8 +3509,6 @@
         async function startPlay() {
             try { sfx.init(); } catch (e) {}
 
-            clearAllRemoteAvatars();
-            mpSession.active = false;
             mpSession.callsign = (document.getElementById('input-callsign')?.value || 'OPERATIVE-01').trim().toUpperCase() || 'OPERATIVE-01';
 
             if (selectedBattleSystem === 'pvp') {
@@ -3319,28 +3517,21 @@
                     code = generateRoomCode();
                     document.getElementById('input-room-code').value = code;
                 }
-                mpSession.active = true;
-                mpSession.roomCode = code;
-
-                if (window.AegisNetBridge) {
-                    const roomInfo = await window.AegisNetBridge.createOrJoinRoom(
-                        code,
-                        selectedMapId,
-                        selectedGameMode,
-                        mpSession.callsign,
-                        false
-                    );
-                    mpSession.isHost = roomInfo.isHost;
-                    if (!mpSession.isHost && roomInfo.mapId && MAPS.some(m => m.id === roomInfo.mapId)) {
-                        selectedMapId = roomInfo.mapId;
-                    }
-                    window.AegisNetBridge.subscribeToRoom(code, handleRemotePlayersSnapshot, handleRoomEventReceived);
+                if (!mpSession.active || mpSession.roomCode !== code) {
+                    clearAllRemoteAvatars();
+                    await joinRoomFromLobby(code, false);
                 }
 
                 document.getElementById('hud-room-pill').classList.remove('hidden');
-                document.getElementById('hud-room-code-text').textContent = `ROOM: ${code} (${mpSession.callsign})`;
+                document.getElementById('hud-room-code-text').textContent = `CONNECTED TO ROOM: ${code} (${mpSession.callsign})`;
+                const pauseRoomEl = document.getElementById('pause-room-label');
+                pauseRoomEl.classList.remove('hidden');
+                pauseRoomEl.textContent = `CONNECTED TO ROOM: ${code}`;
             } else {
+                clearAllRemoteAvatars();
+                mpSession.active = false;
                 document.getElementById('hud-room-pill').classList.add('hidden');
+                document.getElementById('pause-room-label').classList.add('hidden');
             }
 
             buildArena(selectedMapId);
