@@ -636,10 +636,32 @@
             <!-- 3. Map Selector Grid -->
             <div class="text-left mb-3">
                 <div class="flex justify-between items-center mb-1.5">
-                    <span class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400">3. Select Combat Theater (6 Arenas)</span>
+                    <span class="text-xs font-mono-tech font-bold uppercase tracking-widest text-sky-400">3. Select Combat Theater (6 Arenas + Terrain Forge)</span>
                     <span id="selected-map-badge" class="text-[11px] font-mono-tech text-slate-300 bg-slate-900/90 border border-slate-700 px-2.5 py-0.5 rounded">ACTIVE: SECTOR 07</span>
                 </div>
                 <div id="start-map-grid" class="grid grid-cols-2 lg:grid-cols-3 gap-2"></div>
+            </div>
+
+            <!-- 3b. Terrain Forge setup (shown when the procedural theater is selected) -->
+            <div id="proc-panel" class="hidden text-left mb-3 p-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 font-mono-tech text-[10px] sm:text-[11px]">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold uppercase tracking-widest text-emerald-300">Terrain Forge // Map Setup</span>
+                    <span id="proc-status" class="text-slate-400">READY</span>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 items-start">
+                    <div class="flex-1 min-w-0 w-full">
+                        <div id="proc-biomes" class="grid grid-cols-3 gap-1.5 mb-2"></div>
+                        <div class="flex gap-1.5 mb-2">
+                            <input id="proc-seed" type="text" maxlength="12" spellcheck="false" autocomplete="off" placeholder="SEED" class="flex-1 min-w-0 bg-slate-950 border border-emerald-500/40 focus:border-emerald-400 rounded px-2 py-1 text-emerald-200 font-bold uppercase tracking-widest outline-none">
+                            <button id="proc-roll" type="button" class="mode-pill rounded px-3 py-1 font-bold text-emerald-200">ROLL SEED</button>
+                        </div>
+                        <div id="proc-sliders" class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5"></div>
+                    </div>
+                    <div class="flex-shrink-0 text-center mx-auto sm:mx-0">
+                        <canvas id="proc-preview" width="160" height="160" class="rounded border border-emerald-500/40 bg-slate-950"></canvas>
+                        <div class="mt-1 text-slate-400"><span class="text-sky-300">&#9679;</span> you &nbsp;<span class="text-rose-400">&#9679;</span> rival &nbsp;<span class="text-white">&#9632;</span> village</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Compact Controls Strip -->
@@ -816,6 +838,654 @@
             </div>
         </div>
     </div>
+
+    <script id="tf-core">
+/* ------------------------------------------------------------------
+   Terrain Forge core: noise, erosion, biomes, scattering and geometry.
+   Pure functions; THREE is only used to assemble BufferGeometry.
+------------------------------------------------------------------- */
+(function (root) {
+'use strict';
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+function hashSeed(str) {
+  str = String(str);
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+  h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hash3(x, y, z) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+  return s - Math.floor(s);
+}
+function lin(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+}
+
+function makeNoise(rand) {
+  const perm = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) perm[i] = i;
+  for (let i = 255; i > 0; i--) { const j = (rand() * (i + 1)) | 0; const t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+  const p = new Uint8Array(512);
+  for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
+  const GX = [1, -1, 1, -1, 1, -1, 0, 0], GY = [1, 1, -1, -1, 0, 0, 1, -1];
+  return function (x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), X = xi & 255, Y = yi & 255, xf = x - xi, yf = y - yi;
+    const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10), v = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+    const a = p[p[X] + Y] & 7, b = p[p[X + 1] + Y] & 7, c = p[p[X] + Y + 1] & 7, d = p[p[X + 1] + Y + 1] & 7;
+    const n00 = GX[a] * xf + GY[a] * yf, n10 = GX[b] * (xf - 1) + GY[b] * yf;
+    const n01 = GX[c] * xf + GY[c] * (yf - 1), n11 = GX[d] * (xf - 1) + GY[d] * (yf - 1);
+    const x1 = n00 + (n10 - n00) * u, x2 = n01 + (n11 - n01) * u;
+    return x1 + (x2 - x1) * v;
+  };
+}
+function fbm(n, x, y, oct, gain, lac) {
+  let a = 1, f = 1, s = 0, t = 0;
+  for (let o = 0; o < oct; o++) { s += a * n(x * f, y * f); t += a; a *= gain; f *= lac; }
+  return s / t;
+}
+function ridged(n, x, y, oct, gain, lac) {
+  let a = 1, f = 1, s = 0, t = 0, w = 1;
+  for (let o = 0; o < oct; o++) {
+    let v = 1 - Math.abs(n(x * f, y * f)); v *= v; v *= w;
+    w = clamp(v * 2, 0, 1); s += v * a; t += a; a *= gain; f *= lac;
+  }
+  return s / t;
+}
+
+/* ---------------- biome presets ---------------- */
+const PRESETS = {
+  temperate: { label: 'Temperate', flora: 'forest', rs: 0.8,
+    v: { size: 1200, height: 170, freq: 2.6, oct: 6, gain: 0.5, ridge: 0.35, warp: 0.45, island: 0.2, flat: 1.4, terrace: 0, erosion: 45, sea: 0.3, snow: 0.9, wet: 0, trees: 2400, rocks: 400, treeline: 0.7, conifer: 0.35, treeScale: 1.2, base: 40, towns: 3, townSize: 110 },
+    pal: { sand: '#cdbf8f', dry: '#8d9a55', grass: '#5a8a3a', forest: '#2f5e2d', high: '#7d8a5e', rock: '#7a766e', rockDark: '#4d4a45', snow: '#e8eef0', seabed: '#8d8765', deep: '#164358', water: '#2f7a96', needle: '#214c32', leafA: '#3a6e34', leafB: '#5f9441', trunk: '#5a4431' } },
+  alpine: { label: 'Alpine', flora: 'forest', rs: 0.7,
+    v: { size: 1600, height: 520, freq: 2.0, oct: 7, gain: 0.52, ridge: 0.8, warp: 0.5, island: 0, flat: 1.15, terrace: 0, erosion: 70, sea: 0.18, snow: 0.55, wet: -0.05, trees: 2600, rocks: 700, treeline: 0.42, conifer: 0.9, treeScale: 1.3, base: 60, towns: 2, townSize: 100 },
+    pal: { sand: '#bdb69a', dry: '#85905d', grass: '#5f8545', forest: '#35603a', high: '#8a8f70', rock: '#8a867f', rockDark: '#565350', snow: '#eef3f6', seabed: '#7f7d68', deep: '#173d52', water: '#3b829c', needle: '#1d4630', leafA: '#3a6a3a', leafB: '#5a8a46', trunk: '#55402e' } },
+  islands: { label: 'Islands', flora: 'forest', rs: 0.85,
+    v: { size: 1400, height: 180, freq: 3.2, oct: 6, gain: 0.5, ridge: 0.2, warp: 0.7, island: 0.95, flat: 1.6, terrace: 0, erosion: 35, sea: 0.36, snow: 1.05, wet: 0.1, trees: 2400, rocks: 250, treeline: 0.8, conifer: 0.15, treeScale: 1.3, base: 40, towns: 3, townSize: 100 },
+    pal: { sand: '#e2d3a4', dry: '#9aa75a', grass: '#4f9540', forest: '#2a6b34', high: '#6f8f52', rock: '#7a766e', rockDark: '#4d4a45', snow: '#e8eef0', seabed: '#b6aa7c', deep: '#0d4b66', water: '#25a0b4', needle: '#24533a', leafA: '#2f7d3a', leafB: '#5fae48', trunk: '#5d4733' } },
+  desert: { label: 'Desert', flora: 'arid', rs: 0.62,
+    v: { size: 1200, height: 200, freq: 2.2, oct: 5, gain: 0.46, ridge: 0.25, warp: 0.9, island: 0, flat: 1.9, terrace: 0.35, erosion: 25, sea: 0, snow: 1.05, wet: -0.45, trees: 500, rocks: 900, treeline: 0.7, conifer: 0, treeScale: 1.0, base: 40, towns: 2, townSize: 120 },
+    pal: { sand: '#dcc08a', dry: '#cfa86b', grass: '#b99a5c', forest: '#8d8a4e', high: '#b4825a', rock: '#a86f4c', rockDark: '#6e4632', snow: '#f0e9dc', seabed: '#c9a874', deep: '#3c6a70', water: '#4a9aa0', needle: '#5a7a46', leafA: '#6f8a4a', leafB: '#8d9a55', trunk: '#6b4f35' } },
+  tropical: { label: 'Tropical', flora: 'forest', rs: 0.85,
+    v: { size: 1200, height: 200, freq: 3.0, oct: 6, gain: 0.5, ridge: 0.3, warp: 0.6, island: 0.9, flat: 1.5, terrace: 0, erosion: 50, sea: 0.34, snow: 1.05, wet: 0.35, trees: 3500, rocks: 200, treeline: 0.85, conifer: 0, treeScale: 1.5, base: 40, towns: 3, townSize: 100 },
+    pal: { sand: '#e6d9a8', dry: '#7fb04a', grass: '#3f9a3a', forest: '#1b6b2c', high: '#4f8f3e', rock: '#77736a', rockDark: '#4a4743', snow: '#e8eef0', seabed: '#cdbf8f', deep: '#0b4e63', water: '#1fa6b0', needle: '#1f5a35', leafA: '#1f7a32', leafB: '#4fb04a', trunk: '#6a4e35' } },
+  arctic: { label: 'Arctic', flora: 'forest', rs: 0.7,
+    v: { size: 1400, height: 300, freq: 2.4, oct: 6, gain: 0.5, ridge: 0.55, warp: 0.5, island: 0.25, flat: 1.3, terrace: 0, erosion: 55, sea: 0.25, snow: 0.3, wet: -0.1, trees: 900, rocks: 600, treeline: 0.4, conifer: 1, treeScale: 1.2, base: 50, towns: 1, townSize: 90 },
+    pal: { sand: '#b9b7a8', dry: '#8e9a86', grass: '#7d8c7a', forest: '#4a6350', high: '#8f9a98', rock: '#75777a', rockDark: '#484a4f', snow: '#f2f6f8', seabed: '#7d8584', deep: '#1a3f55', water: '#4c93ad', needle: '#26443a', leafA: '#3c5c4a', leafB: '#5d7d66', trunk: '#504234' } },
+};
+
+/* ---------------- height field ---------------- */
+function buildHeights(P) {
+  const N = P.res, H = new Float32Array(N * N);
+  const rand = mulberry32(hashSeed('h:' + P.seed));
+  const nA = makeNoise(rand), nB = makeNoise(rand), nW = makeNoise(rand), nM = makeNoise(rand);
+  const maxOct = Math.max(2, Math.floor(Math.log2(N / 7 / P.freq)) + 1);
+  const oct = Math.min(P.oct, maxOct);
+  let lo = Infinity, hi = -Infinity;
+  for (let j = 0; j < N; j++) {
+    const v = j / (N - 1);
+    for (let i = 0; i < N; i++) {
+      const u = i / (N - 1);
+      let x = u * P.freq + 3.7, y = v * P.freq + 9.1;
+      if (P.warp > 0) {
+        const wx = fbm(nW, x * 0.8 + 11.3, y * 0.8 + 4.1, 3, 0.5, 2), wy = fbm(nW, x * 0.8 - 7.7, y * 0.8 + 19.2, 3, 0.5, 2);
+        x += wx * P.warp * 1.2; y += wy * P.warp * 1.2;
+      }
+      const base = fbm(nA, x, y, oct, P.gain, 2) * 0.5 + 0.5;
+      const rid = ridged(nB, x * 0.9 + 31.4, y * 0.9 + 17.9, oct, P.gain, 2.05);
+      const mask = smooth(0.3, 0.7, fbm(nM, u * P.freq * 0.5 + 5.5, v * P.freq * 0.5 + 9.9, 2, 0.5, 2) * 0.5 + 0.5);
+      let h = lerp(base, rid, P.ridge * (0.35 + 0.65 * mask));
+      if (P.island > 0) {
+        const dx = u * 2 - 1, dy = v * 2 - 1, d = Math.sqrt(dx * dx + dy * dy) / 1.1;
+        h = lerp(h, 0, P.island * smooth(0.35, 0.95, d));
+      }
+      H[j * N + i] = h;
+      if (h < lo) lo = h; if (h > hi) hi = h;
+    }
+  }
+  const span = Math.max(1e-6, hi - lo);
+  for (let k = 0; k < H.length; k++) {
+    let h = clamp((H[k] - lo) / span, 0, 1);
+    h = Math.pow(h, P.flat);
+    if (P.terrace > 0) {
+      const steps = 9, t = h * steps, f = t - Math.floor(t);
+      h = lerp(h, (Math.floor(t) + smooth(0.25, 0.75, f)) / steps, P.terrace);
+    }
+    H[k] = h;
+  }
+  return H;
+}
+
+function erode(H, P) {
+  const N = P.res, cell = P.size / (N - 1), k = P.height / cell;
+  const G = new Float32Array(H.length);
+  for (let i = 0; i < G.length; i++) G[i] = H[i] * k;
+  const drops = Math.round((P.erosion / 100) * N * N * 2);
+  if (drops > 0) {
+    const rand = mulberry32(hashSeed('e:' + P.seed));
+    const R = 2, brush = [];
+    let wsum = 0;
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= R) { const w = Math.max(0, R + 0.5 - d); brush.push([dy * N + dx, w]); wsum += w; }
+    }
+    for (const b of brush) b[1] /= wsum;
+    const inertia = 0.05, capF = 4, minSlope = 0.01, eroS = 0.3, depS = 0.3, evap = 0.012, grav = 4, life = 40;
+    for (let d = 0; d < drops; d++) {
+      let x = 1 + rand() * (N - 3), y = 1 + rand() * (N - 3);
+      let dx = 0, dy = 0, speed = 1, water = 1, sed = 0;
+      for (let s = 0; s < life; s++) {
+        const ix = x | 0, iy = y | 0, fx = x - ix, fy = y - iy, idx = iy * N + ix;
+        const hNW = G[idx], hNE = G[idx + 1], hSW = G[idx + N], hSE = G[idx + N + 1];
+        const gx = (hNE - hNW) * (1 - fy) + (hSE - hSW) * fy;
+        const gy = (hSW - hNW) * (1 - fx) + (hSE - hNE) * fx;
+        const h = hNW * (1 - fx) * (1 - fy) + hNE * fx * (1 - fy) + hSW * (1 - fx) * fy + hSE * fx * fy;
+        dx = dx * inertia - gx * (1 - inertia); dy = dy * inertia - gy * (1 - inertia);
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1e-6) { const a = rand() * 6.2831853; dx = Math.cos(a); dy = Math.sin(a); } else { dx /= len; dy /= len; }
+        const nx = x + dx, ny = y + dy;
+        if (nx < R + 1 || nx >= N - R - 2 || ny < R + 1 || ny >= N - R - 2) break;
+        const jx = nx | 0, jy = ny | 0, gx2 = nx - jx, gy2 = ny - jy, j0 = jy * N + jx;
+        const hn = G[j0] * (1 - gx2) * (1 - gy2) + G[j0 + 1] * gx2 * (1 - gy2) + G[j0 + N] * (1 - gx2) * gy2 + G[j0 + N + 1] * gx2 * gy2;
+        const dh = hn - h;
+        const cap = Math.max(-dh, minSlope) * speed * water * capF;
+        if (sed > cap || dh > 0) {
+          const dep = dh > 0 ? Math.min(dh, sed) : (sed - cap) * depS;
+          sed -= dep;
+          G[idx] += dep * (1 - fx) * (1 - fy); G[idx + 1] += dep * fx * (1 - fy);
+          G[idx + N] += dep * (1 - fx) * fy; G[idx + N + 1] += dep * fx * fy;
+        } else {
+          const er = Math.min((cap - sed) * eroS, -dh);
+          const c = (fx > 0.5 ? ix + 1 : ix) + (fy > 0.5 ? iy + 1 : iy) * N;
+          for (let b = 0; b < brush.length; b++) G[c + brush[b][0]] -= er * brush[b][1];
+          sed += er;
+        }
+        speed = Math.sqrt(Math.max(0, speed * speed + dh * grav));
+        water *= 1 - evap;
+        x = nx; y = ny;
+      }
+    }
+    // thermal relaxation: collapse slopes steeper than ~40 degrees
+    const talus = 0.84, D = new Float32Array(G.length);
+    for (let it = 0; it < 5; it++) {
+      D.fill(0);
+      for (let j = 1; j < N - 1; j++) for (let i = 1; i < N - 1; i++) {
+        const c = j * N + i, h = G[c];
+        let d = h - G[c - 1]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c - 1] += m; }
+        d = h - G[c + 1]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c + 1] += m; }
+        d = h - G[c - N]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c - N] += m; }
+        d = h - G[c + N]; if (d > talus) { const m = (d - talus) * 0.15; D[c] -= m; D[c + N] += m; }
+      }
+      for (let i = 0; i < G.length; i++) G[i] += D[i];
+    }
+  }
+  const out = new Float32Array(H.length);
+  for (let i = 0; i < out.length; i++) out[i] = clamp(G[i] / k, 0, 1);
+  return out;
+}
+
+function analyse(H, P) {
+  const N = P.res, cell = P.size / (N - 1), hs = P.height;
+  const slope = new Float32Array(N * N), ao = new Float32Array(N * N), moist = new Float32Array(N * N);
+  const nM = makeNoise(mulberry32(hashSeed('m:' + P.seed)));
+  const r = 3;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const k = j * N + i;
+    const iL = Math.max(i - 1, 0), iR = Math.min(i + 1, N - 1), jU = Math.max(j - 1, 0), jD = Math.min(j + 1, N - 1);
+    const gx = (H[j * N + iR] - H[j * N + iL]) * hs / ((iR - iL) * cell);
+    const gz = (H[jD * N + i] - H[jU * N + i]) * hs / ((jD - jU) * cell);
+    slope[k] = Math.sqrt(gx * gx + gz * gz);
+    const a = H[j * N + Math.max(i - r, 0)], b = H[j * N + Math.min(i + r, N - 1)];
+    const c = H[Math.max(j - r, 0) * N + i], d = H[Math.min(j + r, N - 1) * N + i];
+    const conc = ((a + b + c + d) / 4 - H[k]) * hs / (r * cell);
+    ao[k] = 1 - clamp(conc * 0.6, -0.12, 0.28);
+    const u = i / (N - 1), v = j / (N - 1);
+    let m = 0.5 + fbm(nM, u * 3.3 + 40, v * 3.3 + 8, 4, 0.5, 2) * 1.1 + P.wet - (H[k] - 0.3) * 0.4 + clamp(conc * 0.8, 0, 0.3);
+    moist[k] = clamp(m, 0, 1);
+  }
+  return { slope, ao, moist };
+}
+
+function makeSampler(F, N, size) {
+  const half = size / 2, k = (N - 1) / size;
+  return function (x, z) {
+    let u = clamp((x + half) * k, 0, N - 1.001), v = clamp((z + half) * k, 0, N - 1.001);
+    const i = u | 0, j = v | 0, fx = u - i, fy = v - j, a = F[j * N + i], b = F[j * N + i + 1], c = F[(j + 1) * N + i], d = F[(j + 1) * N + i + 1];
+    return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+  };
+}
+
+/* ---------------- geometry builders ---------------- */
+function mix(dst, a, b, t) { dst[0] = a[0] + (b[0] - a[0]) * t; dst[1] = a[1] + (b[1] - a[1]) * t; dst[2] = a[2] + (b[2] - a[2]) * t; }
+
+function buildTerrain(P, H, F, L, rs, roads) {
+  const N = P.res, size = P.size, hs = P.height, half = size / 2, cell = size / (N - 1);
+  const n = N * N, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  const dn = makeNoise(mulberry32(hashSeed('d:' + P.seed)));
+  const c = [0, 0, 0], tmp = [0, 0, 0], sea = P.sea;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const k = j * N + i, x = -half + i * cell, z = -half + j * cell, h01 = H[k];
+    pos[k * 3] = x; pos[k * 3 + 1] = h01 * hs; pos[k * 3 + 2] = z;
+    const n1 = dn(x * 0.045, z * 0.045), n2 = dn(x * 0.27 + 9.1, z * 0.27 + 4.3);
+    const sl = F.slope[k], m = F.moist[k], rel = Math.max(0, (h01 - sea) / (1 - sea + 1e-6));
+    mix(c, L.dry, L.grass, smooth(0.2, 0.7, m + n1 * 0.18));
+    mix(c, c, L.forest, smooth(0.55, 0.9, m) * (1 - smooth(0.3, 0.65, rel)) * 0.85);
+    mix(c, c, L.high, smooth(0.35, 0.7, rel + n1 * 0.08));
+    mix(tmp, L.rock, L.rockDark, n2 * 0.5 + 0.5);
+    const rockT = smooth(rs, rs + 0.4, sl + n1 * 0.12);
+    mix(c, c, tmp, Math.max(rockT, smooth(0.8, 1.0, rel) * 0.55));
+    if (sea > 0.001) {
+      const beach = 1 - smooth(0, 0.018, h01 - sea + n1 * 0.004);
+      mix(c, c, L.sand, beach * (1 - rockT * 0.6));
+    }
+    if (P.snow <= 1) {
+      const sn = smooth(P.snow, P.snow + 0.07, rel + n1 * 0.05) * (1 - smooth(0.9, 1.7, sl) * 0.8);
+      mix(c, c, L.snow, sn);
+    }
+    if (h01 < sea) {
+      const d = sea - h01;
+      mix(c, c, L.seabed, smooth(0, 0.015, d));
+      mix(c, c, L.deep, smooth(0.01, 0.12, d) * 0.85);
+    }
+    if (roads && roads[k] > 0 && h01 >= sea) mix(c, c, L.road, roads[k] * 0.85);
+    const shade = F.ao[k] * (1 + n2 * 0.06);
+    col[k * 3] = Math.min(1, c[0] * shade); col[k * 3 + 1] = Math.min(1, c[1] * shade); col[k * 3 + 2] = Math.min(1, c[2] * shade);
+  }
+  const IdxArr = n > 65535 ? Uint32Array : Uint16Array;
+  const idx = new IdxArr((N - 1) * (N - 1) * 6);
+  let q = 0;
+  for (let j = 0; j < N - 1; j++) for (let i = 0; i < N - 1; i++) {
+    const a = j * N + i, b = (j + 1) * N + i, cc = j * N + i + 1, d = (j + 1) * N + i + 1;
+    idx[q++] = a; idx[q++] = b; idx[q++] = cc; idx[q++] = cc; idx[q++] = b; idx[q++] = d;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeVertexNormals();
+  return g;
+}
+
+function edgeWalks(N) {
+  const a = [], b = [], c = [], d = [];
+  for (let i = 0; i < N; i++) a.push([i, N - 1]);
+  for (let j = N - 1; j >= 0; j--) b.push([N - 1, j]);
+  for (let i = N - 1; i >= 0; i--) c.push([i, 0]);
+  for (let j = 0; j < N; j++) d.push([0, j]);
+  return [{ p: a, n: [0, 0, 1] }, { p: b, n: [1, 0, 0] }, { p: c, n: [0, 0, -1] }, { p: d, n: [-1, 0, 0] }];
+}
+
+/* wall strip around the map: topFn / botFn give heights in metres, colorFn(y, top) gives rgb */
+function buildWalls(P, topFn, botFn, colorFn, uvFn, skipFlat) {
+  const N = P.res, half = P.size / 2, cell = P.size / (N - 1);
+  const pos = [], nrm = [], col = [], uv = [], idx = [];
+  let vc = 0;
+  for (const w of edgeWalks(N)) {
+    const base = vc;
+    for (const [i, j] of w.p) {
+      const x = -half + i * cell, z = -half + j * cell, t = topFn(i, j), b = botFn(i, j);
+      pos.push(x, t, z, x, b, z);
+      nrm.push(w.n[0], w.n[1], w.n[2], w.n[0], w.n[1], w.n[2]);
+      const ct = colorFn(t, t), cb = colorFn(b, t);
+      col.push(ct[0], ct[1], ct[2], cb[0], cb[1], cb[2]);
+      if (uvFn) { const a = uvFn(x, z, t), bb = uvFn(x, z, b); uv.push(a[0], a[1], bb[0], bb[1]); }
+      vc += 2;
+    }
+    for (let s = 0; s < w.p.length - 1; s++) {
+      const t0 = base + 2 * s, b0 = t0 + 1, t1 = t0 + 2, b1 = t0 + 3;
+      if (skipFlat) {
+        const h0 = pos[t0 * 3 + 1] - pos[b0 * 3 + 1], h1 = pos[t1 * 3 + 1] - pos[b1 * 3 + 1];
+        if (h0 < 0.001 && h1 < 0.001) continue;
+      }
+      idx.push(t0, b0, t1, t1, b0, b1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nrm), 3));
+  if (col.length && colorFn) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(col), 3));
+  if (uvFn) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+  g.setIndex(new THREE.BufferAttribute(vc > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1));
+  return g;
+}
+
+function buildBase(P, H) {
+  const N = P.res, hs = P.height, depth = P.base, floor = -depth;
+  const soil = lin('#4a3a2b'), clay = lin('#7a5c3e'), deepc = lin('#2c231b'), top = lin('#3c2f23');
+  const colorFn = (y, topY) => {
+    if (topY - y < 1.2) return top;
+    const t = clamp((y - floor) / Math.max(1, hs * 0.5 + depth), 0, 1);
+    const band = 0.5 + 0.5 * Math.sin(y * 0.33);
+    const a = [0, 0, 0]; mix(a, deepc, soil, smooth(0, 0.5, t)); mix(a, a, clay, band * 0.35 * (0.4 + t));
+    return a;
+  };
+  const wall = buildWalls(P, (i, j) => H[j * N + i] * hs, () => floor, colorFn, null, false);
+  // bottom cap
+  const s = P.size / 2, cc = deepc;
+  const cp = new Float32Array([-s, floor, -s, s, floor, -s, s, floor, s, -s, floor, s]);
+  const merged = new THREE.BufferGeometry();
+  const wp = wall.attributes.position.array, wn = wall.attributes.normal.array, wc = wall.attributes.color.array, wi = wall.index.array;
+  const vcount = wp.length / 3;
+  const pos = new Float32Array(wp.length + 12), nrm = new Float32Array(wn.length + 12), col = new Float32Array(wc.length + 12);
+  pos.set(wp); pos.set(cp, wp.length); nrm.set(wn); col.set(wc);
+  for (let i = 0; i < 4; i++) { nrm[wn.length + i * 3 + 1] = -1; col[wc.length + i * 3] = cc[0]; col[wc.length + i * 3 + 1] = cc[1]; col[wc.length + i * 3 + 2] = cc[2]; }
+  const idx = new Uint32Array(wi.length + 6); idx.set(wi);
+  idx.set([vcount, vcount + 1, vcount + 2, vcount, vcount + 2, vcount + 3], wi.length);
+  merged.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  merged.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  merged.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  merged.setIndex(new THREE.BufferAttribute(idx, 1));
+  wall.dispose();
+  return merged;
+}
+
+function buildWater(P, H) {
+  const N = P.res, hs = P.height, seaY = P.sea * hs, half = P.size / 2, tile = 90;
+  const wall = buildWalls(P, () => seaY, (i, j) => Math.min(H[j * N + i] * hs, seaY), () => [1, 1, 1], (x, z, y) => [(x + z) / tile, y / tile], true);
+  const wp = wall.attributes.position.array, wn = wall.attributes.normal.array, wu = wall.attributes.uv.array, wi = wall.index.array;
+  const vcount = wp.length / 3;
+  const pos = new Float32Array(wp.length + 12), nrm = new Float32Array(wn.length + 12), uv = new Float32Array(wu.length + 8);
+  pos.set(wp); nrm.set(wn); uv.set(wu);
+  const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
+  corners.forEach(([x, z], i) => {
+    pos.set([x, seaY, z], wp.length + i * 3); nrm.set([0, 1, 0], wn.length + i * 3); uv.set([x / tile, z / tile], wu.length + i * 2);
+  });
+  // top face, wound to face +y
+  const idx = new Uint32Array(wi.length + 6); idx.set(wi);
+  idx.set([vcount, vcount + 3, vcount + 1, vcount + 1, vcount + 3, vcount + 2], wi.length);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  wall.dispose();
+  return g;
+}
+
+/* ---------------- vegetation and rocks ---------------- */
+class Baker {
+  constructor() { this.pos = []; this.nrm = []; this.col = []; this.idx = []; this.vc = 0; this._v = new THREE.Vector3(); this._n = new THREE.Vector3(); }
+  add(geo, color, m, nm, tint) {
+    const P = geo.attributes.position, Nn = geo.attributes.normal, v = this._v, n = this._n;
+    for (let i = 0; i < P.count; i++) {
+      v.fromBufferAttribute(P, i).applyMatrix4(m); this.pos.push(v.x, v.y, v.z);
+      n.fromBufferAttribute(Nn, i).applyMatrix3(nm).normalize(); this.nrm.push(n.x, n.y, n.z);
+      this.col.push(Math.min(1, color[0] * tint[0]), Math.min(1, color[1] * tint[1]), Math.min(1, color[2] * tint[2]));
+    }
+    const base = this.vc;
+    if (geo.index) for (let k = 0; k < geo.index.count; k++) this.idx.push(base + geo.index.getX(k));
+    else for (let k = 0; k < P.count; k++) this.idx.push(base + k);
+    this.vc += P.count;
+  }
+  build() {
+    if (!this.vc) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(this.pos), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(this.nrm), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(this.col), 3));
+    g.setIndex(new THREE.BufferAttribute(this.vc > 65535 ? Uint32Array.from(this.idx) : Uint16Array.from(this.idx), 1));
+    return g;
+  }
+}
+function trunkGeo(h, r0, r1, seg) { const g = new THREE.CylinderGeometry(r1, r0, h, seg, 1, false); g.translate(0, h / 2, 0); return g; }
+function coneGeo(r, h, y, seg) { const g = new THREE.ConeGeometry(r, h, seg, 1, false); g.translate(0, y + h / 2, 0); return g; }
+function blobGeo(rx, ry, rz, cx, cy, cz, sd) {
+  const g = new THREE.SphereGeometry(1, 6, 4), p = g.attributes.position, nr = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const j = 1 + 0.4 * (hash3(x * 3.1 + sd, y * 3.1, z * 3.1) - 0.5);
+    p.setXYZ(i, x * rx * j + cx, y * ry * j + cy, z * rz * j + cz);
+    const ny = y + 0.45, l = Math.hypot(x, ny, z) || 1;
+    nr.setXYZ(i, x / l, ny / l, z / l);
+  }
+  return g;
+}
+function rockGeo(sd) {
+  const g = new THREE.IcosahedronGeometry(1, 0), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), j = 0.72 + 0.5 * hash3(x * 5.3 + sd, y * 5.3, z * 5.3);
+    p.setXYZ(i, x * j, y * j * 0.85, z * j);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+function cactusParts() {
+  const mk = (r0, r1, h, seg, tx, ty, tz, rz) => { const g = trunkGeo(h, r0, r1, seg); if (rz) g.rotateZ(rz); g.translate(tx, ty, tz); return g; };
+  return [mk(0.38, 0.3, 3.6, 6, 0, 0, 0, 0), mk(0.2, 0.2, 1.1, 5, 0.55, 1.5, 0, -Math.PI / 2), mk(0.2, 0.17, 1.3, 5, 1.1, 1.5, 0, 0), mk(0.18, 0.18, 0.9, 5, -0.5, 2.1, 0, Math.PI / 2), mk(0.18, 0.15, 1.0, 5, -0.95, 2.1, 0, 0)];
+}
+
+function scatter(P, pal, L, H, F, flora, towns) {
+  const near = (x, z, k) => towns.some(t => Math.hypot(x - t.x, z - t.z) < t.R * k);
+  const trees = new Baker(), rocks = new Baker(), treePts = [];
+  const N = P.res, size = P.size, sampH = makeSampler(H, N, size), sampS = makeSampler(F.slope, N, size), sampM = makeSampler(F.moist, N, size);
+  const rand = mulberry32(hashSeed('s:' + P.seed));
+  const forestN = makeNoise(mulberry32(hashSeed('f:' + P.seed)));
+  const m = new THREE.Matrix4(), nm = new THREE.Matrix3(), q = new THREE.Quaternion(), e = new THREE.Euler(), pv = new THREE.Vector3(), sv = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+  // reusable part sets, three variants each
+  const conif = [], broad = [], rockV = [], cact = cactusParts();
+  for (let v = 0; v < 3; v++) {
+    const k = 1 + (v - 1) * 0.12;
+    conif.push([[trunkGeo(2.4, 0.42, 0.26, 6), L.trunk], [coneGeo(2.1 * k, 3.4, 1.7, 6), L.needle], [coneGeo(1.6 * k, 3.0, 3.5, 6), L.needle], [coneGeo(1.05 * k, 2.6, 5.4, 6), L.needle]]);
+    broad.push([[trunkGeo(3.0, 0.45, 0.28, 6), L.trunk], [blobGeo(2.3 * k, 1.8, 2.3 * k, 0, 4.3, 0, v * 7), L.leafA], [blobGeo(1.5, 1.3, 1.5, 1.3, 3.5, 0.5, v * 7 + 3), L.leafB]]);
+    rockV.push(rockGeo(v * 11 + 1));
+  }
+  const tint = (t, r) => [t, t * (0.94 + 0.12 * r()), t * (0.9 + 0.14 * r())];
+  const cellSz = Math.max(2.4, 3.6 * P.treeScale), occ = new Set();
+  const keyOf = (x, z) => (Math.floor(x / cellSz) + 20000) * 40000 + (Math.floor(z / cellSz) + 20000);
+  let placed = 0, tries = 0;
+  const maxTries = P.trees * 14, margin = 6;
+  let nTrees = 0;
+  while (nTrees < P.trees && tries < maxTries) {
+    tries++;
+    const x = (rand() - 0.5) * (size - margin * 2), z = (rand() - 0.5) * (size - margin * 2);
+    const h01 = sampH(x, z);
+    if (h01 <= P.sea + 0.012 || near(x, z, 1.1)) continue;
+    const rel = (h01 - P.sea) / (1 - P.sea);
+    if (rel > P.treeline + (rand() - 0.5) * 0.08) continue;
+    const sl = sampS(x, z);
+    if (sl > 0.9) continue;
+    const mo = sampM(x, z);
+    const dens = smooth(0.28, 0.6, forestN(x * 0.006, z * 0.006) * 0.5 + 0.5 + (mo - 0.5) * 0.35);
+    if (rand() > dens * Math.min(1, mo * 1.5 + 0.2) * (1 - smooth(0.5, 0.9, sl))) continue;
+    const key = keyOf(x, z);
+    if (occ.has(key)) continue;
+    occ.add(key);
+    const y = h01 * P.height - 0.2, v = (rand() * 3) | 0;
+    let set, sc = P.treeScale * (0.75 + 0.6 * rand()) * (1 - rel * 0.25);
+    if (flora === 'arid') {
+      if (rand() < 0.65) { set = cact.map(g => [g, L.leafA]); sc *= 0.9; } else { set = broad[v]; sc *= 0.5; }
+    } else {
+      const pc = clamp(P.conifer + (rel - 0.4) * 0.9, 0, 1);
+      set = rand() < pc ? conif[v] : broad[v];
+    }
+    q.setFromAxisAngle(up, rand() * 6.2832);
+    m.compose(pv.set(x, y, z), q, sv.set(sc, sc * (0.9 + 0.25 * rand()), sc));
+    nm.getNormalMatrix(m);
+    const t = tint(0.82 + 0.36 * rand(), rand);
+    for (const [g, c] of set) trees.add(g, c, m, nm, t);
+    treePts.push(x, y, z, sc);
+    nTrees++;
+  }
+  let nRocks = 0; tries = 0;
+  while (nRocks < P.rocks && tries < P.rocks * 30) {
+    tries++;
+    const x = (rand() - 0.5) * (size - 4), z = (rand() - 0.5) * (size - 4), h01 = sampH(x, z);
+    if (h01 <= P.sea + 0.004 || near(x, z, 1.0)) continue;
+    const rel = (h01 - P.sea) / (1 - P.sea), sl = sampS(x, z);
+    if (rand() > 0.12 + smooth(0.35, 1.0, sl) * 0.9 + smooth(0.7, 1, rel) * 0.3) continue;
+    const s = (0.8 + Math.pow(rand(), 2.2) * 4.5) * Math.max(0.6, P.treeScale * 0.8);
+    e.set((rand() - 0.5) * 0.5, rand() * 6.2832, (rand() - 0.5) * 0.5);
+    q.setFromEuler(e);
+    m.compose(pv.set(x, h01 * P.height - s * 0.25, z), q, sv.set(s * (0.8 + 0.5 * rand()), s * (0.55 + 0.4 * rand()), s * (0.8 + 0.5 * rand())));
+    nm.getNormalMatrix(m);
+    const c = [0, 0, 0]; mix(c, L.rock, L.rockDark, rand());
+    rocks.add(rockV[(rand() * 3) | 0], c, m, nm, tint(0.85 + 0.3 * rand(), rand));
+    nRocks++;
+  }
+  [conif, broad].forEach(a => a.forEach(s => s.forEach(p => p[0].dispose())));
+  cact.forEach(g => g.dispose()); rockV.forEach(g => g.dispose());
+  return { trees: trees.build(), rocks: rocks.build(), nTrees, nRocks, treePts };
+}
+
+
+/* ---------------- towns ---------------- */
+function siteTowns(P, H, rand) {
+  const N = P.res, R = P.townSize, sampH = makeSampler(H, N, P.size), half = P.size / 2;
+  const cand = [];
+  for (let t = 0; t < 700; t++) {
+    const x = (rand() - 0.5) * (P.size - R * 3), z = (rand() - 0.5) * (P.size - R * 3);
+    const h0 = sampH(x, z);
+    if (h0 < P.sea + 0.03 || (h0 - P.sea) / (1 - P.sea) > 0.5) continue;
+    let dev = 0, sum = h0;
+    for (let a = 0; a < 8; a++) {
+      const h = sampH(x + Math.cos(a * 0.7854) * R * 0.8, z + Math.sin(a * 0.7854) * R * 0.8);
+      if (h < P.sea + 0.01) { dev = 1e9; break; }
+      dev = Math.max(dev, Math.abs(h - h0) * P.height); sum += h;
+    }
+    if (dev < R * 0.4) cand.push({ x, z, dev, h: sum / 9, R, ang: rand() * 3.1416 });
+  }
+  cand.sort((a, b) => a.dev - b.dev);
+  const out = [], minD = Math.max(R * 2.6, P.size * 0.12);
+  for (const c of cand) {
+    if (out.length >= P.towns) break;
+    if (out.every(o => Math.hypot(o.x - c.x, o.z - c.z) > minD)) out.push(c);
+  }
+  return out;
+}
+function levelTowns(P, H, towns) {
+  const N = P.res, cell = P.size / (N - 1), half = P.size / 2;
+  for (const t of towns) {
+    const r = t.R * 1.4, i0 = Math.max(0, Math.floor((t.x - r + half) / cell)), i1 = Math.min(N - 1, Math.ceil((t.x + r + half) / cell));
+    const j0 = Math.max(0, Math.floor((t.z - r + half) / cell)), j1 = Math.min(N - 1, Math.ceil((t.z + r + half) / cell));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const d = Math.hypot(-half + i * cell - t.x, -half + j * cell - t.z), w = 1 - smooth(t.R * 0.85, r, d);
+      if (w > 0) H[j * N + i] = lerp(H[j * N + i], t.h, w);
+    }
+  }
+}
+function paintRoads(P, H, towns) {
+  const N = P.res, cell = P.size / (N - 1), half = P.size / 2, mask = new Float32Array(N * N);
+  const dab = (x, z, w) => {
+    const i0 = Math.floor((x - w + half) / cell), i1 = Math.ceil((x + w + half) / cell), j0 = Math.floor((z - w + half) / cell), j1 = Math.ceil((z + w + half) / cell);
+    for (let j = Math.max(0, j0); j <= Math.min(N - 1, j1); j++) for (let i = Math.max(0, i0); i <= Math.min(N - 1, i1); i++) {
+      const d = Math.hypot(-half + i * cell - x, -half + j * cell - z), v = 1 - smooth(w * 0.5, w, d);
+      if (v > mask[j * N + i]) mask[j * N + i] = v;
+    }
+  };
+  const line = (a, b, w) => { const len = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.ceil(len / (cell * 0.6)); for (let k = 0; k <= n; k++) dab(lerp(a[0], b[0], k / n), lerp(a[1], b[1], k / n), w); };
+  for (const t of towns) {
+    for (let k = 0; k < 4; k++) { const a = t.ang + k * 1.5708; line([t.x, t.z], [t.x + Math.cos(a) * t.R * 0.85, t.z + Math.sin(a) * t.R * 0.85], 3.2); }
+    for (let a = 0; a < 24; a++) dab(t.x + Math.cos(a * 0.2618) * t.R * 0.2, t.z + Math.sin(a * 0.2618) * t.R * 0.2, 3);
+  }
+  const left = towns.slice(1), cur = [towns[0]];
+  while (left.length && cur.length) {
+    const a = cur[cur.length - 1];
+    left.sort((u, v) => Math.hypot(u.x - a.x, u.z - a.z) - Math.hypot(v.x - a.x, v.z - a.z));
+    const b = left.shift(); line([a.x, a.z], [b.x, b.z], 2.6); cur.push(b);
+  }
+  return mask;
+}
+function gableGeo() {
+  const q = (a, b, c, d) => [...a, ...b, ...c, ...a, ...c, ...d];
+  const v = [
+    ...q([-.5, 0, .5], [.5, 0, .5], [.5, 1, 0], [-.5, 1, 0]),
+    ...q([.5, 0, -.5], [-.5, 0, -.5], [-.5, 1, 0], [.5, 1, 0]),
+    .5, 0, .5, .5, 0, -.5, .5, 1, 0,
+    -.5, 0, -.5, -.5, 0, .5, -.5, 1, 0,
+    ...q([-.5, 0, -.5], [.5, 0, -.5], [.5, 0, .5], [-.5, 0, .5]),
+  ];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(v), 3));
+  g.computeVertexNormals();
+  return g;
+}
+function buildTowns(P, towns, sampH, rand) {
+  const bk = new Baker(), box = new THREE.BoxGeometry(1, 1, 1), blocks = []; box.translate(0, 0.5, 0);
+  const roof = gableGeo(), spire = new THREE.ConeGeometry(3.4, 4.5, 4, 1, false); spire.rotateY(Math.PI / 4); spire.translate(0, 10 + 2.25, 0);
+  const walls = ['#e8dfcc', '#d9c9a8', '#c9b79a', '#b8b2a6', '#efe9dd'].map(lin), roofs = ['#a4503a', '#7c3b30', '#56606a', '#6b4a3a', '#8d5a3c'].map(lin);
+  const stone = lin('#a39d90'), slate = lin('#4a5058');
+  const m = new THREE.Matrix4(), nm = new THREE.Matrix3(), q = new THREE.Quaternion(), pv = new THREE.Vector3(), sv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const one = [1, 1, 1];
+  let count = 0;
+  const put = (g, col, x, y, z, yaw, sx, sy, sz, tint) => {
+    if (g === box) blocks.push([x, y, z, yaw, sx, sy, sz]); q.setFromAxisAngle(up, yaw); m.compose(pv.set(x, y, z), q, sv.set(sx, sy, sz)); nm.getNormalMatrix(m); bk.add(g, col, m, nm, tint || one);
+  };
+  for (const t of towns) {
+    const y0 = sampH(t.x, t.z) * P.height, occ = new Set(), cs = 11;
+    put(box, stone, t.x, y0, t.z, t.ang, 5, 10, 5, one); put(spire, slate, t.x, y0, t.z, t.ang, 1, 1, 1, one); count++;
+    occ.add(Math.floor(t.x / cs) * 9973 + Math.floor(t.z / cs));
+    const want = Math.round(t.R * t.R / 200);
+    for (let n = 0, tries = 0; n < want && tries < want * 25; tries++) {
+      const r = t.R * Math.sqrt(rand()) * 0.92, a = rand() * 6.2832;
+      if (r < t.R * 0.16) continue;
+      const x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r, key = Math.floor(x / cs) * 9973 + Math.floor(z / cs);
+      if (occ.has(key)) continue;
+      const h = sampH(x, z);
+      if (h < P.sea + 0.008) continue;
+      occ.add(key);
+      const w = 6 + rand() * 4, d = 5 + rand() * 2.8, wh = 3 + rand() * 1.4, rh = 1.8 + rand() * 1.2;
+      const yaw = t.ang + (rand() < 0.5 ? 0 : 1.5708) + (rand() - 0.5) * 0.16, y = h * P.height - 0.15;
+      const tn = 0.92 + rand() * 0.12, tint = [tn, tn, tn];
+      put(box, walls[(rand() * 5) | 0], x, y, z, yaw, w, wh, d, tint);
+      put(roof, roofs[(rand() * 5) | 0], x, y + wh, z, yaw, w * 1.14, rh, d * 1.14, tint);
+      n++; count++;
+    }
+  }
+  box.dispose(); roof.dispose(); spire.dispose();
+  return { geo: bk.build(), count, blocks };
+}
+
+/* ---------------- orchestration ---------------- */
+function heightKey(P) { return [P.seed, P.res, P.size, P.height, P.freq, P.oct, P.gain, P.ridge, P.warp, P.island, P.flat, P.terrace, P.erosion].join('|'); }
+function bytesOf(g) {
+  if (!g) return 0;
+  let b = 0;
+  for (const k in g.attributes) b += g.attributes[k].array.byteLength;
+  if (g.index) b += g.index.array.byteLength;
+  return b;
+}
+function generate(P, cache) {
+  const preset = PRESETS[P.preset] || PRESETS.temperate;
+  const L = {}; for (const k in preset.pal) L[k] = lin(preset.pal[k]);
+  const key = heightKey(P);
+  if (cache.key !== key) { cache.H = erode(buildHeights(P), P); cache.key = key; }
+  let H = cache.H, towns = [], roads = null;
+  if (P.towns > 0) {
+    H = Float32Array.from(H);
+    towns = siteTowns(P, H, mulberry32(hashSeed('t:' + P.seed)));
+    if (towns.length) { levelTowns(P, H, towns); roads = paintRoads(P, H, towns); }
+  }
+  L.road = lin('#a19478');
+  const F = analyse(H, P);
+  const terrain = buildTerrain(P, H, F, L, preset.rs, roads);
+  const base = P.base > 0 ? buildBase(P, H) : null;
+  const water = P.sea > 0.001 ? buildWater(P, H) : null;
+  const sc = scatter(P, preset.pal, L, H, F, preset.flora, towns);
+  const tw = towns.length ? buildTowns(P, towns, makeSampler(H, P.res, P.size), mulberry32(hashSeed('b:' + P.seed))) : { geo: null, count: 0 };
+  let hmax = 0; for (let i = 0; i < H.length; i++) if (H[i] > hmax) hmax = H[i];
+  const geos = { terrain, base, water, trees: sc.trees, rocks: sc.rocks, towns: tw.geo };
+  let tris = 0, bytes = 0;
+  for (const k in geos) { const g = geos[k]; if (g) { tris += (g.index ? g.index.count : g.attributes.position.count) / 3; bytes += bytesOf(g); } }
+  return { geos, pal: preset.pal, H, towns, blocks: tw.blocks || [], treePts: sc.treePts || [], info: { verts: P.res * P.res, tris: Math.round(tris), trees: sc.nTrees, rocks: sc.nRocks, towns: towns.length, houses: tw.count, bytes, hmax: hmax * P.height, seaY: P.sea * P.height } };
+}
+
+root.TF = { PRESETS, generate, hash3, lin, smooth, clamp, makeSampler };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
 
     <script>
         // ==========================================
@@ -1015,6 +1685,7 @@
                     this.knownOpenRooms.set(msg.roomCode, {
                         code: msg.roomCode,
                         mapId: msg.mapId || 'bunker',
+                        procCode: msg.procCode || null,
                         gameMode: msg.gameMode || '1v1',
                         hostName: msg.hostName || 'HOST',
                         updatedAt: Date.now()
@@ -1028,6 +1699,7 @@
                             type: 'ROOM_ADVERTISE',
                             roomCode: window.mpSession.roomCode,
                             mapId: window.selectedMapId,
+                            procCode: window.procCode ? window.procCode() : null,
                             gameMode: window.selectedGameMode,
                             hostName: window.mpSession.callsign
                         });
@@ -1526,6 +2198,7 @@
                 callsign,
                 isHost: isCreating,
                 mapId: selectedMapId,
+                procCode: procCode(),
                 gameMode: selectedGameMode
             });
 
@@ -1534,6 +2207,7 @@
                     type: 'ROOM_ADVERTISE',
                     roomCode: code,
                     mapId: selectedMapId,
+                procCode: procCode(),
                     gameMode: selectedGameMode,
                     hostName: callsign
                 });
@@ -1590,7 +2264,11 @@
                 window.selectedMapId = mapId;
                 const found = MAPS.find(m => m.id === mapId);
                 if (found) document.getElementById('selected-map-badge').textContent = `ACTIVE: ${found.shortName}`;
+                const advertised = netRelay.knownOpenRooms.get(code);
+                if (mapId === 'procedural' && advertised && advertised.procCode) procDecode(advertised.procCode);
                 renderMapSelectors();
+                procSync();
+                procOnMapSelect();
             }
             if (['1v1', '2v2', 'ffa'].includes(mode)) {
                 setGameMode(mode);
@@ -1773,6 +2451,14 @@
                 bgColor: 0x161230, fogColor: 0x1d1840, fogDensity: 0.0045,
                 obstacleColor: 0x2e2966, trimColor: 0x6ee7b7, floorRoughness: 0.5, floorMetalness: 0.25,
                 playerSpawn: [0, 1.8, 62]
+            },
+            {
+                id: 'procedural', shortName: 'TERRAIN FORGE', name: 'FORGED TERRAIN: PROCEDURAL', badge: 'GENERATED // YOUR SETUP', wide: true,
+                badgeColor: 'text-emerald-300 border-emerald-400/40 bg-emerald-950/60', accentHex: '#34d399',
+                desc: 'Open-world terrain built from a seed. Choose biome, size, relief, water, forests and villages.',
+                bgColor: 0xa9c8e0, fogColor: 0xa9c8e0, fogDensity: 0.003,
+                obstacleColor: 0x4d4a45, trimColor: 0x34d399, floorRoughness: 0.9, floorMetalness: 0,
+                playerSpawn: [0, 1.8, 62]
             }
         ];
 
@@ -1794,12 +2480,13 @@
         dirLight.castShadow = true;
         scene.add(dirLight);
 
-        const ARENA_SIZE = 180;
+        let ARENA_SIZE = 180;
         const colliders = [];
         const wallMeshes = [];
         const shootableMeshes = [];
 
         function clearCurrentMap() {
+            PROC.active = false; PROC.builtKey = null;
             colliders.length = 0;
             wallMeshes.length = 0;
             shootableMeshes.length = 0;
@@ -1815,9 +2502,12 @@
         }
 
         function buildArena(mapId = selectedMapId) {
+            if (mapId === 'procedural' && procReuse()) return;
             clearCurrentMap();
             const cfg = MAPS.find(m => m.id === mapId) || MAPS[0];
             currentMapConfig = cfg;
+            if (cfg.id === 'procedural') { buildProceduralArena(cfg); return; }
+            procRestoreEnv();
 
             document.getElementById('hud-map-name').textContent = cfg.name;
             document.getElementById('pause-map-label').textContent = `THEATER: ${cfg.name}`;
@@ -1910,11 +2600,392 @@
             const dir = new THREE.Vector3().subVectors(toPos, fromPos);
             const dist = dir.length();
             if (dist < 0.05) return true;
+            if (PROC.active && !procLOS(fromPos, toPos)) return false;
             dir.normalize();
             losRaycaster.set(fromPos, dir);
             losRaycaster.far = dist;
             const hits = losRaycaster.intersectObjects(wallMeshes, false);
             return hits.length === 0;
+        }
+
+        // ==========================================
+        // 5b. TERRAIN FORGE: PROCEDURAL MAPS + SETUP PANEL
+        // Generator core lives in the tf-core script block above (window.TF).
+        // ==========================================
+        const PROC = {
+            active: false, builtKey: null, cache: { key: null, H: null },
+            P: null, out: null, samp: null, seaY: -1e3, th: 0,
+            cfg: { preset: 'temperate', seed: 'AEGIS', size: 320, relief: 45, erosion: 40, sea: 0.3, trees: 1100, towns: 2 }
+        };
+        const PROC_SKY = { temperate: 0xa9c8e0, alpine: 0xb4cde3, islands: 0x9fd4e8, desert: 0xe4d0a6, tropical: 0xa0dbd6, arctic: 0xcfe1ec };
+        const PROC_SLIDERS = [
+            ['size', 'Arena size', 200, 600, 20, v => v + ' m'],
+            ['relief', 'Relief', 10, 120, 5, v => v + ' m'],
+            ['erosion', 'Erosion', 0, 100, 5, v => v + '%'],
+            ['sea', 'Water level', 0, 0.6, 0.02, v => (v <= 0.001 ? 'dry' : Math.round(v * 100) + '%')],
+            ['trees', 'Trees', 0, 3000, 100, v => v],
+            ['towns', 'Villages', 0, 3, 1, v => v]
+        ];
+        const procEl = (id) => document.getElementById(id);
+        const procClamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+        // Biome button: reset the sliders to sensible gameplay-scale values for that biome.
+        function procApplyPreset(name) {
+            const pr = window.TF.PRESETS[name]; if (!pr) return;
+            const v = pr.v, c = PROC.cfg;
+            c.preset = name;
+            c.relief = procClamp(Math.round(v.height / v.size * c.size / 5) * 5, 20, 80);
+            c.erosion = v.erosion; c.sea = Math.round(v.sea * 0.85 * 50) / 50;
+            c.trees = Math.round(v.trees * 0.45 / 100) * 100;
+            c.towns = Math.min(3, v.towns);
+        }
+        if (window.TF) procApplyPreset('temperate');
+
+        // Compact string so multiplayer peers can rebuild the identical map from the seed + settings.
+        function procCode() {
+            const c = PROC.cfg;
+            return [c.preset, c.seed, c.size, c.relief, c.erosion, c.sea, c.trees, c.towns].join('~');
+        }
+        window.procCode = procCode;
+        function procDecode(s) {
+            const a = String(s).split('~');
+            if (a.length !== 8 || !window.TF || !window.TF.PRESETS[a[0]]) return false;
+            const n = (i, lo, hi) => procClamp(parseFloat(a[i]) || 0, lo, hi);
+            Object.assign(PROC.cfg, {
+                preset: a[0], seed: a[1].replace(/[^A-Za-z0-9]/g, '').slice(0, 12) || 'AEGIS',
+                size: n(2, 200, 600), relief: n(3, 10, 120), erosion: n(4, 0, 100),
+                sea: n(5, 0, 0.6), trees: n(6, 0, 3000), towns: Math.round(n(7, 0, 3))
+            });
+            return true;
+        }
+
+        function procParams() {
+            const c = PROC.cfg, v = window.TF.PRESETS[c.preset].v;
+            return Object.assign({}, v, {
+                preset: c.preset, seed: c.seed, size: c.size, height: c.relief, erosion: c.erosion, sea: c.sea,
+                trees: c.trees, towns: c.towns, res: c.size <= 380 ? 192 : 256, base: 20,
+                rocks: Math.round(v.rocks * Math.min(1, c.size / 600)),
+                townSize: Math.round(procClamp(c.size * 0.13, 36, 70))
+            });
+        }
+
+        // ---- ground queries (flat maps stay at y = 0) ----
+        function groundAt(x, z) {
+            if (!PROC.active) return 0;
+            return Math.max(PROC.samp(x, z) * PROC.P.height, PROC.seaY - 0.9);   // shallow water is wadeable
+        }
+        function procLimitMove(ox, oz, p, maxSlope, feetY) {
+            if (!PROC.active) return;
+            const g0 = groundAt(ox, oz);
+            const ok = (x, z) => {
+                const d = Math.hypot(x - ox, z - oz);
+                if (d < 1e-4) return true;
+                if (PROC.samp(x, z) * PROC.P.height < PROC.seaY - 1.4) return false;   // deep water
+                const g1 = groundAt(x, z);
+                if (feetY > g1 + 0.5) return true;                                      // airborne
+                return (g1 - g0) / d <= maxSlope;                                       // too steep
+            };
+            if (ok(p.x, p.z)) return;
+            if (ok(p.x, oz)) { p.z = oz; return; }
+            if (ok(ox, p.z)) { p.x = ox; return; }
+            p.x = ox; p.z = oz;
+        }
+        function procLOS(a, b) {
+            const d = a.distanceTo(b), n = Math.ceil(d / 2.5), H = PROC.P.height;
+            for (let i = 1; i < n; i++) {
+                const t = i / n;
+                if (PROC.samp(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t) * H > a.y + (b.y - a.y) * t) return false;
+            }
+            return true;
+        }
+        function procBotStep(en) {
+            const p = en.group.position;
+            resolveHorizontalCollisions(p, en.radius, p.y, p.y + 2.0);
+            if (!PROC.active) return;
+            if (en._lx !== undefined) procLimitMove(en._lx, en._lz, p, 1.0, p.y);
+            p.y = groundAt(p.x, p.z);
+            en._lx = p.x; en._lz = p.z;
+        }
+
+        // Label walkable regions (no deep water, no cliffs) so spawns always share the largest one.
+        function procComputeReach() {
+            const P = PROC.P, cell = 4, n = Math.floor(P.size / cell), half = P.size / 2;
+            const wx = (i) => -half + (i + 0.5) * cell;
+            const deep = (x, z) => PROC.samp(x, z) * P.height < PROC.seaY - 1.4;
+            const lab = new Int32Array(n * n);
+            let best = 0, bestSize = 0, next = 0;
+            for (let s = 0; s < n * n; s++) {
+                if (lab[s] || deep(wx(s % n), wx((s / n) | 0))) continue;
+                next++; lab[s] = next;
+                let size = 0; const q = [s];
+                while (q.length) {
+                    const c = q.pop(), i = c % n, j = (c / n) | 0; size++;
+                    const g0 = groundAt(wx(i), wx(j));
+                    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                        const a = i + di, b = j + dj;
+                        if (a < 0 || b < 0 || a >= n || b >= n || lab[b * n + a]) continue;
+                        const x1 = wx(a), z1 = wx(b);
+                        if (deep(x1, z1) || Math.abs(groundAt(x1, z1) - g0) / cell > 1.0) continue;
+                        lab[b * n + a] = next; q.push(b * n + a);
+                    }
+                }
+                if (size > bestSize) { bestSize = size; best = next; }
+            }
+            PROC.reach = { lab, n, cell, half, id: best };
+        }
+
+        // ---- spawn helpers ----
+        function procOk(x, z) {
+            const P = PROC.P, half = ARENA_SIZE / 2 - 6;
+            if (Math.abs(x) > half || Math.abs(z) > half) return false;
+            if (PROC.samp(x, z) * P.height < PROC.seaY + 0.7) return false;
+            const R = PROC.reach;
+            if (R && R.lab[Math.floor((z + R.half) / R.cell) * R.n + Math.floor((x + R.half) / R.cell)] !== R.id) return false;
+            const e = 2, s = Math.hypot(groundAt(x + e, z) - groundAt(x - e, z), groundAt(x, z + e) - groundAt(x, z - e)) / (2 * e);
+            if (s > 0.45) return false;
+            for (let i = 0; i < colliders.length; i++) {
+                const b = colliders[i];
+                if (x > b.min.x - 2 && x < b.max.x + 2 && z > b.min.z - 2 && z < b.max.z + 2) return false;
+            }
+            return true;
+        }
+        function procFindSpot(tx, tz) {                       // sunflower spiral outward from the target
+            for (let k = 0; k < 260; k++) {
+                const r = k * 0.9, a = k * 2.399963, x = tx + Math.cos(a) * r, z = tz + Math.sin(a) * r;
+                if (procOk(x, z)) return [x, z];
+            }
+            return [tx, tz];
+        }
+        function procBotSpawn(index, total) {
+            const a = PROC.th + Math.PI + (index - (total - 1) / 2) * 0.5, r = PROC.P.size * 0.3;
+            const s = procFindSpot(Math.cos(a) * r, Math.sin(a) * r);
+            return new THREE.Vector3(s[0], groundAt(s[0], s[1]), s[1]);
+        }
+        function procAllySpawn() {
+            if (!PROC.active) return new THREE.Vector3(6, 0, 58);
+            const sp = currentMapConfig.playerSpawn, s = procFindSpot(sp[0] + 5, sp[2] + 5);
+            return new THREE.Vector3(s[0], groundAt(s[0], s[1]), s[1]);
+        }
+        function procRespawnSpot() {
+            if (!PROC.active) return [(Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90];
+            const a = Math.random() * 6.2832, r = Math.random() * PROC.P.size * 0.35;
+            return procFindSpot(Math.cos(a) * r, Math.sin(a) * r);
+        }
+
+        // ---- scene environment ----
+        function procApplyEnv(cfg) {
+            currentMapConfig = cfg;
+            PROC.active = true;
+            ARENA_SIZE = PROC.P.size;
+            document.getElementById('hud-map-name').textContent = cfg.name;
+            document.getElementById('pause-map-label').textContent = `THEATER: ${cfg.name}`;
+            const sky = PROC_SKY[PROC.P.preset] || 0xa9c8e0;
+            scene.background.setHex(sky);
+            scene.fog.color.setHex(sky);
+            scene.fog.density = 0.9 / PROC.P.size;
+            ambientLight.intensity = 0.42;
+            hemiLight.color.setHex(0xdbeafe); hemiLight.groundColor.setHex(0x6b6250); hemiLight.intensity = 0.5;
+            dirLight.color.setHex(0xfff3e0); dirLight.intensity = 1.3; dirLight.position.set(60, 90, 40);
+            dirLight.castShadow = false;
+            camera.far = Math.max(380, PROC.P.size * 1.8); camera.updateProjectionMatrix();
+        }
+        function procRestoreEnv() {
+            PROC.active = false;
+            ARENA_SIZE = 180;
+            ambientLight.intensity = 1.15;
+            hemiLight.color.setHex(0x7dd3fc); hemiLight.groundColor.setHex(0x1e293b); hemiLight.intensity = 1.1;
+            dirLight.color.setHex(0xf0f9ff); dirLight.intensity = 1.85; dirLight.position.set(45, 75, 42);
+            dirLight.castShadow = true;
+            camera.far = 380; camera.updateProjectionMatrix();
+        }
+        function procReuse() {
+            if (!PROC.active || PROC.builtKey !== procCode() || !mapRootGroup.children.length) return false;
+            procApplyEnv(MAPS.find(m => m.id === 'procedural'));
+            return true;
+        }
+        // This renderer has no sRGB output, so convert the generator's linear vertex colours back.
+        function procSrgb(g) {
+            if (!g || !g.attributes.color) return;
+            const a = g.attributes.color.array;
+            for (let i = 0; i < a.length; i++) { const v = a[i]; a[i] = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; }
+            g.attributes.color.needsUpdate = true;
+        }
+
+        function buildProceduralArena(cfg) {
+            const P = procParams();
+            const out = window.TF.generate(P, PROC.cache);
+            PROC.P = P; PROC.out = out;
+            PROC.seaY = P.sea > 0.001 ? P.sea * P.height : -1e3;
+            PROC.samp = window.TF.makeSampler(out.H, P.res, P.size);
+            PROC.builtKey = procCode();
+            PROC.active = true;
+            ARENA_SIZE = P.size;
+
+            const g = out.geos;
+            ['terrain', 'base', 'trees', 'rocks', 'towns'].forEach(k => procSrgb(g[k]));
+            const lit = (rough) => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: rough, metalness: 0 });
+            const mk = (geo, mat, shoot, wall) => {
+                if (!geo) return null;
+                const m = new THREE.Mesh(geo, mat);
+                mapRootGroup.add(m);
+                if (shoot) shootableMeshes.push(m);
+                if (wall) wallMeshes.push(m);
+                return m;
+            };
+            mk(g.terrain, lit(0.95));
+            mk(g.base, lit(1));
+            mk(g.trees, lit(0.9));
+            mk(g.rocks, lit(0.95));
+            mk(g.towns, lit(0.9), true, true);          // buildings stop bullets and line of sight
+            if (g.water) {
+                mk(g.water, new THREE.MeshStandardMaterial({ color: new THREE.Color(out.pal.water), transparent: true, opacity: 0.72, roughness: 0.15, depthWrite: false }));
+            }
+
+            // Invisible coarse terrain mesh: bullets hit this, rendering uses the detailed mesh.
+            const seg = Math.min(128, Math.round(P.size / 3));
+            const pg = new THREE.PlaneGeometry(P.size, P.size, seg, seg);
+            pg.rotateX(-Math.PI / 2);
+            const pp = pg.attributes.position;
+            for (let i = 0; i < pp.count; i++) pp.setY(i, PROC.samp(pp.getX(i), pp.getZ(i)) * P.height);
+            pg.computeBoundingSphere();
+            mk(pg, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, visible: false }), true, false);
+
+            // Colliders: buildings (axis-aligned footprint of the rotated box) and tree trunks.
+            for (const [x, y, z, yaw, w, h, d] of out.blocks) {
+                const c = Math.abs(Math.cos(yaw)), s = Math.abs(Math.sin(yaw)), ex = (c * w + s * d) / 2, ez = (s * w + c * d) / 2;
+                colliders.push(new THREE.Box3(new THREE.Vector3(x - ex, y, z - ez), new THREE.Vector3(x + ex, y + h + 2, z + ez)));
+            }
+            const tp = out.treePts, maxTrees = Math.min(tp.length / 4, 3000);
+            for (let i = 0; i < maxTrees; i++) {
+                const x = tp[i * 4], y = tp[i * 4 + 1], z = tp[i * 4 + 2], hw = 0.4 * tp[i * 4 + 3];
+                colliders.push(new THREE.Box3(new THREE.Vector3(x - hw, y, z - hw), new THREE.Vector3(x + hw, y + 8, z + hw)));
+            }
+
+            procComputeReach();
+
+            // Spawns: host on one side of the map, a joining player (and the AI) opposite.
+            let h = 0; for (const ch of P.seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+            PROC.th = (h % 628) / 100;
+            const r = P.size * 0.3;
+            const a = procFindSpot(Math.cos(PROC.th) * r, Math.sin(PROC.th) * r);
+            const b = procFindSpot(-Math.cos(PROC.th) * r, -Math.sin(PROC.th) * r);
+            cfg.playerSpawn = [a[0], groundAt(a[0], a[1]) + 1.8, a[1]];
+            cfg.spawnYaw = Math.atan2(a[0], a[1]);
+            cfg.joinSpawn = [b[0], groundAt(b[0], b[1]) + 1.8, b[1]];
+            cfg.joinYaw = Math.atan2(b[0], b[1]);
+            cfg.orbit = { r: P.size * 0.5, h: P.height * 0.9 + P.size * 0.12, y: P.height * 0.25 };
+            procApplyEnv(cfg);
+        }
+
+        // ---- setup panel ----
+        let procTimer = null;
+        function procStatus(t) { const e = procEl('proc-status'); if (e) e.textContent = t; }
+        function procSchedule() {
+            clearTimeout(procTimer);
+            procStatus('FORGING TERRAIN…');
+            procTimer = setTimeout(() => {
+                if (selectedMapId !== 'procedural' || gameState === 'PLAYING') return;
+                try {
+                    const t0 = performance.now();
+                    buildArena('procedural');
+                    procDrawPreview();
+                    const i = PROC.out.info;
+                    procStatus(`${i.trees.toLocaleString()} trees · ${i.towns} villages · ${Math.round(performance.now() - t0)} ms`);
+                } catch (err) {
+                    console.error('Terrain Forge error:', err);
+                    procStatus('GENERATION FAILED');
+                }
+            }, 140);
+        }
+        function procOnMapSelect() {
+            const panel = procEl('proc-panel');
+            const on = selectedMapId === 'procedural';
+            if (panel) panel.classList.toggle('hidden', !on);
+            if (on) procSchedule();
+            else if (PROC.active) buildArena(selectedMapId);      // drop the generated preview
+        }
+        function procSync() {
+            PROC_SLIDERS.forEach(([id, , , , , fmt]) => {
+                const r = procEl('proc-r-' + id), o = procEl('proc-o-' + id);
+                if (r) r.value = PROC.cfg[id];
+                if (o) o.textContent = fmt(PROC.cfg[id]);
+            });
+            document.querySelectorAll('#proc-biomes [data-biome]').forEach(b => b.classList.toggle('selected', b.dataset.biome === PROC.cfg.preset));
+            const s = procEl('proc-seed'); if (s) s.value = PROC.cfg.seed;
+        }
+        function initProcPanel() {
+            const bio = procEl('proc-biomes'), sl = procEl('proc-sliders');
+            if (!bio || !sl || !window.TF) return;
+            bio.innerHTML = Object.entries(window.TF.PRESETS).map(([k, p]) =>
+                `<div class="mode-pill rounded-lg px-2 py-1.5 text-center font-bold text-slate-200" data-biome="${k}">${p.label}</div>`).join('');
+            sl.innerHTML = PROC_SLIDERS.map(([id, label, min, max, step]) =>
+                `<label class="block"><div class="flex justify-between"><span class="text-slate-300">${label}</span><span id="proc-o-${id}" class="text-emerald-300"></span></div>` +
+                `<input type="range" id="proc-r-${id}" min="${min}" max="${max}" step="${step}" class="w-full accent-emerald-400"></label>`).join('');
+            bio.addEventListener('click', (e) => {
+                const b = e.target.closest('[data-biome]'); if (!b) return;
+                procApplyPreset(b.dataset.biome); procSync(); procSchedule();
+            });
+            sl.addEventListener('input', (e) => {
+                if (!e.target.id.startsWith('proc-r-')) return;
+                PROC.cfg[e.target.id.slice(7)] = parseFloat(e.target.value); procSync();
+            });
+            sl.addEventListener('change', procSchedule);
+            const seed = procEl('proc-seed');
+            seed.addEventListener('change', () => {
+                PROC.cfg.seed = seed.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 12) || 'AEGIS';
+                procSync(); procSchedule();
+            });
+            procEl('proc-roll').addEventListener('click', () => {
+                PROC.cfg.seed = Math.random().toString(36).slice(2, 8).toUpperCase();
+                procSync(); procSchedule();
+            });
+            procSync();
+        }
+        // Top-down preview of the generated map with spawns and villages.
+        function procDrawPreview() {
+            const cv = procEl('proc-preview');
+            if (!cv || !PROC.out) return;
+            const g = cv.getContext('2d'), S = cv.width, P = PROC.P, N = P.res, H = PROC.out.H, pal = window.TF.PRESETS[P.preset].pal;
+            const rgb = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+            const C = {}; ['deep', 'water', 'sand', 'grass', 'forest', 'high', 'rock', 'snow'].forEach(k => { C[k] = rgb(pal[k]); });
+            const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+            const img = g.createImageData(S, S), sea = P.sea, wet = sea > 0.001;
+            for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+                const i = Math.min(N - 1, Math.round(x / (S - 1) * (N - 1))), j = Math.min(N - 1, Math.round(y / (S - 1) * (N - 1)));
+                const h = H[j * N + i];
+                let c;
+                if (wet && h < sea) c = mix(C.water, C.deep, procClamp((sea - h) / 0.12, 0, 1));
+                else {
+                    const rel = (h - sea) / (1 - sea + 1e-6);
+                    if (wet && rel < 0.03) c = C.sand;
+                    else if (P.snow <= 1 && rel > P.snow) c = C.snow;
+                    else if (rel < 0.35) c = mix(C.grass, C.forest, rel / 0.35);
+                    else if (rel < 0.65) c = mix(C.high, C.rock, (rel - 0.35) / 0.3);
+                    else c = C.rock;
+                }
+                const sh = 1 + procClamp((H[j * N + Math.max(i - 2, 0)] - H[j * N + Math.min(i + 2, N - 1)] + H[Math.max(j - 2, 0) * N + i] - H[Math.min(j + 2, N - 1) * N + i]) * P.height * 0.06, -0.35, 0.35);
+                const o = (y * S + x) * 4;
+                img.data[o] = Math.min(255, c[0] * sh); img.data[o + 1] = Math.min(255, c[1] * sh); img.data[o + 2] = Math.min(255, c[2] * sh); img.data[o + 3] = 255;
+            }
+            g.putImageData(img, 0, 0);
+            const px = (v) => (v / P.size + 0.5) * S;
+            g.fillStyle = 'rgba(255,255,255,0.92)';
+            for (const t of (PROC.out.towns || [])) g.fillRect(px(t.x) - 3, px(t.z) - 3, 6, 6);
+            const cfg = MAPS.find(m => m.id === 'procedural');
+            [[cfg.playerSpawn, '#38bdf8'], [cfg.joinSpawn, '#f43f5e']].forEach(([sp, col]) => {
+                g.beginPath(); g.arc(px(sp[0]), px(sp[2]), 4.5, 0, 7); g.fillStyle = col; g.fill();
+                g.lineWidth = 1.5; g.strokeStyle = '#020617'; g.stroke();
+            });
+        }
+        // A joining player follows the host's procedural map (same seed + settings = same terrain).
+        function procFromNetwork(msg) {
+            if (!msg || !msg.isHost || mpSession.isHost || msg.mapId !== 'procedural' || !msg.procCode || gameState !== 'START') return;
+            if (selectedMapId === 'procedural' && msg.procCode === procCode()) return;
+            if (!procDecode(msg.procCode)) return;
+            selectedMapId = 'procedural'; window.selectedMapId = 'procedural';
+            const found = MAPS.find(m => m.id === 'procedural');
+            document.getElementById('selected-map-badge').textContent = `ACTIVE: ${found.shortName}`;
+            renderMapSelectors(); procSync(); procOnMapSelect();
         }
 
         buildArena('bunker');
@@ -2317,6 +3388,7 @@
         }
 
         function getValidSpawnPosition(index, total) {
+            if (PROC.active) return procBotSpawn(index, total);
             const candidateAngles = [];
             for (let k = 0; k < 16; k++) {
                 candidateAngles.push(((index + k * 0.5) / Math.max(1, total)) * Math.PI * 2);
@@ -2355,11 +3427,11 @@
             let spawnPos;
             if (options.customSpawn) {
                 spawnPos = options.customSpawn.clone();
-                resolveHorizontalCollisions(spawnPos, 1.0, 0, 2.0);
+                resolveHorizontalCollisions(spawnPos, 1.0, spawnPos.y, spawnPos.y + 2.0);
             } else {
                 spawnPos = getValidSpawnPosition(index, total);
             }
-            avatar.group.position.set(spawnPos.x, 0, spawnPos.z);
+            avatar.group.position.set(spawnPos.x, groundAt(spawnPos.x, spawnPos.z), spawnPos.z);
             scene.add(avatar.group);
 
             const tier = selectedBetaAiTier;
@@ -2468,7 +3540,7 @@
                     spawnCombatantAI(0, 1, {
                         team: 'blue',
                         botName: 'ALLY-BETA-01',
-                        customSpawn: new THREE.Vector3(6, 0, 58),
+                        customSpawn: procAllySpawn(),
                         chassisColor: 0x0ea5e9,
                         visorColor: 0x7dd3fc,
                         tracerColor: 0x38bdf8,
@@ -2597,6 +3669,7 @@
             const peerUid = msg.sender;
             const roomTopic = `aegis_fps/v2/room/${mpSession.roomCode}`;
 
+            if (msg.type === 'HELLO' || msg.type === 'HELLO_ACK') procFromNetwork(msg);
             if (msg.type === 'HELLO') {
                 mpSession.lobbyPeers.set(peerUid, {
                     uid: peerUid,
@@ -2609,6 +3682,8 @@
                 // Reply with HELLO_ACK so the newcomer immediately sees us in their lobby roster
                 netRelay.publish(roomTopic, {
                     type: 'HELLO_ACK',
+                    mapId: selectedMapId,
+                    procCode: procCode(),
                     roomCode: mpSession.roomCode,
                     callsign: mpSession.callsign,
                     isHost: mpSession.isHost
@@ -3480,11 +4555,12 @@
             gameState = 'PLAYING';
             const spawn = currentMapConfig.playerSpawn || [0, 1.8, 62];
             if (mpSession.active && !mpSession.isHost) {
-                player.pos.set(0, 1.8, -62);
-                player.yaw = Math.PI;
+                const js = currentMapConfig.joinSpawn || [0, 1.8, -62];
+                player.pos.set(js[0], js[1], js[2]);
+                player.yaw = currentMapConfig.joinYaw ?? Math.PI;
             } else {
                 player.pos.set(spawn[0], spawn[1], spawn[2]);
-                player.yaw = 0;
+                player.yaw = currentMapConfig.spawnYaw ?? 0;
             }
             player.vel.set(0, 0, 0);
             player.pitch = 0;
@@ -3637,18 +4713,22 @@
                 player.vel.z = moveDir.z * player.speed * speedMult;
             }
 
+            const _wasGrounded = player.isGrounded;
             if (!player.isGrounded) {
                 player.vel.y -= player.gravity * dt;
             }
 
+            const _ox = player.pos.x, _oz = player.pos.z;
             player.pos.x += player.vel.x * dt;
             player.pos.y += player.vel.y * dt;
             player.pos.z += player.vel.z * dt;
 
             resolveHorizontalCollisions(player.pos, player.radius, player.pos.y - player.height, player.pos.y + 0.2);
+            procLimitMove(_ox, _oz, player.pos, 1.0, player.pos.y - player.height);
 
-            if (player.pos.y <= 1.8) {
-                player.pos.y = 1.8;
+            const _gy = groundAt(player.pos.x, player.pos.z) + 1.8;
+            if (player.pos.y <= _gy || (_wasGrounded && player.vel.y <= 0 && player.pos.y - _gy < 0.7)) {
+                player.pos.y = _gy;
                 player.vel.y = 0;
                 player.isGrounded = true;
                 player.jumpsRemaining = player.maxJumps;
@@ -3919,7 +4999,7 @@
                         }
                     }
 
-                    resolveHorizontalCollisions(en.group.position, en.radius, 0, 2.0);
+                    procBotStep(en);
                     for (let j = 0; j < enemies.length; j++) {
                         if (i === j) continue;
                         const other = enemies[j];
@@ -3988,10 +5068,9 @@
                     syncPlayerNetworkState();
                     showToast('EXOSUIT CRITICAL // RESPAWNING', 'text-rose-300 border-rose-500/60');
                     player.health = player.maxHealth;
-                    const rx = (Math.random() - 0.5) * 90;
-                    const rz = (Math.random() - 0.5) * 90;
-                    player.pos.set(rx, 1.8, rz);
-                    resolveHorizontalCollisions(player.pos, player.radius, 0, 2.0);
+                    const rs = procRespawnSpot();
+                    player.pos.set(rs[0], groundAt(rs[0], rs[1]) + 1.8, rs[1]);
+                    resolveHorizontalCollisions(player.pos, player.radius, player.pos.y - player.height, player.pos.y + 0.2);
                     updateHealthHUD();
                     syncPlayerNetworkState();
                 } else {
@@ -4088,7 +5167,7 @@
                 MAPS.forEach(m => {
                     const isSelected = m.id === selectedMapId;
                     const card = document.createElement('div');
-                    card.className = `map-card rounded-xl p-2.5 flex flex-col justify-between ${isSelected ? 'selected' : ''}`;
+                    card.className = `map-card rounded-xl p-2.5 flex flex-col justify-between ${isSelected ? 'selected' : ''}${m.wide ? ' col-span-full' : ''}`;
                     card.innerHTML = `
                         <div>
                             <div class="flex items-center justify-between gap-1.5 mb-1">
@@ -4104,6 +5183,7 @@
                         window.selectedMapId = m.id;
                         document.getElementById('selected-map-badge').textContent = `ACTIVE: ${m.shortName}`;
                         renderMapSelectors();
+                        procOnMapSelect();
                     };
                     container.appendChild(card);
                 });
@@ -4118,8 +5198,10 @@
 
             if (gameState === 'START') {
                 const t = now * 0.00022;
-                camera.position.set(Math.sin(t) * 52, 16, Math.cos(t) * 52);
-                camera.lookAt(0, 3, 0);
+                const orb = currentMapConfig.orbit || { r: 52, h: 16, y: 3 };
+                const ox = Math.sin(t) * orb.r, oz = Math.cos(t) * orb.r;
+                camera.position.set(ox, PROC.active ? Math.max(orb.h, groundAt(ox, oz) + 14) : orb.h, oz);
+                camera.lookAt(0, orb.y, 0);
 
                 // Periodic Lobby Heartbeat when waiting in PvP Lobby
                 if (mpSession.active && mpSession.roomCode) {
@@ -4132,6 +5214,7 @@
                             callsign: mpSession.callsign,
                             isHost: mpSession.isHost,
                             mapId: selectedMapId,
+                procCode: procCode(),
                             gameMode: selectedGameMode
                         });
                         if (mpSession.isHost) {
@@ -4139,6 +5222,7 @@
                                 type: 'ROOM_ADVERTISE',
                                 roomCode: mpSession.roomCode,
                                 mapId: selectedMapId,
+                procCode: procCode(),
                                 gameMode: selectedGameMode,
                                 hostName: mpSession.callsign
                             });
@@ -4154,6 +5238,7 @@
         window.addEventListener('load', () => {
             try {
                 renderMapSelectors();
+                initProcPanel();
                 initAmmoPips();
                 refreshKeybindUI();
                 netRelay.init();
